@@ -1,85 +1,85 @@
-# Comitiva — Especificação
+# Comitiva — Specification
 
 > **Comitiva — agentic chat for your whole team.**
 >
-> Este documento é a fonte de verdade sobre o que o produto é e como está organizado. O detalhamento técnico (classes, comandos, modelo de dados, fluxos) está em `docs/design.md`. O roadmap por fase está na seção 6; o estado atual em `docs/STATUS.md`.
+> This document is the source of truth for what the product is and how it is organized. Technical detail (classes, commands, data model, flows) lives in `docs/design.md`. The roadmap by phase is in section 6; the current state is in `docs/STATUS.md`.
 
-### 1. Visão
+### 1. Vision
 
-Aplicação desktop open source onde o usuário cadastra **conexões** com LLMs (APIs ou harnesses de linha de comando como Claude Code e Codex), cria **agentes** com um papel e um conjunto de **ferramentas** (diretórios locais, Google Drive, qualquer servidor MCP), e conversa com todos eles em uma interface de **chat estilo Slack**, com várias conversas em paralelo. Mais tarde, um **hub** em Laravel permite times compartilharem agentes e conversas, e uma **interface web** acessa o hub sem o desktop.
+An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop.
 
-O que não é: uma ferramenta de código. Nada no núcleo assume Git, repositórios ou terminal. Isso pode vir como servidor MCP como qualquer outra ferramenta.
+What it is not: a coding tool. Nothing in the core assumes Git, repositories or a terminal. Those can come in as an MCP server like any other tool.
 
-### 2. Princípios
+### 2. Principles
 
-1. **Genérico por padrão.** Agentes podem pesquisar, escrever, revisar, organizar arquivos. Código é só um caso.
-2. **O runner é o produto.** Toda a lógica de execução (adaptadores, loop de ferramentas, MCP, streaming, cancelamento, uso) vive em um processo Node independente com protocolo próprio. O Electron é um cliente dele. Qualquer outro shell (NativePHP, CLI, servidor) também pode ser.
-3. **Local-first.** Sem hub, tudo funciona offline com SQLite. O hub é opcional e sincroniza.
-4. **Segredos nunca em texto puro.** Chaves de API e tokens OAuth via `safeStorage` do Electron, fora do SQLite.
-5. **O usuário vê e controla o que o agente faz com arquivos.** Leitura dentro das raízes é livre; escrita pede aprovação; fora das raízes é negado.
-6. **Contrato compartilhado, código não.** Desktop (TS) e hub (PHP) compartilham os schemas JSON de mensagens, blocos, eventos e entidades, publicados em `packages/contract`. Cada lado implementa como for melhor no seu mundo.
+1. **Generic by default.** Agents can research, write, review, organize files. Code is just one case.
+2. **The runner is the product.** All execution logic (adapters, tool loop, MCP, streaming, cancellation, usage) lives in an independent Node process with its own protocol. Electron is a client of it. Any other shell (NativePHP, CLI, server) can be too.
+3. **Local-first.** Without the hub, everything works offline with SQLite. The hub is optional and syncs.
+4. **Secrets never in plain text.** API keys and OAuth tokens go through Electron's `safeStorage`, outside SQLite.
+5. **The user sees and controls what the agent does with files.** Reading inside the roots is free; writing asks for approval; outside the roots is denied.
+6. **Shared contract, not shared code.** Desktop (TS) and hub (PHP) share the JSON schemas for messages, blocks, events and entities, published in `packages/contract`. Each side implements them as best fits its world.
 
-### 3. Conceitos de domínio
+### 3. Domain concepts
 
 ```
 Connection ──1:N──▶ Agent ──1:N──▶ Conversation ──1:N──▶ Message
                       │                                      │
                       ├── N:M ── ToolServer               UsageRecord
-                      └── roots[] (diretórios + modo)
+                      └── roots[] (directories + mode)
 ```
 
-**Connection** — uma forma de chegar em um LLM.
-`id`, `name`, `kind` (`api` | `cli`), `provider` (`anthropic`, `openai-compatible`, `google`, `ollama`, `claude-code`, `codex`, `gemini-cli`, …), `config` (JSON por provider), `secretRef`, `enabled`, `createdAt`. Ação: testar conexão.
+**Connection** — a way to reach an LLM.
+`id`, `name`, `kind` (`api` | `cli`), `provider` (`anthropic`, `openai-compatible`, `google`, `ollama`, `claude-code`, `codex`, `gemini-cli`, …), `config` (JSON per provider), `secretRef`, `enabled`, `createdAt`. Action: test connection.
 
-**ToolServer** — um servidor MCP.
-`id`, `name`, `transport` (`stdio` | `http`), `command`, `args`, `env` (valores sensíveis por `secretRef`), `url`, `headers`, `builtin` (bool), `enabled`. Embutidos na v1: `filesystem` e `google-drive`. O usuário pode cadastrar qualquer outro.
+**ToolServer** — an MCP server.
+`id`, `name`, `transport` (`stdio` | `http`), `command`, `args`, `env` (sensitive values via `secretRef`), `url`, `headers`, `builtin` (bool), `enabled`. Built-ins in v1: `filesystem` and `google-drive`. The user can register any other.
 
-**Agent** — uma persona persistente.
-`id`, `name`, `avatar`, `connectionId`, `model` (opcional), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Fase 10), `tags`.
+**Agent** — a persistent persona.
+`id`, `name`, `avatar`, `connectionId`, `model` (optional), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Phase 10), `tags`.
 
 **Conversation** — `id`, `agentId`, `title`, `status` (`idle` | `running` | `awaiting-approval` | `error`), `harnessSessionId`, `archived`, `lastActivityAt`.
 
 **Message** — `id`, `conversationId`, `role` (`user` | `assistant` | `tool`), `content: Block[]`, `status` (`streaming` | `complete` | `cancelled` | `error`), `createdAt`.
-Blocos seguem o formato da Anthropic Messages API como canônico: `text`, `image`, `document`, `tool_use`, `tool_result`. Adaptadores traduzem para o formato do provider.
+Blocks follow the Anthropic Messages API format as canonical: `text`, `image`, `document`, `tool_use`, `tool_result`. Adapters translate to the provider's format.
 
-**ToolApproval** — registro de aprovação: `id`, `conversationId`, `toolUseId`, `toolServerId`, `toolName`, `input`, `decision` (`allow` | `deny` | `allow-always`), `decidedAt`.
+**ToolApproval** — approval record: `id`, `conversationId`, `toolUseId`, `toolServerId`, `toolName`, `input`, `decision` (`allow` | `deny` | `allow-always`), `decidedAt`.
 
 **UsageRecord** — `id`, `connectionId`, `agentId`, `conversationId`, `messageId`, `model`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `estimated` (bool), `estimatedCostUsd`, `latencyMs`, `createdAt`.
 
-### 4. Arquitetura
+### 4. Architecture
 
 ```
 repo/
 ├── packages/
-│   ├── contract/     # schemas zod + JSON Schema gerado: entidades, blocos, eventos, protocolo do runner
-│   ├── runner/       # processo Node: adaptadores, MCP, loop de ferramentas, engine, uso. Sem Electron.
-│   └── mcp-servers/  # servidores MCP embutidos: filesystem (com raízes), google-drive, documents (futuro)
+│   ├── contract/     # zod schemas + generated JSON Schema: entities, blocks, events, runner protocol
+│   ├── runner/       # Node process: adapters, MCP, tool loop, engine, usage. No Electron.
+│   └── mcp-servers/  # built-in MCP servers: filesystem (with roots), google-drive, documents (future)
 ├── apps/
-│   ├── desktop/      # Electron: main (cliente do runner, SQLite, segredos, IPC) + renderer React
-│   ├── hub/          # Fase 8: Laravel + Reverb + Postgres
-│   └── web/          # Fase 9: React servido pelo hub, reaproveita componentes do desktop
+│   ├── desktop/      # Electron: main (runner client, SQLite, secrets, IPC) + React renderer
+│   ├── hub/          # Phase 8: Laravel + Reverb + Postgres
+│   └── web/          # Phase 9: React served by the hub, reuses desktop components
 ├── docs/
 ├── SPEC.md
 └── CLAUDE.md
 ```
 
-**Stack desktop:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 com migrations (ORM decidido em ADR), IPC tipado por zod, vitest, Playwright.
+**Desktop stack:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 with migrations (ORM decided in an ADR), zod-typed IPC, vitest, Playwright.
 
-**Stack runner:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, SDK oficial da Anthropic, cliente OpenAI-compatible, cliente Gemini, fetch para Ollama. Sem dependência de Electron ou de banco: o runner é stateless quanto a persistência; recebe o histórico e devolve eventos. Quem persiste é o shell.
+**Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists.
 
-**Stack hub:** Laravel 12+, Reverb, Sanctum, Postgres, Pest. Implementa o `contract` em PHP (validação por JSON Schema gerado).
+**Hub stack:** Laravel 12+, Reverb, Sanctum, Postgres, Pest. Implements the `contract` in PHP (validation via generated JSON Schema).
 
-#### 4.1 Protocolo do runner
+#### 4.1 Runner protocol
 
-Processo filho do shell, JSON lines em stdin/stdout, uma linha por mensagem. O shell pode reiniciá-lo; o runner não guarda estado entre reinícios além de sessões MCP abertas.
+Child process of the shell, JSON lines on stdin/stdout, one line per message. The shell may restart it; the runner keeps no state across restarts other than open MCP sessions.
 
-Requisições (shell → runner):
+Requests (shell → runner):
 
 ```ts
 type RunnerRequest =
   | { id; type: 'connection.test'; connection; secret? }
   | { id; type: 'connection.listModels'; connection; secret? }
-  | { id; type: 'toolServer.start'; toolServer; secrets? }     // abre cliente MCP, retorna lista de tools
+  | { id; type: 'toolServer.start'; toolServer; secrets? }     // opens MCP client, returns tool list
   | { id; type: 'toolServer.stop'; toolServerId }
   | { id; type: 'run.start'; runId; conversationId; agent; connection; secret?; messages: Message[]; harnessSessionId? }
   | { id; type: 'run.cancel'; runId }
@@ -87,14 +87,14 @@ type RunnerRequest =
   | { id; type: 'shutdown' }
 ```
 
-Eventos (runner → shell), sempre com `runId` quando pertencem a um run:
+Events (runner → shell), always with `runId` when they belong to a run:
 
 ```ts
 type RunnerEvent =
   | { type: 'response'; id; ok: true; result } | { type: 'response'; id; ok: false; error }
   | { type: 'run.session'; runId; harnessSessionId }
   | { type: 'run.text_delta'; runId; text }
-  | { type: 'run.block'; runId; block: Block }                   // bloco completo (image, tool_use...)
+  | { type: 'run.block'; runId; block: Block }                   // complete block (image, tool_use...)
   | { type: 'run.tool_call'; runId; toolUseId; toolServerId; toolName; input; requiresApproval: boolean }
   | { type: 'run.tool_result'; runId; toolUseId; output; isError; durationMs }
   | { type: 'run.usage'; runId; inputTokens; outputTokens; cacheReadTokens?; cacheWriteTokens?; estimated }
@@ -103,7 +103,7 @@ type RunnerEvent =
   | { type: 'log'; level; message }
 ```
 
-#### 4.2 Adaptadores de conexão
+#### 4.2 Connection adapters
 
 ```ts
 interface ProviderAdapter {
@@ -115,54 +115,54 @@ interface ProviderAdapter {
 }
 ```
 
-`RunContext` dá ao adaptador `tools` (definições agregadas dos servidores MCP do agente) e `callTool(toolUseId, name, input)`, que já passa pela política de permissão e retorna o resultado ou uma negação.
+`RunContext` gives the adapter `tools` (definitions aggregated from the agent's MCP servers) and `callTool(toolUseId, name, input)`, which already goes through the permission policy and returns the result or a denial.
 
-- **API** (`anthropic`, `openai-compatible`, `google`, `ollama`): o runner controla o loop. Streaming → `tool_use` → `ctx.callTool` → `tool_result` → nova chamada, até `stopReason` sem ferramentas, com limite de iterações configurável.
-- **CLI** (`claude-code`, `codex`, `gemini-cli`): o runner escreve um arquivo de configuração MCP temporário com os servidores do agente e passa ao binário (`--mcp-config` ou equivalente, verificado no `--help`), define `cwd` como a primeira raiz `readwrite` (ou um diretório isolado em `userData`), roda em modo não interativo com saída JSON stream, e traduz linhas para `AdapterEvent`. Aprovação de escrita: o harness roda com auto-accept e a política do agente é aplicada pelo servidor `filesystem` embutido, que pede aprovação ao shell via o próprio runner. Ferramentas nativas de arquivo do harness são desabilitadas quando possível, para que toda escrita passe pelo servidor embutido; quando não for possível, o usuário é avisado no formulário da conexão.
+- **API** (`anthropic`, `openai-compatible`, `google`, `ollama`): the runner controls the loop. Streaming → `tool_use` → `ctx.callTool` → `tool_result` → new call, until a `stopReason` without tools, with a configurable iteration limit.
+- **CLI** (`claude-code`, `codex`, `gemini-cli`): the runner writes a temporary MCP configuration file with the agent's servers and passes it to the binary (`--mcp-config` or equivalent, verified via `--help`), sets `cwd` to the first `readwrite` root (or an isolated directory in `userData`), runs in non-interactive mode with streaming JSON output, and translates lines into `AdapterEvent`. Write approval: the harness runs with auto-accept and the agent's policy is enforced by the built-in `filesystem` server, which asks the shell for approval through the runner itself. The harness's native file tools are disabled when possible, so every write goes through the built-in server; when that is not possible, the user is warned in the connection form.
 
-#### 4.3 Ferramentas e permissões
+#### 4.3 Tools and permissions
 
-- O runner mantém um cliente MCP por `ToolServer` habilitado, iniciado sob demanda e reaproveitado entre runs.
-- Servidor **`filesystem`** embutido: recebe as raízes e modos do agente por argumento; expõe `list`, `read`, `search`, `write`, `create`, `move`, `delete`. Qualquer caminho fora das raízes é rejeitado no servidor, não só na UI. Operações de escrita emitem pedido de aprovação, salvo `allow-always` já registrado para aquele agente e ferramenta.
-- Servidor **`google-drive`** embutido: OAuth feito pelo desktop (loopback), tokens no `safeStorage`, injetados por env ao iniciar o servidor. Expõe `search`, `read` (com export de Google Docs/Sheets para texto), `create`, `update`, `move`. Escritas seguem a mesma política de aprovação.
-- Servidores de terceiros: ferramentas classificadas como `readOnlyHint`/`destructiveHint` (anotações MCP) para decidir se pedem aprovação; sem anotações, pedem.
-- Na UI: cada chamada de ferramenta é um bloco colapsável com nome, argumentos, resultado e duração. Pedido de aprovação é um card inline com **Permitir**, **Negar**, **Permitir sempre para este agente**. Enquanto aguarda, a conversa fica em `awaiting-approval` e a sidebar sinaliza.
+- The runner keeps one MCP client per enabled `ToolServer`, started on demand and reused across runs.
+- Built-in **`filesystem`** server: receives the agent's roots and modes as arguments; exposes `list`, `read`, `search`, `write`, `create`, `move`, `delete`. Any path outside the roots is rejected in the server, not only in the UI. Write operations emit an approval request, unless `allow-always` is already recorded for that agent and tool.
+- Built-in **`google-drive`** server: OAuth done by the desktop (loopback), tokens in `safeStorage`, injected via env when starting the server. Exposes `search`, `read` (with Google Docs/Sheets export to text), `create`, `update`, `move`. Writes follow the same approval policy.
+- Third-party servers: tools classified by `readOnlyHint`/`destructiveHint` (MCP annotations) to decide whether they ask for approval; without annotations, they ask.
+- In the UI: each tool call is a collapsible block with name, arguments, result and duration. An approval request is an inline card with **Allow**, **Deny**, **Always allow for this agent**. While waiting, the conversation is `awaiting-approval` and the sidebar flags it.
 
-#### 4.4 Fronteiras
+#### 4.4 Boundaries
 
-- Renderer → `Backend` (interface): `LocalBackend` sobre IPC hoje; `RemoteBackend` sobre HTTP + WebSocket na Fase 8. UI não conhece nada além de `Backend`.
-- Main → `RunnerClient`: único ponto que fala com o processo do runner. Persiste eventos, resolve segredos, aplica reinício.
-- Hub → executa apenas conexões de API e servidores MCP `http`. Servidores `stdio` e harnesses de CLI só existem em desktops. Um desktop online pode se registrar como **runner do workspace** (Fase 9+) para executar esses em nome do time.
+- Renderer → `Backend` (interface): `LocalBackend` over IPC today; `RemoteBackend` over HTTP + WebSocket in Phase 8. The UI knows nothing beyond `Backend`.
+- Main → `RunnerClient`: the single point that talks to the runner process. Persists events, resolves secrets, handles restarts.
+- Hub → runs only API connections and `http` MCP servers. `stdio` servers and CLI harnesses only exist on desktops. An online desktop can register as the **workspace runner** (Phase 9+) to execute those on behalf of the team.
 
-### 5. Interface do usuário
+### 5. User interface
 
-Três colunas, estilo Slack:
+Three columns, Slack style:
 
-- **Sidebar**: agentes com avatar, status (ocioso / respondendo / aguardando aprovação / erro) e não lidas. Atalhos para Conexões, Ferramentas, Uso, Configurações.
-- **Centro**: conversas do agente selecionado e o chat aberto. Markdown, código com copiar, blocos de ferramenta colapsáveis, cards de aprovação, cursor de streaming, cancelar, retry.
-- **Painel direito**: detalhes do agente com role editável, raízes e ferramentas ativas, uso da conversa.
-- **Composer**: Enter envia, Shift+Enter quebra linha, anexos de texto e imagem, `Cmd/Ctrl+K` para trocar de agente ou conversa.
-- Tema claro/escuro; i18n desde o início (en, pt-BR).
+- **Sidebar**: agents with avatar, status (idle / responding / awaiting approval / error) and unread count. Shortcuts to Connections, Tools, Usage, Settings.
+- **Center**: conversations of the selected agent and the open chat. Markdown, code with copy, collapsible tool blocks, approval cards, streaming cursor, cancel, retry.
+- **Right panel**: agent details with editable role, active roots and tools, conversation usage.
+- **Composer**: Enter sends, Shift+Enter adds a line break, text and image attachments, `Cmd/Ctrl+K` to switch agent or conversation.
+- Light/dark theme; i18n from the start (en, pt-BR).
 
 ### 6. Roadmap
 
-| Fase | Entrega | Pronto quando |
+| Phase | Deliverable | Done when |
 |---|---|---|
-| 0 | Monorepo, docs, CI, **spike**: runner mínimo com adaptador Anthropic + Electron mostrando duas conversas em streaming paralelo com cancelar | Spike funciona; decisão de arquitetura confirmada em ADR |
-| 1 | Conexões de API completas, segredos seguros, tela de conexões | Quatro providers testam e listam modelos |
-| 2 | Harnesses de CLI (Claude Code, Codex), resume de sessão | Turno com streaming e cancelamento nos dois |
-| 3 | Agentes: CRUD, role, modelo, avatar | Agente aparece na sidebar |
-| 4 | Chat completo com paralelismo, persistência, retry, auto-título | Dois agentes respondem ao mesmo tempo |
-| 5 | Ferramentas: `ToolServer`, cliente MCP no runner, loop de ferramentas para API, servidor `filesystem` com raízes e aprovações, repasse de MCP aos harnesses | Agente lê e cria arquivo em diretório permitido, escrita pede aprovação, fora da raiz é negado |
-| 5b | Google Drive: OAuth, servidor embutido, cadastro de servidores MCP de terceiros na UI | Agente lê um Google Doc e cria outro com aprovação |
-| 6 | Uso: registros, preços, dashboard, export | Dashboard bate com os registros |
-| 7 | Polimento e v0.1.0: anexos, busca, export/import, i18n, empacotamento, auto-update | Release publicada |
-| 8 | Hub Laravel: auth, workspaces, sync de agentes e conversas, Reverb, `RemoteBackend` no desktop | Dois desktops veem a mesma conversa ao vivo |
-| 9 | Web: mesma UI servida pelo hub, execução de API e MCP `http` no hub, chaves de time; desktop como runner de workspace | Usuário sem desktop conversa com agente de API do time |
-| 10 | Políticas de uso: limites, concorrência, fallback e troca de conexão | Agente troca de conexão ao atingir limite |
+| 0 | Monorepo, docs, CI, **spike**: minimal runner with Anthropic adapter + Electron showing two conversations streaming in parallel with cancel | Spike works; architecture decision confirmed in an ADR |
+| 1 | Complete API connections, secure secrets, connections screen | Four providers test and list models |
+| 2 | CLI harnesses (Claude Code, Codex), session resume | A turn with streaming and cancellation in both |
+| 3 | Agents: CRUD, role, model, avatar | Agent shows up in the sidebar |
+| 4 | Full chat with parallelism, persistence, retry, auto-title | Two agents respond at the same time |
+| 5 | Tools: `ToolServer`, MCP client in the runner, tool loop for APIs, `filesystem` server with roots and approvals, MCP passthrough to harnesses | Agent reads and creates a file in an allowed directory, a write asks for approval, outside the root is denied |
+| 5b | Google Drive: OAuth, built-in server, registering third-party MCP servers in the UI | Agent reads a Google Doc and creates another one with approval |
+| 6 | Usage: records, pricing, dashboard, export | Dashboard matches the records |
+| 7 | Polish and v0.1.0: attachments, search, export/import, i18n, packaging, auto-update | Release published |
+| 8 | Laravel hub: auth, workspaces, sync of agents and conversations, Reverb, `RemoteBackend` in the desktop | Two desktops see the same conversation live |
+| 9 | Web: same UI served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
+| 10 | Usage policies: limits, concurrency, fallback and connection switching | Agent switches connection when it hits a limit |
 
-### 7. Decisões em aberto (ADR na Fase 0)
+### 7. Open decisions (ADR in Phase 0)
 
-ORM do desktop (drizzle vs kysely); licença (Apache-2.0 vs MIT); nome; como executar o runner (Node embarcado pelo Electron via `ELECTRON_RUN_AS_NODE` vs binário `node` separado); implementação do servidor `google-drive` (próprio vs comunidade).
+Desktop ORM (drizzle vs kysely); license (Apache-2.0 vs MIT); name; how to run the runner (Node embedded in Electron via `ELECTRON_RUN_AS_NODE` vs a separate `node` binary); implementation of the `google-drive` server (own vs community).
 
 ---

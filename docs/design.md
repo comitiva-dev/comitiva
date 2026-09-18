@@ -1,30 +1,30 @@
-# Comitiva — Design Técnico
+# Comitiva — Technical Design
 
-> A `SPEC.md` diz **o quê**; este documento diz **como**: passo a passo para iniciar, estrutura de arquivos, modelo de dados, classes e métodos principais, fluxos, comandos. É escrito para ser lido pelo Claude Code junto com o `SPEC.md`; os prompts de fase devem referenciá-lo.
+> `SPEC.md` says **what**; this document says **how**: step-by-step bootstrapping, file layout, data model, main classes and methods, flows, commands. It is written to be read by Claude Code together with `SPEC.md`; phase prompts should reference it.
 >
-> Assinaturas são esqueletos: nomes e responsabilidades importam, detalhes de implementação ficam para cada fase.
+> Signatures are skeletons: names and responsibilities matter, implementation details are left to each phase.
 
 ---
 
-## 1. Como iniciar o projeto (Fase 0, passo a passo)
+## 1. How to bootstrap the project (Phase 0, step by step)
 
-### 1.1 Pré-requisitos
+### 1.1 Prerequisites
 
-| Ferramenta | Versão | Por quê |
+| Tool | Version | Why |
 |---|---|---|
-| Node.js | 22 LTS | runner e Electron |
+| Node.js | 22 LTS | runner and Electron |
 | pnpm | 9+ | workspaces |
-| Git | qualquer | |
-| Python 3 + build tools (Xcode CLT / VS Build Tools / `build-essential`) | | compilar `better-sqlite3` |
-| Claude Code, Codex CLI | opcional | testar harnesses na Fase 2 |
+| Git | any | |
+| Python 3 + build tools (Xcode CLT / VS Build Tools / `build-essential`) | | compile `better-sqlite3` |
+| Claude Code, Codex CLI | optional | test harnesses in Phase 2 |
 
-### 1.2 Sequência de comandos
+### 1.2 Command sequence
 
 ```bash
-# 1. Repositório
+# 1. Repository
 mkdir comitiva && cd comitiva && git init
 pnpm init
-echo "node-linker=hoisted" > .npmrc        # electron-builder e módulos nativos preferem hoisted
+echo "node-linker=hoisted" > .npmrc        # electron-builder and native modules prefer hoisted
 
 # 2. Workspaces
 cat > pnpm-workspace.yaml <<'EOF'
@@ -34,21 +34,21 @@ packages:
 EOF
 mkdir -p packages/{contract,runner,mcp-servers} apps/desktop docs/adr
 
-# 3. Tooling raiz
+# 3. Root tooling
 pnpm add -Dw typescript turbo eslint prettier @eslint/js typescript-eslint \
   eslint-config-prettier vitest @types/node
 
-# 4. Pacote contract
+# 4. contract package
 cd packages/contract && pnpm init && pnpm add zod && pnpm add -D zod-to-json-schema tsup && cd ../..
 
-# 5. Pacote runner
+# 5. runner package
 cd packages/runner && pnpm init && pnpm add @anthropic-ai/sdk @modelcontextprotocol/sdk openai \
   @google/genai zod pino && pnpm add -D tsup msw && cd ../..
 
-# 6. Servidores MCP embutidos
+# 6. Built-in MCP servers
 cd packages/mcp-servers && pnpm init && pnpm add @modelcontextprotocol/sdk zod && pnpm add -D tsup && cd ../..
 
-# 7. Desktop (scaffold electron-vite dentro do monorepo)
+# 7. Desktop (electron-vite scaffold inside the monorepo)
 pnpm create @quick-start/electron@latest apps/desktop -- --template react-ts
 cd apps/desktop
 pnpm add better-sqlite3 zustand react-markdown remark-gfm @tanstack/react-virtual i18next react-i18next
@@ -56,16 +56,16 @@ pnpm add -D @types/better-sqlite3 tailwindcss @tailwindcss/vite @electron/rebuil
   @playwright/test
 cd ../..
 
-# 8. Módulo nativo compilado para a versão do Electron
+# 8. Native module compiled for the Electron version
 pnpm --filter desktop exec electron-rebuild -f -w better-sqlite3
 
-# 9. Primeiro commit
+# 9. First commit
 git add -A && git commit -m "chore: bootstrap monorepo"
 ```
 
-### 1.3 Arquivos de configuração raiz
+### 1.3 Root configuration files
 
-`package.json` (raiz):
+`package.json` (root):
 
 ```json
 {
@@ -99,7 +99,7 @@ git add -A && git commit -m "chore: bootstrap monorepo"
 }
 ```
 
-`tsconfig.base.json` (estendido por todos os pacotes):
+`tsconfig.base.json` (extended by every package):
 
 ```json
 {
@@ -111,30 +111,30 @@ git add -A && git commit -m "chore: bootstrap monorepo"
 }
 ```
 
-Ordem de build: `contract` → `runner` e `mcp-servers` → `desktop`. O `turbo` resolve isso pelo `dependsOn: ["^build"]`.
+Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` resolves this through `dependsOn: ["^build"]`.
 
-### 1.4 Nomes dos pacotes
+### 1.4 Package names
 
-| Diretório | `name` | Publicável |
+| Directory | `name` | Publishable |
 |---|---|---|
-| packages/contract | `@comitiva/contract` | sim (o hub Laravel consome o `schema/`) |
-| packages/runner | `@comitiva/runner` | sim (bin `comitiva-runner`) |
-| packages/mcp-servers | `@comitiva/mcp-servers` | sim (bins `comitiva-mcp-filesystem`, `comitiva-mcp-gdrive`) |
-| apps/desktop | `desktop` | não |
+| packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`) |
+| packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner`) |
+| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bins `comitiva-mcp-filesystem`, `comitiva-mcp-gdrive`) |
+| apps/desktop | `desktop` | no |
 
-### 1.5 Checklist de saída da Fase 0
+### 1.5 Phase 0 exit checklist
 
-- [ ] `pnpm lint && pnpm typecheck && pnpm test` verdes
-- [ ] `pnpm dev` abre janela; `window.api.app.getVersion()` retorna a versão via IPC
-- [ ] runner sobe como processo filho e responde `ping`
-- [ ] spike: duas respostas Anthropic em streaming simultâneo, cancelar independente
-- [ ] latência evento do runner → paint medida e anotada em `docs/STATUS.md`
-- [ ] ADRs: ORM, licença, execução do runner, formato canônico de blocos
-- [ ] CI verde em mac/win/linux
+- [ ] `pnpm lint && pnpm typecheck && pnpm test` green
+- [ ] `pnpm dev` opens a window; `window.api.app.getVersion()` returns the version via IPC
+- [ ] runner starts as a child process and answers `ping`
+- [ ] spike: two Anthropic responses streaming simultaneously, independent cancel
+- [ ] runner event → paint latency measured and recorded in `docs/STATUS.md`
+- [ ] ADRs: ORM, license, runner execution, canonical block format
+- [ ] CI green on mac/win/linux
 
 ---
 
-## 2. Estrutura de arquivos
+## 2. File layout
 
 ```
 packages/contract/src/
@@ -142,10 +142,10 @@ packages/contract/src/
 ├── entities/          connection.ts agent.ts conversation.ts message.ts tool-server.ts
 │                      tool-approval.ts usage-record.ts usage-policy.ts
 ├── blocks.ts          Block = TextBlock | ImageBlock | DocumentBlock | ToolUseBlock | ToolResultBlock
-├── provider-config.ts ConnectionConfig discriminated union por provider
+├── provider-config.ts ConnectionConfig discriminated union per provider
 ├── runner-protocol.ts RunnerRequest, RunnerEvent
-├── ipc.ts             contrato IPC do desktop (canais + schemas de entrada/saída)
-└── schema.ts          script: zod → JSON Schema em ../schema/*.json
+├── ipc.ts             desktop IPC contract (channels + input/output schemas)
+└── schema.ts          script: zod → JSON Schema in ../schema/*.json
 
 packages/runner/src/
 ├── bin.ts             entry: new RunnerServer(process.stdin, process.stdout).start()
@@ -156,7 +156,7 @@ packages/runner/src/
 │   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts parsers/
 ├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts
 ├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts
-├── client/            RunnerClient.ts        (embutido pelos shells)
+├── client/            RunnerClient.ts        (embedded by shells)
 └── util/              jsonl.ts errors.ts logger.ts
 
 packages/mcp-servers/src/
@@ -172,10 +172,10 @@ apps/desktop/src/
 │   ├── services/                ConversationService.ts AgentService.ts ConnectionService.ts
 │   │                            ToolServerService.ts ApprovalService.ts UsageService.ts TitleService.ts
 │   ├── ipc/                     IpcRouter.ts handlers/*.ts
-│   └── oauth/                   GoogleOAuth.ts (Fase 5b)
-├── preload/index.ts             expõe window.api tipado a partir de contract/ipc.ts
+│   └── oauth/                   GoogleOAuth.ts (Phase 5b)
+├── preload/index.ts             exposes a typed window.api derived from contract/ipc.ts
 └── renderer/src/
-    ├── backend/                 Backend.ts LocalBackend.ts (RemoteBackend.ts na Fase 8)
+    ├── backend/                 Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
     ├── store/                   agents.ts conversations.ts messages.ts ui.ts
     ├── components/              Sidebar/ Chat/ Composer/ ToolBlock/ ApprovalCard/ Forms/ Settings/
     ├── screens/                 ChatScreen ConnectionsScreen ToolsScreen UsageScreen SettingsScreen
@@ -184,21 +184,21 @@ apps/desktop/src/
 
 ---
 
-## 3. Modelo de dados
+## 3. Data model
 
-### 3.1 Diagrama
+### 3.1 Diagram
 
 ```mermaid
 erDiagram
-    CONNECTION ||--o{ AGENT : "usa"
-    AGENT ||--o{ CONVERSATION : "tem"
-    CONVERSATION ||--o{ MESSAGE : "contém"
-    AGENT }o--o{ TOOL_SERVER : "habilita (agent_tool_server)"
-    AGENT ||--o{ AGENT_ROOT : "raízes"
-    CONVERSATION ||--o{ TOOL_APPROVAL : "aprovações"
-    MESSAGE ||--o{ USAGE_RECORD : "gera"
-    CONNECTION ||--o{ USAGE_RECORD : "consumo"
-    CONNECTION ||--o| USAGE_POLICY : "limite (Fase 10)"
+    CONNECTION ||--o{ AGENT : "uses"
+    AGENT ||--o{ CONVERSATION : "has"
+    CONVERSATION ||--o{ MESSAGE : "contains"
+    AGENT }o--o{ TOOL_SERVER : "enables (agent_tool_server)"
+    AGENT ||--o{ AGENT_ROOT : "roots"
+    CONVERSATION ||--o{ TOOL_APPROVAL : "approvals"
+    MESSAGE ||--o{ USAGE_RECORD : "generates"
+    CONNECTION ||--o{ USAGE_RECORD : "consumption"
+    CONNECTION ||--o| USAGE_POLICY : "limit (Phase 10)"
 
     CONNECTION { text id PK; text name; text kind; text provider; json config; text secret_ref; int enabled; text created_at; text updated_at }
     AGENT { text id PK; text name; text avatar; text connection_id FK; text model; text role; json params; text permission_policy; json fallback_connection_ids; json tags; text created_at; text updated_at }
@@ -211,7 +211,7 @@ erDiagram
     USAGE_POLICY { text connection_id PK; int max_tokens_day; real max_cost_day; int max_concurrent; text window_start; text window_end }
 ```
 
-### 3.2 DDL inicial (SQLite, migration 0001)
+### 3.2 Initial DDL (SQLite, migration 0001)
 
 ```sql
 CREATE TABLE connections (
@@ -285,26 +285,26 @@ CREATE INDEX idx_usage_agent_time ON usage_records(agent_id, created_at);
 CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
 ```
 
-Convenções: ids são ULID (ordenáveis); datas ISO 8601 UTC; JSON em colunas TEXT validado por zod ao ler e escrever; `seq` em `messages` é incrementado por conversa e serve para ordenação e para reconciliação com o hub.
+Conventions: ids are ULIDs (sortable); dates are ISO 8601 UTC; JSON in TEXT columns is validated by zod on read and write; `seq` in `messages` is incremented per conversation and is used for ordering and for reconciliation with the hub.
 
-### 3.3 Blocos de mensagem (canônico)
+### 3.3 Message blocks (canonical)
 
 ```ts
 type Block =
   | { type: 'text'; text: string }
   | { type: 'image'; source: { kind: 'base64'; mediaType: string; data: string } | { kind: 'file'; path: string } }
-  | { type: 'document'; name: string; mediaType: string; source: /* idem */ }
+  | { type: 'document'; name: string; mediaType: string; source: /* same */ }
   | { type: 'tool_use'; id: string; toolServerId: string; name: string; input: unknown }
   | { type: 'tool_result'; toolUseId: string; content: Block[]; isError: boolean; durationMs?: number };
 ```
 
-Mensagem `assistant` pode misturar `text` e `tool_use`; a mensagem `tool` seguinte carrega os `tool_result`. Adaptadores traduzem para o formato do provider (OpenAI usa `tool_calls`/`role: tool`; Gemini usa `functionCall`/`functionResponse`).
+An `assistant` message can mix `text` and `tool_use`; the following `tool` message carries the `tool_result`s. Adapters translate to the provider's format (OpenAI uses `tool_calls`/`role: tool`; Gemini uses `functionCall`/`functionResponse`).
 
 ---
 
 ## 4. Runner
 
-### 4.1 Ciclo de vida
+### 4.1 Lifecycle
 
 ```mermaid
 sequenceDiagram
@@ -313,41 +313,41 @@ sequenceDiagram
     M->>R: spawn(execPath, [runner.js], { env: ELECTRON_RUN_AS_NODE=1 })
     M->>R: {"id":"1","type":"ping"}
     R-->>M: {"type":"response","id":"1","ok":true,"result":{"version":"0.1.0"}}
-    Note over M,R: a partir daqui, requisições e eventos fluem em JSON lines
-    R--xM: processo morre
-    M->>M: backoff (1s, 2s, 4s… máx 30s), marca runs ativos como error(retryable)
-    M->>R: spawn novamente
+    Note over M,R: from here on, requests and events flow as JSON lines
+    R--xM: process dies
+    M->>M: backoff (1s, 2s, 4s… max 30s), mark active runs as error(retryable)
+    M->>R: spawn again
 ```
 
 ### 4.2 Classes
 
 ```ts
-// server/Transport.ts — JSON lines sobre streams
+// server/Transport.ts — JSON lines over streams
 class JsonLinesTransport {
   constructor(input: NodeJS.ReadableStream, output: NodeJS.WritableStream);
   onMessage(handler: (msg: unknown) => void): void;
-  send(msg: RunnerEvent): void;        // serializa + '\n'; nunca lança
+  send(msg: RunnerEvent): void;        // serializes + '\n'; never throws
 }
 
 // server/RunnerServer.ts
 class RunnerServer {
   constructor(transport: JsonLinesTransport, deps: { registry: ProviderRegistry; mcp: McpClientManager; runs: RunManager });
-  start(): void;                        // valida cada linha com RunnerRequest schema, despacha ao RequestRouter
-  stop(): Promise<void>;                // cancela runs, fecha clientes MCP
+  start(): void;                        // validates each line with the RunnerRequest schema, dispatches to RequestRouter
+  stop(): Promise<void>;                // cancels runs, closes MCP clients
 }
 
 // server/RequestRouter.ts
 class RequestRouter {
-  handle(req: RunnerRequest): Promise<unknown>;   // switch por req.type → método correspondente
+  handle(req: RunnerRequest): Promise<unknown>;   // switch on req.type → matching method
   // connection.test → registry.get(provider).testConnection
   // connection.listModels → registry.get(provider).listModels
   // toolServer.start/stop → mcp.start/stop
   // run.start → runs.start ; run.cancel → runs.cancel ; run.approval → runs.resolveApproval
 }
 
-// runs/RunManager.ts — um Run por runId, todos concorrentes
+// runs/RunManager.ts — one Run per runId, all concurrent
 class RunManager {
-  start(req: RunStartRequest): void;                 // cria Run, não bloqueia
+  start(req: RunStartRequest): void;                 // creates Run, does not block
   cancel(runId: string): void;                       // AbortController.abort()
   resolveApproval(runId: string, toolUseId: string, decision: ApprovalDecision): void;
   active(): string[];
@@ -357,27 +357,27 @@ class RunManager {
 class Run {
   constructor(req: RunStartRequest, adapter: ProviderAdapter, tools: ToolCatalog, gate: PermissionGate, emit: (e: RunnerEvent) => void);
   execute(): Promise<void>;
-  // monta RunInput, cria RunContext { tools, callTool }, itera adapter.run(...)
-  // traduz AdapterEvent → RunnerEvent com runId; mede latência; coleta usage
+  // builds RunInput, creates RunContext { tools, callTool }, iterates adapter.run(...)
+  // translates AdapterEvent → RunnerEvent with runId; measures latency; collects usage
   private callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  // → gate.check(...) → se precisa aprovação, emite run.tool_call{requiresApproval:true} e aguarda promise
-  // → tools.call(...) → emite run.tool_result
+  // → gate.check(...) → if approval is needed, emits run.tool_call{requiresApproval:true} and awaits a promise
+  // → tools.call(...) → emits run.tool_result
 }
 
-// runs/ToolLoop.ts — usado pelos adaptadores de API
+// runs/ToolLoop.ts — used by the API adapters
 async function* toolLoop(opts: {
   callModel: (messages: Message[], tools: ToolDef[], signal: AbortSignal) => AsyncIterable<AdapterEvent>;
   ctx: RunContext; messages: Message[]; maxIterations: number; signal: AbortSignal;
 }): AsyncIterable<AdapterEvent>
-// loop: chama modelo → acumula tool_use → para cada um, ctx.callTool → anexa tool_result → repete até stopReason != 'tool_use'
+// loop: call model → accumulate tool_use → for each, ctx.callTool → append tool_result → repeat until stopReason != 'tool_use'
 
 // runs/PermissionGate.ts
 class PermissionGate {
   constructor(policy: PermissionPolicy, alwaysAllowed: Set<string> /* `${serverId}:${tool}` */);
   check(tool: ToolDef): 'allow' | 'ask' | 'deny';
   // read-only (annotations.readOnlyHint) → allow
-  // policy read-only + tool não read-only → deny
-  // allow-always registrado → allow ; policy allow-writes → allow ; senão ask
+  // policy read-only + tool not read-only → deny
+  // allow-always recorded → allow ; policy allow-writes → allow ; otherwise ask
 }
 ```
 
@@ -393,23 +393,23 @@ interface ProviderAdapter {
 }
 
 interface RunContext {
-  tools: ToolDef[];                                            // agregadas dos servidores do agente
+  tools: ToolDef[];                                            // aggregated from the agent's servers
   callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  mcpConfigForCli(): Promise<{ path: string; cleanup(): void }>; // arquivo temporário para harnesses
+  mcpConfigForCli(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses
   log(level: 'debug' | 'info' | 'warn', msg: string): void;
 }
 
 // providers/ProviderRegistry.ts
 class ProviderRegistry {
   register(adapter: ProviderAdapter): void;
-  get(id: ProviderId): ProviderAdapter;                        // lança UnknownProviderError
-  list(): ProviderDescriptor[];                                // usado pela UI para montar formulários
+  get(id: ProviderId): ProviderAdapter;                        // throws UnknownProviderError
+  list(): ProviderDescriptor[];                                // used by the UI to build forms
 }
 
-// providers/api/AnthropicAdapter.ts (padrão para os demais)
+// providers/api/AnthropicAdapter.ts (pattern for the others)
 class AnthropicAdapter implements ProviderAdapter {
   private client(config, secret): Anthropic;
-  private toProviderMessages(messages: Message[]): MessageParam[];   // Block[] → formato Anthropic
+  private toProviderMessages(messages: Message[]): MessageParam[];   // Block[] → Anthropic format
   private toProviderTools(tools: ToolDef[]): Tool[];
   run(input, ctx, signal) { return toolLoop({ callModel: (m, t, s) => this.stream(m, t, s), ... }); }
   private async *stream(...): AsyncIterable<AdapterEvent>;          // SDK stream → text_delta/tool_use/usage/done
@@ -419,29 +419,29 @@ class AnthropicAdapter implements ProviderAdapter {
 abstract class CliHarnessAdapter implements ProviderAdapter {
   kind = 'cli' as const;
   protected abstract buildArgs(input: RunInput, mcpConfigPath?: string): string[];
-  protected abstract parseLine(line: string): AdapterEvent[];    // uma linha JSON → zero ou mais eventos
+  protected abstract parseLine(line: string): AdapterEvent[];    // one JSON line → zero or more events
   protected abstract versionArgs(): string[];
   protected locateBinary(config: CliConfig): Promise<string>;     // config.binaryPath || which()
   protected spawn(bin, args, opts: { cwd; env; signal }): ChildProcess;
   async *run(input, ctx, signal) { /* mcp config → spawn → readline stdout → parseLine → yield; stderr → error */ }
-  async testConnection(config) { /* locate → --version → prompt mínimo */ }
+  async testConnection(config) { /* locate → --version → minimal prompt */ }
 }
 class ClaudeCodeAdapter extends CliHarnessAdapter { /* -p, --output-format stream-json, --resume, --mcp-config */ }
-class CodexAdapter extends CliHarnessAdapter { /* exec --json ... verificado no --help */ }
+class CodexAdapter extends CliHarnessAdapter { /* exec --json ... verified via --help */ }
 ```
 
 ```ts
 // mcp/McpClientManager.ts
 class McpClientManager {
-  start(server: ToolServer, secrets: Record<string, string>): Promise<ToolDef[]>;  // idempotente
+  start(server: ToolServer, secrets: Record<string, string>): Promise<ToolDef[]>;  // idempotent
   stop(serverId: string): Promise<void>;
   catalogFor(serverIds: string[]): ToolCatalog;
   private restartOnFailure(serverId: string): void;
 }
 
-// mcp/ToolCatalog.ts — visão agregada para um run
+// mcp/ToolCatalog.ts — aggregated view for a run
 class ToolCatalog {
-  defs(): ToolDef[];                                            // nomes prefixados: `${serverSlug}__${tool}` para evitar colisão
+  defs(): ToolDef[];                                            // prefixed names: `${serverSlug}__${tool}` to avoid collisions
   call(name: string, input: unknown, signal: AbortSignal): Promise<ToolResult>;
   resolve(name: string): { serverId: string; tool: ToolDef };
 }
@@ -450,14 +450,14 @@ class ToolCatalog {
 class UsageCalculator {
   constructor(pricing: PricingTable, overrides?: PricingTable);
   cost(model: string, usage: TokenUsage): number | null;
-  estimate(messages: Message[], output: string): TokenUsage;   // fallback aproximado, estimated=true
+  estimate(messages: Message[], output: string): TokenUsage;   // approximate fallback, estimated=true
 }
 
-// client/RunnerClient.ts — o que os shells embutem
+// client/RunnerClient.ts — what shells embed
 class RunnerClient extends EventEmitter {
   constructor(opts: { spawn: () => ChildProcess; requestTimeoutMs?: number });
   start(): Promise<void>;                                       // spawn + ping
-  request<T>(req: Omit<RunnerRequest, 'id'>): Promise<T>;       // correlaciona por id
+  request<T>(req: Omit<RunnerRequest, 'id'>): Promise<T>;       // correlates by id
   startRun(req: RunStartPayload): { runId: string };
   cancelRun(runId: string): void;
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void;
@@ -467,11 +467,11 @@ class RunnerClient extends EventEmitter {
 }
 ```
 
-### 4.3 Fluxo de um turno com ferramenta e aprovação
+### 4.3 Flow of a turn with a tool and approval
 
 ```mermaid
 sequenceDiagram
-    actor U as Usuário
+    actor U as User
     participant UI as Renderer
     participant CS as ConversationService (main)
     participant RC as RunnerClient
@@ -479,97 +479,97 @@ sequenceDiagram
     participant A as Adapter (API)
     participant FS as MCP filesystem
 
-    U->>UI: envia "reorganize os relatórios"
+    U->>UI: sends "reorganize the reports"
     UI->>CS: sendMessage(convId, blocks)
-    CS->>CS: persiste msg user; status=running
+    CS->>CS: persists user msg; status=running
     CS->>RC: run.start {agent, connection, secret, messages, alwaysAllowed}
     RC->>R: JSON line
     R->>A: run(input, ctx)
     A-->>R: text_delta*
-    R-->>CS: run.text_delta (batched no CS a cada ~50ms)
+    R-->>CS: run.text_delta (batched in CS every ~50ms)
     CS-->>UI: stream
     A-->>R: tool_use fs__list_dir
     R->>R: gate.check → allow (read-only)
     R->>FS: tools/call list_dir
-    FS-->>R: resultado
+    FS-->>R: result
     R-->>CS: run.tool_call{requiresApproval:false}, run.tool_result
     A-->>R: tool_use fs__move
     R->>R: gate.check → ask
     R-->>CS: run.tool_call{requiresApproval:true}
     CS->>CS: status=awaiting-approval
     CS-->>UI: ApprovalCard
-    U->>UI: "Permitir sempre"
+    U->>UI: "Always allow"
     UI->>CS: approve(convId, toolUseId, 'allow-always')
-    CS->>CS: grava tool_approval
+    CS->>CS: stores tool_approval
     CS->>RC: run.approval
-    RC->>R: JSON line → promise resolvida
+    RC->>R: JSON line → promise resolved
     R->>FS: tools/call move
     FS-->>R: ok
     R-->>CS: run.tool_result
     A-->>R: text_delta* , done, usage
     R-->>CS: run.usage, run.done
-    CS->>CS: persiste msg assistant/tool, usage_record; status=idle
+    CS->>CS: persists assistant/tool msg, usage_record; status=idle
     CS-->>UI: done
 ```
 
-Batching: o `ConversationService` acumula `text_delta` e escreve no SQLite a cada ~250 ms ou ao fim do run; para a UI, encaminha a cada ~50 ms. Nunca um `UPDATE` por token.
+Batching: `ConversationService` accumulates `text_delta` and writes to SQLite every ~250 ms or at the end of the run; to the UI, it forwards every ~50 ms. Never one `UPDATE` per token.
 
 ---
 
-## 5. Servidores MCP embutidos
+## 5. Built-in MCP servers
 
 ```ts
 // mcp-servers/src/filesystem/RootGuard.ts
 class RootGuard {
   constructor(roots: Array<{ path: string; mode: 'read' | 'readwrite' }>);
   resolve(requested: string, op: 'read' | 'write'): string;
-  // realpath do candidato E de cada raiz; exige que realpath(candidato) comece com realpath(raiz) + sep
-  // para write, exige raiz readwrite; para caminhos ainda inexistentes, valida o diretório pai
-  // lança OutsideRootsError / ReadOnlyRootError — nunca retorna caminho fora das raízes
+  // realpath of the candidate AND of each root; requires realpath(candidate) to start with realpath(root) + sep
+  // for write, requires a readwrite root; for paths that do not exist yet, validates the parent directory
+  // throws OutsideRootsError / ReadOnlyRootError — never returns a path outside the roots
 }
 
-// mcp-servers/src/filesystem/server.ts — argumentos: --root <path>:<mode> (repetível)
-// tools: list_dir, read_file, search (glob + conteúdo), write_file, create_dir, move, delete
+// mcp-servers/src/filesystem/server.ts — arguments: --root <path>:<mode> (repeatable)
+// tools: list_dir, read_file, search (glob + content), write_file, create_dir, move, delete
 // annotations: list_dir/read_file/search → readOnlyHint:true ; delete/move → destructiveHint:true
-// aprovação: o servidor NÃO aprova nada; o runner decide antes de chamar tools/call (PermissionGate).
-// Para harnesses de CLI que chamam o servidor diretamente, o servidor recebe --approval-socket <path>
-// e pergunta ao runner por um socket local antes de executar escritas (Fase 5, confirmar desenho).
+// approval: the server does NOT approve anything; the runner decides before calling tools/call (PermissionGate).
+// For CLI harnesses that call the server directly, the server receives --approval-socket <path>
+// and asks the runner over a local socket before executing writes (Phase 5, design to be confirmed).
 ```
 
 ```ts
-// mcp-servers/src/google-drive/server.ts — tokens via env GDRIVE_ACCESS_TOKEN (renovado pelo desktop)
-// tools: search, read (Docs → texto/markdown, Sheets → CSV), create (doc/texto), update, move
-// annotations análogas
+// mcp-servers/src/google-drive/server.ts — tokens via env GDRIVE_ACCESS_TOKEN (refreshed by the desktop)
+// tools: search, read (Docs → text/markdown, Sheets → CSV), create (doc/text), update, move
+// analogous annotations
 ```
 
 ---
 
-## 6. Desktop — processo main
+## 6. Desktop — main process
 
 ```ts
 // main/runner/RunnerSupervisor.ts
 class RunnerSupervisor {
   constructor(deps: { onEvent: (e: RunnerEvent) => void; runnerEntry: string });
   client: RunnerClient;
-  start(): Promise<void>;         // spawn com process.execPath e ELECTRON_RUN_AS_NODE=1 (ADR), ou node embarcado
-  private onCrash(): void;        // backoff, restart, notifica services para marcar runs como error
+  start(): Promise<void>;         // spawn with process.execPath and ELECTRON_RUN_AS_NODE=1 (ADR), or embedded node
+  private onCrash(): void;        // backoff, restart, notify services to mark runs as error
   stop(): Promise<void>;
 }
 
 // main/db/Database.ts
 class Database {
   static open(path: string): Database;   // WAL, foreign_keys=ON, busy_timeout
-  migrate(): void;                       // aplica migrations/*.sql em ordem, registra em schema_migrations
+  migrate(): void;                       // applies migrations/*.sql in order, records in schema_migrations
   transaction<T>(fn: () => T): T;
   raw: BetterSqlite3.Database;
 }
 
-// main/db/repositories/*.ts — padrão comum
+// main/db/repositories/*.ts — common pattern
 interface Repository<T, Create, Update> {
   list(filter?): T[]; get(id): T | null; create(data: Create): T; update(id, data: Update): T; delete(id): void;
 }
 class ConnectionRepository implements Repository<Connection, ...> { /* + hasAgents(id) */ }
-class AgentRepository { /* + roots/toolServers carregados junto; alwaysAllowed(agentId) */ }
+class AgentRepository { /* + roots/toolServers loaded together; alwaysAllowed(agentId) */ }
 class ConversationRepository { /* + listByAgent(agentId, {archived}); setStatus; setHarnessSession; touch */ }
 class MessageRepository { /* + listByConversation(id, {limit, before}); appendText(id, text); setContent; setStatus; nextSeq */ }
 class ToolServerRepository, ToolApprovalRepository, UsageRepository { /* summary(range, groupBy); timeseries */ }
@@ -581,8 +581,8 @@ interface SecretStore {
   delete(ref: string): Promise<void>;
 }
 class ElectronSecretStore implements SecretStore {
-  // safeStorage.encryptString → arquivo <userData>/secrets.bin (JSON { ref: base64 }), escrita atômica (tmp + rename)
-  // recusa operar se !safeStorage.isEncryptionAvailable()
+  // safeStorage.encryptString → file <userData>/secrets.bin (JSON { ref: base64 }), atomic write (tmp + rename)
+  // refuses to operate if !safeStorage.isEncryptionAvailable()
 }
 
 // main/services/ConversationService.ts
@@ -594,20 +594,20 @@ class ConversationService extends EventEmitter {
   retryLast(conversationId: string): Promise<void>;
   approve(conversationId: string, toolUseId: string, decision: ApprovalDecision): void;
   private buildRunRequest(conv: Conversation): RunStartPayload;      // agent + connection + secret + history + alwaysAllowed
-  private handleRunnerEvent(e: RunnerEvent): void;                   // despacha por tipo; mantém mapa runId → conversationId
-  private flushText(conversationId: string): void;                   // batching para SQLite
-  // eventos emitidos para o IpcRouter: 'conversation.updated', 'message.delta', 'message.block', 'message.completed', 'approval.requested'
+  private handleRunnerEvent(e: RunnerEvent): void;                   // dispatches by type; keeps a runId → conversationId map
+  private flushText(conversationId: string): void;                   // batching for SQLite
+  // events emitted to IpcRouter: 'conversation.updated', 'message.delta', 'message.block', 'message.completed', 'approval.requested'
 }
 
 // main/ipc/IpcRouter.ts
 class IpcRouter {
   constructor(services, windowManager);
-  register(): void;   // para cada canal em contract/ipc.ts: ipcMain.handle(channel, (e, input) => schema.parse(input) → service)
-  broadcast(channel: string, payload: unknown): void;   // webContents.send para todas as janelas
+  register(): void;   // for each channel in contract/ipc.ts: ipcMain.handle(channel, (e, input) => schema.parse(input) → service)
+  broadcast(channel: string, payload: unknown): void;   // webContents.send to all windows
 }
 ```
 
-Canais IPC (definidos em `contract/ipc.ts`, todos com schema de entrada e saída):
+IPC channels (defined in `contract/ipc.ts`, all with input and output schemas):
 
 ```
 app.getVersion
@@ -627,7 +627,7 @@ events: conversation.updated, message.delta, message.block, message.completed, a
 ## 7. Desktop — renderer
 
 ```ts
-// renderer/src/backend/Backend.ts — a UI só conhece isto
+// renderer/src/backend/Backend.ts — the UI only knows this
 interface Backend {
   capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };
   connections: { list(); create(d); update(id, d); delete(id); test(id); listModels(id) };
@@ -639,63 +639,63 @@ interface Backend {
   usage: { summary(range, groupBy); timeseries(range) };
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
-class LocalBackend implements Backend { /* delega a window.api; onEvent assina os canais de evento */ }
+class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
 
 // renderer/src/store/*.ts (Zustand)
-useAgentsStore:         agents[], selectedAgentId, statusByAgent (derivado das conversas), unreadByAgent
+useAgentsStore:         agents[], selectedAgentId, statusByAgent (derived from conversations), unreadByAgent
 useConversationsStore:  byAgent: Record<agentId, Conversation[]>, selectedByAgent
 useMessagesStore:       byConversation: Record<convId, Message[]>, streamingText: Record<convId, string>,
                         applyDelta(convId, text), applyBlock(convId, block), complete(convId, message)
 useUiStore:             rightPanelOpen, theme, quickSwitcherOpen, pendingApprovals: Record<convId, ToolCallEvent>
 ```
 
-Componentes principais: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualizado), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renderiza campos a partir de `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
+Main components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renders fields from `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
 
 ---
 
-## 8. Comandos do dia a dia
+## 8. Everyday commands
 
 ```bash
-pnpm dev                      # desktop em dev (hot reload no renderer, restart no main)
-pnpm runner:dev               # runner sozinho: ecoe JSON lines no stdin para testar
+pnpm dev                      # desktop in dev (hot reload in the renderer, restart of main)
+pnpm runner:dev               # runner alone: echo JSON lines into stdin to test
 echo '{"id":"1","type":"ping"}' | pnpm --filter @comitiva/runner exec tsx src/bin.ts
 
-pnpm test                     # tudo
+pnpm test                     # everything
 pnpm --filter @comitiva/runner test -- --watch
 pnpm --filter desktop exec playwright test
 
-pnpm contract:schema          # regenera packages/contract/schema/*.json (commitar)
-pnpm --filter desktop exec electron-rebuild -f -w better-sqlite3   # após trocar versão do Electron
+pnpm contract:schema          # regenerates packages/contract/schema/*.json (commit it)
+pnpm --filter desktop exec electron-rebuild -f -w better-sqlite3   # after changing the Electron version
 
-pnpm package                  # electron-builder para a plataforma atual
-pnpm --filter desktop run package -- --mac --win --linux           # com CI ou toolchains instaladas
+pnpm package                  # electron-builder for the current platform
+pnpm --filter desktop run package -- --mac --win --linux           # with CI or installed toolchains
 
-# Inspeção do banco local
+# Inspecting the local database
 sqlite3 "$HOME/Library/Application Support/comitiva/comitiva.db" '.tables'   # macOS
 # Linux: ~/.config/comitiva/ ; Windows: %APPDATA%\comitiva\
 ```
 
-Depuração do runner: `AGENTDESK_RUNNER_LOG=debug pnpm dev` faz o runner logar em stderr (nunca em stdout, que é o canal do protocolo). O main grava esse stderr em `<userData>/logs/runner.log` com rotação.
+Debugging the runner: `AGENTDESK_RUNNER_LOG=debug pnpm dev` makes the runner log to stderr (never to stdout, which is the protocol channel). Main writes that stderr to `<userData>/logs/runner.log` with rotation.
 
 ---
 
-## 9. Convenções
+## 9. Conventions
 
-- **Erros**: classe `AppError { code: string; message; retryable; cause? }` no `contract`; adaptadores mapeiam erros de provider para códigos estáveis (`auth_failed`, `rate_limited`, `provider_unavailable`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`). A UI traduz por código (i18n), nunca exibe mensagem crua de provider como título.
-- **Logs**: `pino` no runner e no main; níveis por env; sem conteúdo de mensagens nos logs em nível `info`.
-- **Segredos**: só `secretRef` no banco e nos payloads IPC; o renderer nunca recebe um valor de segredo; o runner recebe o valor por requisição e não o persiste.
-- **Testes**: runner e mcp-servers com vitest e mocks (msw para HTTP, servidor MCP falso em memória, binário falso em shell para CLI); desktop main com SQLite em memória; renderer com testing-library; Playwright para o fluxo de duas conversas em paralelo com provider mock.
-- **Commits**: conventional commits; escopo = pacote (`feat(runner): ...`, `fix(desktop): ...`).
-- **ADR**: uma por decisão que afeta mais de um pacote; formato: contexto, decisão, consequências.
-
----
-
-## 10. Ordem de implementação dentro de cada fase
-
-Regra geral: **contract → runner → main → renderer**, com testes em cada camada antes de passar à seguinte. Um tópico só é "pronto" quando o Playwright ou um teste de integração exercita o caminho inteiro. Isso vale para todas as fases e deve constar no `CLAUDE.md`.
+- **Errors**: `AppError { code: string; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`). The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
+- **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
+- **Tests**: runner and mcp-servers with vitest and mocks (msw for HTTP, fake in-memory MCP server, fake shell binary for CLI); desktop main with in-memory SQLite; renderer with testing-library; Playwright for the two-parallel-conversations flow with a mock provider.
+- **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
+- **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 
 ---
 
-## 11. Uso pelo Claude Code
+## 10. Implementation order within each phase
 
-Todo prompt de fase manda ler este documento junto com `SPEC.md`. Quando o código divergir daqui por um bom motivo, o documento é atualizado no mesmo commit; ele nunca fica desatualizado em silêncio.
+General rule: **contract → runner → main → renderer**, with tests at each layer before moving on to the next. A topic is only "done" when Playwright or an integration test exercises the whole path. This applies to every phase and must be stated in `CLAUDE.md`.
+
+---
+
+## 11. Use by Claude Code
+
+Every phase prompt says to read this document together with `SPEC.md`. When the code diverges from it for a good reason, the document is updated in the same commit; it never goes silently out of date.

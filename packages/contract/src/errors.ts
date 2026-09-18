@@ -1,0 +1,66 @@
+import { z } from 'zod';
+
+/**
+ * Stable error codes. The UI translates by code and never shows a raw provider
+ * message as a title.
+ */
+export const ErrorCode = z.enum([
+  'auth_failed',
+  'rate_limited',
+  'provider_unavailable',
+  'provider_error',
+  'binary_not_found',
+  'not_logged_in',
+  'outside_roots',
+  'approval_denied',
+  'invalid_request',
+  'not_implemented',
+  'unknown_provider',
+  'unsupported_content',
+  'secret_missing',
+  'secret_store_unavailable',
+  'runner_crashed',
+  'runner_unavailable',
+  'timeout',
+  'internal',
+]);
+export type ErrorCode = z.infer<typeof ErrorCode>;
+
+/** Wire shape of an error: what crosses process boundaries. */
+export const AppErrorShape = z.object({
+  code: ErrorCode,
+  message: z.string(),
+  retryable: z.boolean(),
+});
+export type AppErrorShape = z.infer<typeof AppErrorShape>;
+
+export class AppError extends Error {
+  readonly code: ErrorCode;
+  readonly retryable: boolean;
+
+  constructor(
+    code: ErrorCode,
+    message: string,
+    opts: { retryable?: boolean; cause?: unknown } = {},
+  ) {
+    super(message, opts.cause === undefined ? undefined : { cause: opts.cause });
+    this.name = 'AppError';
+    this.code = code;
+    this.retryable = opts.retryable ?? false;
+  }
+
+  toJSON(): AppErrorShape {
+    return { code: this.code, message: this.message, retryable: this.retryable };
+  }
+
+  static fromShape(shape: AppErrorShape): AppError {
+    return new AppError(shape.code, shape.message, { retryable: shape.retryable });
+  }
+
+  /** Normalizes anything thrown into an AppError, defaulting to `internal`. */
+  static from(err: unknown): AppError {
+    if (err instanceof AppError) return err;
+    const message = err instanceof Error ? err.message : String(err);
+    return new AppError('internal', message, { cause: err });
+  }
+}

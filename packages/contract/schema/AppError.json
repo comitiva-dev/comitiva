@@ -1,0 +1,42 @@
+{
+  "$id": "https://comitiva.dev/schema/AppError.json",
+  "title": "AppError",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "code": {
+      "type": "string",
+      "enum": [
+        "auth_failed",
+        "rate_limited",
+        "provider_unavailable",
+        "provider_error",
+        "binary_not_found",
+        "not_logged_in",
+        "outside_roots",
+        "approval_denied",
+        "invalid_request",
+        "not_implemented",
+        "unknown_provider",
+        "unsupported_content",
+        "secret_missing",
+        "secret_store_unavailable",
+        "runner_crashed",
+        "runner_unavailable",
+        "timeout",
+        "internal"
+      ]
+    },
+    "message": {
+      "type": "string"
+    },
+    "retryable": {
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "code",
+    "message",
+    "retryable"
+  ]
+}

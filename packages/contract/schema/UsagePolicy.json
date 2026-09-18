@@ -1,0 +1,77 @@
+{
+  "$id": "https://comitiva.dev/schema/UsagePolicy.json",
+  "title": "UsagePolicy",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "connectionId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "maxTokensDay": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "maxCostDay": {
+      "anyOf": [
+        {
+          "type": "number",
+          "exclusiveMinimum": 0
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "maxConcurrent": {
+      "anyOf": [
+        {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "windowStart": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "windowEnd": {
+      "anyOf": [
+        {
+          "type": "string",
+          "pattern": "^([01]\\d|2[0-3]):[0-5]\\d$"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "connectionId",
+    "maxTokensDay",
+    "maxCostDay",
+    "maxConcurrent",
+    "windowStart",
+    "windowEnd"
+  ]
+}

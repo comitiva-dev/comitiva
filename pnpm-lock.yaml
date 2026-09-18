@@ -213,6 +213,12 @@ importers:
         specifier: ^4.23.13
         version: 4.23.13
 
+  packages/mcp-servers:
+    devDependencies:
+      tsup:
+        specifier: ^8.5.1
+        version: 8.5.1(postcss@8.5.28)(tsx@4.23.13)(typescript@6.0.3)
+
   packages/runner:
     dependencies:
       '@anthropic-ai/sdk':

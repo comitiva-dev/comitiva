@@ -32,6 +32,8 @@ export interface ConnectionChanges {
   enabled?: boolean | undefined;
   config?: Record<string, unknown> | undefined;
   secretRef?: string | null | undefined;
+  /** The stored key value changed (same ref): the last test no longer applies. */
+  keyChanged?: boolean | undefined;
 }
 
 type Row = typeof connections.$inferSelect;
@@ -84,11 +86,15 @@ export class ConnectionRepository {
     return { connection, lastTest: null };
   }
 
-  /** Applies changes; changing config or the key clears the last test (it no longer applies). */
+  /** Applies changes; a different config or key clears the last test. */
   update(id: string, changes: ConnectionChanges): ConnectionRecord {
     const current = this.require(id);
     const connection = this.preview(current.connection, changes);
-    const staleTest = changes.config !== undefined || changes.secretRef !== undefined;
+    // A test result no longer applies once the endpoint, model or key change.
+    const staleTest =
+      JSON.stringify(connection.config) !== JSON.stringify(current.connection.config) ||
+      connection.secretRef !== current.connection.secretRef ||
+      changes.keyChanged === true;
     this.db.orm
       .update(connections)
       .set({

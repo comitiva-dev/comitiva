@@ -100,8 +100,13 @@ describe('ConnectionRepository', () => {
       errorCode: 'auth_failed',
     });
 
-    // A rename keeps it; a config change makes it stale.
-    expect(repo.update(connection.id, { name: 'renamed' }).lastTest).not.toBeNull();
+    // A rename (even resending the same config) keeps it; a config or key change makes it stale.
+    expect(
+      repo.update(connection.id, { name: 'renamed', config: connection.config }).lastTest,
+    ).not.toBeNull();
+    repo.recordTest(connection.id, { ok: true, latencyMs: 1 }, at);
+    expect(repo.update(connection.id, { keyChanged: true }).lastTest).toBeNull();
+    repo.recordTest(connection.id, { ok: true, latencyMs: 1 }, at);
     expect(
       repo.update(connection.id, { config: { ...groq.config, defaultModel: 'other' } }).lastTest,
     ).toBeNull();

@@ -69,6 +69,7 @@ export class ConnectionService {
       enabled: patch.enabled,
       config: patch.config,
       secretRef,
+      keyChanged: patch.apiKey !== undefined,
     };
     this.deps.repo.preview(current, changes); // throws invalid_request before any secret change
     if (typeof patch.apiKey === 'string') await this.deps.secrets.set(ref, patch.apiKey);

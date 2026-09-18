@@ -26,10 +26,20 @@ export class ElectronSecretStore implements SecretStore {
   private cache: Record<string, string> | null = null;
   private queue: Promise<unknown> = Promise.resolve();
 
+  private readonly allowWeak: boolean;
+
+  /**
+   * `allowWeak` accepts Linux's `basic_text` backend (obfuscation only). Main
+   * sets it only with COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1 (tests and CI):
+   * without a keyring the product refuses to store keys (SPEC §7).
+   */
   constructor(
     private readonly filePath: string,
     private readonly crypto: SafeStorageLike,
-  ) {}
+    opts: { allowWeak?: boolean } = {},
+  ) {
+    this.allowWeak = opts.allowWeak ?? false;
+  }
 
   /**
    * True on Linux when no keyring is available and Chromium falls back to
@@ -37,6 +47,12 @@ export class ElectronSecretStore implements SecretStore {
    */
   isWeak(): boolean {
     return this.crypto.getSelectedStorageBackend?.() === 'basic_text';
+  }
+
+  status(): { available: boolean; weak: boolean } {
+    const weak = this.isWeak();
+    const available = this.crypto.isEncryptionAvailable() && (!weak || this.allowWeak);
+    return { available, weak: available && weak };
   }
 
   async get(ref: string): Promise<string | null> {
@@ -65,8 +81,13 @@ export class ElectronSecretStore implements SecretStore {
   }
 
   private assertAvailable(): void {
-    if (!this.crypto.isEncryptionAvailable()) {
-      throw new AppError('secret_store_unavailable', 'OS encryption is not available');
+    if (!this.status().available) {
+      throw new AppError(
+        'secret_store_unavailable',
+        this.isWeak()
+          ? 'No OS keyring is available: keys would only be obfuscated'
+          : 'OS encryption is not available',
+      );
     }
   }
 

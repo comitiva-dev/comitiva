@@ -65,4 +65,25 @@ describe('ElectronSecretStore', () => {
     const weak = fakeSafeStorage({ getSelectedStorageBackend: () => 'basic_text' });
     expect(new ElectronSecretStore(file, weak).isWeak()).toBe(true);
   });
+
+  it('refuses to store keys on a weak backend unless explicitly allowed', async () => {
+    const weak = fakeSafeStorage({ getSelectedStorageBackend: () => 'basic_text' });
+    const refusing = new ElectronSecretStore(file, weak);
+    expect(refusing.status()).toEqual({ available: false, weak: false });
+    await expect(refusing.set('k', 'v')).rejects.toMatchObject({
+      code: 'secret_store_unavailable',
+    });
+
+    const allowed = new ElectronSecretStore(file, weak, { allowWeak: true });
+    expect(allowed.status()).toEqual({ available: true, weak: true });
+    await allowed.set('k', 'v');
+    expect(await allowed.get('k')).toBe('v');
+  });
+
+  it('reports a healthy keyring as available and not weak', () => {
+    expect(new ElectronSecretStore(file, fakeSafeStorage()).status()).toEqual({
+      available: true,
+      weak: false,
+    });
+  });
 });

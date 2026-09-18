@@ -7,4 +7,6 @@ export interface SecretStore {
   get(ref: string): Promise<string | null>;
   has(ref: string): Promise<boolean>;
   delete(ref: string): Promise<void>;
+  /** Whether values can be stored securely right now (see SecretStorageStatus). */
+  status(): { available: boolean; weak: boolean };
 }

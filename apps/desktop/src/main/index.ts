@@ -76,6 +76,8 @@ async function bootstrap(): Promise<void> {
     emit: (event) => router?.broadcast('spike.event', event),
     latencyLogFile: paths.log('latency.jsonl'),
     anthropicBaseUrl: process.env.COMITIVA_ANTHROPIC_BASE_URL,
+    // Measurement knob for docs/STATUS.md; defaults to DELTA_FLUSH_MS.
+    ...(process.env.COMITIVA_DELTA_FLUSH_MS ? { flushMs: Number(process.env.COMITIVA_DELTA_FLUSH_MS) } : {}),
   });
 
   router = new IpcRouter(

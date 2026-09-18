@@ -1,12 +1,12 @@
 {
   "name": "desktop",
   "productName": "Comitiva",
+  "desktopName": "comitiva.desktop",
   "version": "0.1.0",
   "private": true,
   "description": "Comitiva desktop app \u2014 agentic chat for your whole team",
   "license": "Apache-2.0",
   "author": "Comitiva contributors",
-  "homepage": "https://github.com/comitiva/comitiva",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -33,7 +33,7 @@
     "@vitejs/plugin-react": "^5.2.0",
     "drizzle-kit": "^0.31.10",
     "drizzle-orm": "^0.45.2",
-    "electron": "^44.4.1",
+    "electron": "44.4.2",
     "electron-builder": "^26.15.3",
     "electron-vite": "^5.0.0",
     "i18next": "^26.4.2",

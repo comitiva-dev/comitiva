@@ -1,0 +1,38 @@
+appId: dev.comitiva.desktop
+productName: Comitiva
+executableName: comitiva
+artifactName: ${productName}-${version}-${os}-${arch}.${ext}
+copyright: Copyright © Comitiva contributors
+directories:
+  output: release
+  buildResources: build
+files:
+  - out/**
+  - package.json
+# The runner is a separate Node process (ELECTRON_RUN_AS_NODE, ADR 0002) and
+# migrations are read from disk at startup: both live outside the asar.
+extraResources:
+  - from: ../../packages/runner/dist/bin.cjs
+    to: runner/bin.cjs
+  - from: src/main/db/migrations
+    to: migrations
+asarUnpack:
+  - '**/*.node'
+mac:
+  category: public.app-category.productivity
+  target:
+    - dmg
+    - zip
+win:
+  target:
+    - nsis
+linux:
+  category: Office
+  syncDesktopName: true
+  target:
+    - AppImage
+    - tar.gz
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+publish: null

@@ -50,10 +50,15 @@ export default tseslint.config(
       'no-restricted-imports': [
         'error',
         {
-          paths: [{ name: 'electron', message: 'The renderer talks to the Backend interface only.' }],
+          paths: [
+            { name: 'electron', message: 'The renderer talks to the Backend interface only.' },
+          ],
           patterns: [
             { group: ['**/main/**', '**/preload/**'], message: 'Use the Backend interface.' },
-            { group: ['@comitiva/runner', '@comitiva/runner/*'], message: 'Use the Backend interface.' },
+            {
+              group: ['@comitiva/runner', '@comitiva/runner/*'],
+              message: 'Use the Backend interface.',
+            },
           ],
         },
       ],

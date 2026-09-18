@@ -12,56 +12,52 @@
 
 | Tool | Version | Why |
 |---|---|---|
-| Node.js | 22 LTS | runner and Electron |
-| pnpm | 9+ | workspaces |
+| Node.js | 24 (`.nvmrc`; packages support ≥ 22) | same Node as Electron 44, which runs the runner in the app |
+| pnpm | 10 (pinned in `packageManager`, via corepack) | workspaces (pnpm 12 does not honor the hoisted linker, ADR 0006) |
 | Git | any | |
 | Python 3 + build tools (Xcode CLT / VS Build Tools / `build-essential`) | | compile `better-sqlite3` |
 | Claude Code, Codex CLI | optional | test harnesses in Phase 2 |
 
 ### 1.2 Command sequence
 
-```bash
-# 1. Repository
-mkdir comitiva && cd comitiva && git init
-pnpm init
-echo "node-linker=hoisted" > .npmrc        # electron-builder and native modules prefer hoisted
+The Phase 0 bootstrap as it was actually done (the history is in git):
 
-# 2. Workspaces
-cat > pnpm-workspace.yaml <<'EOF'
+```bash
+# 1. Repository and workspace
+git init && corepack enable
+cat > pnpm-workspace.yaml <<'EOF2'
 packages:
   - packages/*
   - apps/*
-EOF
+nodeLinker: hoisted            # electron-builder and native modules prefer hoisted
+onlyBuiltDependencies: [better-sqlite3, electron, esbuild]
+ignoredBuiltDependencies: [electron-winstaller]
+EOF2
 mkdir -p packages/{contract,runner,mcp-servers} apps/desktop docs/adr
 
-# 3. Root tooling
-pnpm add -Dw typescript turbo eslint prettier @eslint/js typescript-eslint \
-  eslint-config-prettier vitest @types/node
+# 2. Root tooling (versions pinned per ADR 0006)
+pnpm add -Dw typescript@~6.0 turbo eslint@^10 prettier @eslint/js typescript-eslint \
+  eslint-config-prettier eslint-plugin-react-hooks globals vitest @types/node
 
-# 4. contract package
-cd packages/contract && pnpm init && pnpm add zod && pnpm add -D zod-to-json-schema tsup && cd ../..
+# 3. contract
+pnpm --filter @comitiva/contract add zod@^4 && pnpm --filter @comitiva/contract add -D tsup tsx
 
-# 5. runner package
-cd packages/runner && pnpm init && pnpm add @anthropic-ai/sdk @modelcontextprotocol/sdk openai \
-  @google/genai zod pino && pnpm add -D tsup msw && cd ../..
+# 4. runner (MCP SDK, OpenAI and Gemini clients join in their phases)
+pnpm --filter @comitiva/runner add @anthropic-ai/sdk pino zod@^4 && pnpm --filter @comitiva/runner add -D tsup tsx
 
-# 6. Built-in MCP servers
-cd packages/mcp-servers && pnpm init && pnpm add @modelcontextprotocol/sdk zod && pnpm add -D tsup && cd ../..
+# 5. mcp-servers (scaffold only in Phase 0)
+pnpm --filter @comitiva/mcp-servers add -D tsup
 
-# 7. Desktop (electron-vite scaffold inside the monorepo)
-pnpm create @quick-start/electron@latest apps/desktop -- --template react-ts
+# 6. desktop (electron-vite layout written by hand; no scaffolder)
 cd apps/desktop
-pnpm add better-sqlite3 zustand react-markdown remark-gfm @tanstack/react-virtual i18next react-i18next
-pnpm add -D @types/better-sqlite3 tailwindcss @tailwindcss/vite @electron/rebuild electron-builder \
-  @playwright/test
-cd ../..
-
-# 8. Native module compiled for the Electron version
-pnpm --filter desktop exec electron-rebuild -f -w better-sqlite3
-
-# 9. First commit
-git add -A && git commit -m "chore: bootstrap monorepo"
+pnpm add better-sqlite3
+pnpm add -D electron@44.4.2 electron-vite@^5 vite@^7 @vitejs/plugin-react@^5 react@^19 react-dom@^19 \
+  @types/react @types/react-dom tailwindcss@^4 @tailwindcss/vite@^4 zustand i18next react-i18next \
+  drizzle-orm drizzle-kit ulid @types/better-sqlite3 electron-builder @playwright/test \
+  @comitiva/contract@workspace:* @comitiva/runner@workspace:*
 ```
+
+No `electron-rebuild` step: better-sqlite3 13 is N-API, so the same binary loads in Node (tests) and Electron (app). electron-builder rebuilds or fetches native modules when packaging.
 
 ### 1.3 Root configuration files
 
@@ -77,9 +73,11 @@ git add -A && git commit -m "chore: bootstrap monorepo"
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
     "contract:schema": "pnpm --filter @comitiva/contract run schema",
     "runner:dev": "pnpm --filter @comitiva/runner run dev",
-    "package": "pnpm --filter desktop run package"
+    "package": "turbo run build --filter=desktop... && pnpm --filter desktop run package"
   }
 }
 ```
@@ -89,10 +87,11 @@ git add -A && git commit -m "chore: bootstrap monorepo"
 ```json
 {
   "$schema": "https://turbo.build/schema.json",
+  "envMode": "loose",
   "tasks": {
-    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", "out/**", "schema/**"] },
+    "build": { "dependsOn": ["^build"], "outputs": ["dist/**", "out/**"] },
     "dev": { "cache": false, "persistent": true, "dependsOn": ["^build"] },
-    "lint": {},
+    "lint": { "dependsOn": ["^build"] },
     "typecheck": { "dependsOn": ["^build"] },
     "test": { "dependsOn": ["^build"] }
   }
@@ -111,75 +110,95 @@ git add -A && git commit -m "chore: bootstrap monorepo"
 }
 ```
 
+`envMode: loose` is deliberate: strict mode hid `DBUS_SESSION_BUS_ADDRESS`/`XDG_*` from `pnpm dev`, which broke `safeStorage` on Linux. `schema/**` is not a build output; it is generated by `pnpm contract:schema` and committed.
+
+The real `tsconfig.base.json` also sets `lib: ["ES2023"]`, `verbatimModuleSyntax`, `noImplicitOverride` and `forceConsistentCasingInFileNames`. Each package extends it and adds `"types": ["node"]` (TS 6 no longer includes `@types/*` automatically). Libraries build JS with tsup and declarations with `tsc -p tsconfig.build.json` (tsup's DTS step is incompatible with TS 6).
+
 Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` resolves this through `dependsOn: ["^build"]`.
 
 ### 1.4 Package names
 
 | Directory | `name` | Publishable |
 |---|---|---|
-| packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`) |
-| packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner`) |
+| packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`; subpath `./ipc-channels` has no zod) |
+| packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`; subpaths `./bin`, `./testing`) |
 | packages/mcp-servers | `@comitiva/mcp-servers` | yes (bins `comitiva-mcp-filesystem`, `comitiva-mcp-gdrive`) |
 | apps/desktop | `desktop` | no |
 
 ### 1.5 Phase 0 exit checklist
 
-- [ ] `pnpm lint && pnpm typecheck && pnpm test` green
-- [ ] `pnpm dev` opens a window; `window.api.app.getVersion()` returns the version via IPC
-- [ ] runner starts as a child process and answers `ping`
-- [ ] spike: two Anthropic responses streaming simultaneously, independent cancel
-- [ ] runner event → paint latency measured and recorded in `docs/STATUS.md`
-- [ ] ADRs: ORM, license, runner execution, canonical block format
-- [ ] CI green on mac/win/linux
+- [x] `pnpm lint && pnpm typecheck && pnpm test` green
+- [x] `pnpm dev` opens a window; `app.getVersion` returns the version via IPC (through `Backend.app.getVersion()`)
+- [x] runner starts as a child process and answers `ping`
+- [x] spike: two Anthropic responses streaming simultaneously, independent cancel (e2e against a fake provider; real key pending, see STATUS)
+- [x] runner event → paint latency measured and recorded in `docs/STATUS.md`
+- [x] ADRs: ORM, license, runner execution, canonical block format (plus JSON Schema, toolchain)
+- [ ] CI green on mac/win/linux (workflow written and replayed locally; the repo has no remote yet)
 
 ---
 
 ## 2. File layout
 
+Files marked *(Pn)* arrive in phase n; everything else exists as of Phase 0.
+
 ```
 packages/contract/src/
 ├── index.ts
+├── common.ts          Id, IsoDate
 ├── entities/          connection.ts agent.ts conversation.ts message.ts tool-server.ts
 │                      tool-approval.ts usage-record.ts usage-policy.ts
 ├── blocks.ts          Block = TextBlock | ImageBlock | DocumentBlock | ToolUseBlock | ToolResultBlock
-├── provider-config.ts ConnectionConfig discriminated union per provider
-├── runner-protocol.ts RunnerRequest, RunnerEvent
-├── ipc.ts             desktop IPC contract (channels + input/output schemas)
-└── schema.ts          script: zod → JSON Schema in ../schema/*.json
+├── provider-config.ts ProviderId, per-provider config schemas (Connection is a union on `provider`)
+├── errors.ts          ErrorCode, AppErrorShape, AppError
+├── runner-protocol.ts RunnerRequest, RunnerEvent, results (PingResult, TestResult, …), PROTOCOL_VERSION
+├── ipc.ts             desktop IPC contract (channels + input/output schemas, DesktopApi, IpcResult)
+├── ipc-channels.ts    channel names only (no zod) for the sandboxed preload
+└── schema.ts          zod → JSON Schema; scripts/write-schema.ts writes ../schema/*.json
 
 packages/runner/src/
-├── bin.ts             entry: new RunnerServer(process.stdin, process.stdout).start()
+├── bin.ts             entry: new RunnerServer({ input: stdin, output: stdout }).start()
+├── index.ts           public API: RunnerClient
+├── version.ts
 ├── server/            RunnerServer.ts Transport.ts RequestRouter.ts
-├── runs/              RunManager.ts Run.ts ToolLoop.ts PermissionGate.ts
+├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts (P5)
 ├── providers/         ProviderRegistry.ts ProviderAdapter.ts
-│   ├── api/           AnthropicAdapter.ts OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts
-│   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts parsers/
-├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts
-├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts
+│   ├── api/           AnthropicAdapter.ts             OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts (P1)
+│   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts parsers/ (P2)
+├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts (P5)
+├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts (P6)
 ├── client/            RunnerClient.ts        (embedded by shells)
+├── testing/           fakeAnthropic.ts fixtures.ts  (exported as @comitiva/runner/testing)
 └── util/              jsonl.ts errors.ts logger.ts
 
-packages/mcp-servers/src/
-├── filesystem/        server.ts RootGuard.ts tools/*.ts approval.ts
-└── google-drive/      server.ts drive-api.ts tools/*.ts
+packages/mcp-servers/src/            index.ts (scaffold)
+├── filesystem/        server.ts RootGuard.ts tools/*.ts approval.ts (P5)
+└── google-drive/      server.ts drive-api.ts tools/*.ts (P5b)
 
-apps/desktop/src/
-├── main/
-│   ├── index.ts                 bootstrap: app.whenReady → Database → RunnerSupervisor → IpcRouter → window
-│   ├── runner/                  RunnerSupervisor.ts
-│   ├── db/                      Database.ts migrations/0001_init.sql ... repositories/*.ts
-│   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
-│   ├── services/                ConversationService.ts AgentService.ts ConnectionService.ts
-│   │                            ToolServerService.ts ApprovalService.ts UsageService.ts TitleService.ts
-│   ├── ipc/                     IpcRouter.ts handlers/*.ts
-│   └── oauth/                   GoogleOAuth.ts (Phase 5b)
-├── preload/index.ts             exposes a typed window.api derived from contract/ipc.ts
-└── renderer/src/
-    ├── backend/                 Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
-    ├── store/                   agents.ts conversations.ts messages.ts ui.ts
-    ├── components/              Sidebar/ Chat/ Composer/ ToolBlock/ ApprovalCard/ Forms/ Settings/
-    ├── screens/                 ChatScreen ConnectionsScreen ToolsScreen UsageScreen SettingsScreen
-    └── i18n/                    en.json pt-BR.json
+apps/desktop/
+├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
+├── e2e/spike.spec.ts
+└── src/
+    ├── main/
+    │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
+    │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
+    │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
+    │   ├── db/                      schema.ts Database.ts migrations/0000_init.sql (+ meta/)   repositories/*.ts (P1+)
+    │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
+    │   ├── services/                SpikeService.ts (P0 only)
+    │   │                            ConversationService.ts AgentService.ts ConnectionService.ts
+    │   │                            ToolServerService.ts ApprovalService.ts UsageService.ts TitleService.ts (P1+)
+    │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
+    │   └── oauth/                   GoogleOAuth.ts (P5b)
+    ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
+    └── renderer/
+        ├── index.html               CSP
+        └── src/
+            ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
+            ├── store/               spike.ts context.tsx (P0)   agents.ts conversations.ts messages.ts ui.ts (P3+)
+            ├── lib/                 paint.ts stats.ts
+            ├── components/          KeyBar.tsx Pane.tsx (P0)   Sidebar/ Chat/ Composer/ ToolBlock/ ApprovalCard/ Forms/ Settings/
+            ├── screens/             ChatScreen ConnectionsScreen ToolsScreen UsageScreen SettingsScreen (P1+)
+            └── i18n/                index.ts en.json pt-BR.json
 ```
 
 ---
@@ -211,7 +230,9 @@ erDiagram
     USAGE_POLICY { text connection_id PK; int max_tokens_day; real max_cost_day; int max_concurrent; text window_start; text window_end }
 ```
 
-### 3.2 Initial DDL (SQLite, migration 0001)
+### 3.2 Initial DDL (SQLite, migration 0000_init)
+
+The source of truth is the Drizzle schema in `apps/desktop/src/main/db/schema.ts` (ADR 0003). `drizzle-kit generate` produces `migrations/0000_init.sql`, which is equivalent to the DDL below except for the last table: Drizzle tracks applied migrations in `__drizzle_migrations`, not `schema_migrations`. Booleans are INTEGER, and JSON columns are TEXT with `'[]'`/`'{}'` defaults.
 
 ```sql
 CREATE TABLE connections (
@@ -282,7 +303,7 @@ CREATE TABLE usage_records (
 CREATE INDEX idx_usage_conn_time ON usage_records(connection_id, created_at);
 CREATE INDEX idx_usage_agent_time ON usage_records(agent_id, created_at);
 
-CREATE TABLE schema_migrations (version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL);
+-- applied migrations are tracked by Drizzle in __drizzle_migrations
 ```
 
 Conventions: ids are ULIDs (sortable); dates are ISO 8601 UTC; JSON in TEXT columns is validated by zod on read and write; `seq` in `messages` is incremented per conversation and is used for ordering and for reconciliation with the hub.
@@ -295,8 +316,10 @@ type Block =
   | { type: 'image'; source: { kind: 'base64'; mediaType: string; data: string } | { kind: 'file'; path: string } }
   | { type: 'document'; name: string; mediaType: string; source: /* same */ }
   | { type: 'tool_use'; id: string; toolServerId: string; name: string; input: unknown }
-  | { type: 'tool_result'; toolUseId: string; content: Block[]; isError: boolean; durationMs?: number };
+  | { type: 'tool_result'; toolUseId: string; content: Array<TextBlock | ImageBlock | DocumentBlock>; isError: boolean; durationMs?: number };
 ```
+
+`tool_result.content` cannot nest `tool_use`/`tool_result`, the same restriction as the Anthropic API (ADR 0004).
 
 An `assistant` message can mix `text` and `tool_use`; the following `tool` message carries the `tool_result`s. Adapters translate to the provider's format (OpenAI uses `tool_calls`/`role: tool`; Gemini uses `functionCall`/`functionResponse`).
 
@@ -347,16 +370,20 @@ class RequestRouter {
 
 // runs/RunManager.ts — one Run per runId, all concurrent
 class RunManager {
-  start(req: RunStartRequest): void;                 // creates Run, does not block
-  cancel(runId: string): void;                       // AbortController.abort()
+  constructor(registry: ProviderRegistry, emit: (e: RunEvent) => void, logger: Logger);
+  start(req: RunStartRequest): void;                 // creates Run, does not block; duplicate runId → invalid_request
+  cancel(runId: string): boolean;                    // AbortController.abort(); idempotent, false if unknown
+  cancelAll(timeoutMs?: number): Promise<void>;      // on shutdown / stdin close
   resolveApproval(runId: string, toolUseId: string, decision: ApprovalDecision): void;
   active(): string[];
 }
 
-// runs/Run.ts
+// runs/Run.ts — Phase 0 takes (req, adapter, emit, logger); tools and gate join in Phase 5
 class Run {
   constructor(req: RunStartRequest, adapter: ProviderAdapter, tools: ToolCatalog, gate: PermissionGate, emit: (e: RunnerEvent) => void);
   execute(): Promise<void>;
+  // guarantees exactly one terminal event (run.done | run.error) and nothing after it; stamps runId + ts
+  // model = agent.model ?? connection.config.defaultModel, else invalid_request
   // builds RunInput, creates RunContext { tools, callTool }, iterates adapter.run(...)
   // translates AdapterEvent → RunnerEvent with runId; measures latency; collects usage
   private callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
@@ -364,7 +391,7 @@ class Run {
   // → tools.call(...) → emits run.tool_result
 }
 
-// runs/ToolLoop.ts — used by the API adapters
+// runs/ToolLoop.ts — used by the API adapters (Phase 5; the Phase 0 Anthropic adapter streams one turn)
 async function* toolLoop(opts: {
   callModel: (messages: Message[], tools: ToolDef[], signal: AbortSignal) => AsyncIterable<AdapterEvent>;
   ctx: RunContext; messages: Message[]; maxIterations: number; signal: AbortSignal;
@@ -413,6 +440,8 @@ class AnthropicAdapter implements ProviderAdapter {
   private toProviderTools(tools: ToolDef[]): Tool[];
   run(input, ctx, signal) { return toolLoop({ callModel: (m, t, s) => this.stream(m, t, s), ... }); }
   private async *stream(...): AsyncIterable<AdapterEvent>;          // SDK stream → text_delta/tool_use/usage/done
+  // apiKey is always explicit (never ambient env); errors → auth_failed | rate_limited | provider_unavailable |
+  // provider_error | timeout; abort → usage (estimated if no message_delta yet) + done(cancelled)
 }
 
 // providers/cli/CliHarnessAdapter.ts
@@ -456,14 +485,18 @@ class UsageCalculator {
 // client/RunnerClient.ts — what shells embed
 class RunnerClient extends EventEmitter {
   constructor(opts: { spawn: () => ChildProcess; requestTimeoutMs?: number });
-  start(): Promise<void>;                                       // spawn + ping
-  request<T>(req: Omit<RunnerRequest, 'id'>): Promise<T>;       // correlates by id
-  startRun(req: RunStartPayload): { runId: string };
+  start(): Promise<PingResult>;                                 // spawn + ping; call again after 'crash' to restart
+  request<T>(req: Omit<RunnerRequest, 'id'>): Promise<T>;       // correlates by id; AppError on failure
+  startRun(req: RunStartPayload): { runId: string };            // returns at once; start failures arrive as run.error
   cancelRun(runId: string): void;
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void;
-  on(event: 'run.event', h: (e: RunnerEvent) => void): this;
-  on(event: 'crash', h: (code: number | null) => void): this;
-  stop(): Promise<void>;
+  testConnection(req): Promise<TestResult>;
+  activeRunIds(): string[];
+  on(event: 'run.event', h: (e: RunEvent & { receivedAt: number }) => void): this;
+  on(event: 'log', h: (e: LogEvent) => void): this;
+  on(event: 'crash', h: (code: number | null, signal) => void): this;   // active runs already got run.error(runner_crashed)
+  on(event: 'exit', h: () => void): this;                               // after stop()
+  stop(): Promise<void>;                                        // shutdown request, SIGKILL after timeout
 }
 ```
 
@@ -512,7 +545,7 @@ sequenceDiagram
     CS-->>UI: done
 ```
 
-Batching: `ConversationService` accumulates `text_delta` and writes to SQLite every ~250 ms or at the end of the run; to the UI, it forwards every ~50 ms. Never one `UPDATE` per token.
+Batching: `ConversationService` accumulates `text_delta` and writes to SQLite every ~250 ms or at the end of the run; to the UI, it forwards once per frame (16 ms, chosen from the Phase 0 measurements in `docs/STATUS.md`; 50 ms added ~35 ms of visible lag). Never one `UPDATE` per token and never one IPC message per token.
 
 ---
 
@@ -548,20 +581,22 @@ class RootGuard {
 
 ```ts
 // main/runner/RunnerSupervisor.ts
-class RunnerSupervisor {
-  constructor(deps: { onEvent: (e: RunnerEvent) => void; runnerEntry: string });
-  client: RunnerClient;
-  start(): Promise<void>;         // spawn with process.execPath and ELECTRON_RUN_AS_NODE=1 (ADR), or embedded node
-  private onCrash(): void;        // backoff, restart, notify services to mark runs as error
+class RunnerSupervisor extends EventEmitter<{ status: [RunnerStatus] }> {
+  constructor(opts: { runnerEntry: string; logFile: string; command?: string; env?; backoff? });
+  readonly client: RunnerClient;  // services subscribe to client 'run.event'
+  status: 'starting' | 'ready' | 'restarting' | 'stopped';
+  start(): Promise<void>;         // spawn process.execPath with ELECTRON_RUN_AS_NODE=1 (ADR 0002); stderr → RotatingLog
+  private onCrash(): void;        // backoff 1s, 2s, 4s… 30s (reset after 30s stable); client already failed active runs
   stop(): Promise<void>;
 }
 
 // main/db/Database.ts
 class Database {
   static open(path: string): Database;   // WAL, foreign_keys=ON, busy_timeout
-  migrate(): void;                       // applies migrations/*.sql in order, records in schema_migrations
+  migrate(migrationsFolder: string): void; // Drizzle migrator; tracked in __drizzle_migrations
   transaction<T>(fn: () => T): T;
   raw: BetterSqlite3.Database;
+  orm: BetterSQLite3Database<typeof schema>;
 }
 
 // main/db/repositories/*.ts — common pattern
@@ -578,11 +613,15 @@ class ToolServerRepository, ToolApprovalRepository, UsageRepository { /* summary
 interface SecretStore {
   set(ref: string, value: string): Promise<void>;
   get(ref: string): Promise<string | null>;
+  has(ref: string): Promise<boolean>;
   delete(ref: string): Promise<void>;
 }
 class ElectronSecretStore implements SecretStore {
-  // safeStorage.encryptString → file <userData>/secrets.bin (JSON { ref: base64 }), atomic write (tmp + rename)
-  // refuses to operate if !safeStorage.isEncryptionAvailable()
+  constructor(filePath: string, crypto: SafeStorageLike);   // safeStorage injected (fake in tests)
+  // safeStorage.encryptString → file <userData>/secrets.bin (JSON { version: 1, entries: { ref: base64 } }),
+  // atomic write (tmp + rename, 0600), serialized
+  // refuses to operate (secret_store_unavailable) if !safeStorage.isEncryptionAvailable()
+  isWeak(): boolean;              // Linux basic_text backend; main only enables it with COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1
 }
 
 // main/services/ConversationService.ts
@@ -599,18 +638,25 @@ class ConversationService extends EventEmitter {
   // events emitted to IpcRouter: 'conversation.updated', 'message.delta', 'message.block', 'message.completed', 'approval.requested'
 }
 
+// main/ipc/invoke.ts
+function runInvoke(channel, rawInput, handler): Promise<IpcResult<Output>>;
+// input.safeParse → handler → output.parse (strips unknown keys, so nothing outside the schema reaches the renderer)
+// errors → { ok: false, error: AppErrorShape }. The envelope exists because custom Error props do not cross contextBridge.
+
 // main/ipc/IpcRouter.ts
 class IpcRouter {
-  constructor(services, windowManager);
-  register(): void;   // for each channel in contract/ipc.ts: ipcMain.handle(channel, (e, input) => schema.parse(input) → service)
-  broadcast(channel: string, payload: unknown): void;   // webContents.send to all windows
+  constructor(handlers: InvokeHandlers, isTrustedSender: (frameUrl: string) => boolean);
+  register(): void;   // for each channel in contract ipcInvokeChannels: ipcMain.handle(channel, (e, input) => runInvoke(...))
+  broadcast<C>(channel: C, payload: IpcEventPayload<C>): void;   // webContents.send to all windows
 }
 ```
 
-IPC channels (defined in `contract/ipc.ts`, all with input and output schemas):
+IPC channels (defined in `contract/ipc.ts`, all with input and output schemas; names also listed in `contract/ipc-channels.ts`). `invoke` resolves to `{ ok: true, value } | { ok: false, error }`, which `LocalBackend` unwraps into a `BackendError` with a `code`.
 
 ```
 app.getVersion
+runner.getStatus
+spike.getState | saveApiKey | testApiKey | send | cancel | reset | reportLatency   (Phase 0 only)
 connections.list | create | update | delete | test | listModels
 toolServers.list | create | update | delete | test | connectGoogle (5b)
 agents.list | create | update | delete | duplicate
@@ -620,6 +666,7 @@ approvals.decide
 usage.summary | timeseries | export
 dialogs.pickFolder
 events: conversation.updated, message.delta, message.block, message.completed, approval.requested, runner.status
+        spike.event (Phase 0 only)
 ```
 
 ---
@@ -640,6 +687,7 @@ interface Backend {
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
+// Phase 0 implements only app.getVersion, runner.getStatus, the temporary spike.* group and onEvent.
 
 // renderer/src/store/*.ts (Zustand)
 useAgentsStore:         agents[], selectedAgentId, statusByAgent (derived from conversations), unreadByAgent
@@ -657,34 +705,36 @@ Main components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), 
 
 ```bash
 pnpm dev                      # desktop in dev (hot reload in the renderer, restart of main)
-pnpm runner:dev               # runner alone: echo JSON lines into stdin to test
-echo '{"id":"1","type":"ping"}' | pnpm --filter @comitiva/runner exec tsx src/bin.ts
+pnpm dev -- --noSandbox       # Ubuntu 24.04+ (AppArmor blocks the Chromium sandbox for unpackaged Electron)
+pnpm runner:dev               # runner alone (tsx watch): type JSON lines into stdin
+echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs
 
 pnpm test                     # everything
 pnpm --filter @comitiva/runner test -- --watch
-pnpm --filter desktop exec playwright test
+pnpm --filter desktop test:e2e    # electron-vite build + Playwright against a fake Anthropic server
 
 pnpm contract:schema          # regenerates packages/contract/schema/*.json (commit it)
-pnpm --filter desktop exec electron-rebuild -f -w better-sqlite3   # after changing the Electron version
+pnpm --filter desktop db:generate                                  # Drizzle migration from db/schema.ts (commit it)
 
-pnpm package                  # electron-builder for the current platform
-pnpm --filter desktop run package -- --mac --win --linux           # with CI or installed toolchains
+pnpm package                  # builds deps (turbo) + electron-builder for the current platform → apps/desktop/release/
 
 # Inspecting the local database
 sqlite3 "$HOME/Library/Application Support/comitiva/comitiva.db" '.tables'   # macOS
 # Linux: ~/.config/comitiva/ ; Windows: %APPDATA%\comitiva\
 ```
 
-Debugging the runner: `AGENTDESK_RUNNER_LOG=debug pnpm dev` makes the runner log to stderr (never to stdout, which is the protocol channel). Main writes that stderr to `<userData>/logs/runner.log` with rotation.
+Debugging the runner: `COMITIVA_RUNNER_LOG=debug pnpm dev` makes the runner log to stderr (never to stdout, which is the protocol channel). Main writes that stderr to `<userData>/logs/runner.log` with rotation (5 MB, one backup).
+
+Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA_ANTHROPIC_BASE_URL` (spike endpoint override), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI: allow Linux `basic_text`), `COMITIVA_DELTA_FLUSH_MS` (latency experiments).
 
 ---
 
 ## 9. Conventions
 
-- **Errors**: `AppError { code: string; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`). The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
-- **Tests**: runner and mcp-servers with vitest and mocks (msw for HTTP, fake in-memory MCP server, fake shell binary for CLI); desktop main with in-memory SQLite; renderer with testing-library; Playwright for the two-parallel-conversations flow with a mock provider.
+- **Tests**: runner and mcp-servers with vitest and fakes (a real local fake Anthropic SSE server in `@comitiva/runner/testing` instead of msw, fake in-memory MCP server, fake shell binary for CLI); runner integration tests spawn the bundled `dist/bin.cjs`; desktop main under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app for the two-parallel-conversations flow against the fake provider.
 - **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
 - **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 

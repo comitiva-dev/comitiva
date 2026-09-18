@@ -63,9 +63,9 @@ repo/
 └── CLAUDE.md
 ```
 
-**Desktop stack:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 with migrations (ORM decided in an ADR), zod-typed IPC, vitest, Playwright.
+**Desktop stack:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 with Drizzle migrations (ADR 0003), zod-typed IPC, vitest, Playwright.
 
-**Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists.
+**Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists. The desktop runs it with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE`, ADR 0002); any Node ≥ 22 can run it standalone.
 
 **Hub stack:** Laravel 12+, Reverb, Sanctum, Postgres, Pest. Implements the `contract` in PHP (validation via generated JSON Schema).
 
@@ -77,17 +77,18 @@ Requests (shell → runner):
 
 ```ts
 type RunnerRequest =
+  | { id; type: 'ping' }                                         // → { version, protocolVersion }
   | { id; type: 'connection.test'; connection; secret? }
   | { id; type: 'connection.listModels'; connection; secret? }
   | { id; type: 'toolServer.start'; toolServer; secrets? }     // opens MCP client, returns tool list
   | { id; type: 'toolServer.stop'; toolServerId }
-  | { id; type: 'run.start'; runId; conversationId; agent; connection; secret?; messages: Message[]; harnessSessionId? }
+  | { id; type: 'run.start'; runId; conversationId; agent; connection; secret?; messages: Message[]; harnessSessionId?; alwaysAllowed? }
   | { id; type: 'run.cancel'; runId }
   | { id; type: 'run.approval'; runId; toolUseId; decision: 'allow' | 'deny' | 'allow-always' }
   | { id; type: 'shutdown' }
 ```
 
-Events (runner → shell), always with `runId` when they belong to a run:
+Events (runner → shell), always with `runId` when they belong to a run. Run events also carry `ts` (emission time, epoch ms) for latency measurement:
 
 ```ts
 type RunnerEvent =
@@ -98,10 +99,12 @@ type RunnerEvent =
   | { type: 'run.tool_call'; runId; toolUseId; toolServerId; toolName; input; requiresApproval: boolean }
   | { type: 'run.tool_result'; runId; toolUseId; output; isError; durationMs }
   | { type: 'run.usage'; runId; inputTokens; outputTokens; cacheReadTokens?; cacheWriteTokens?; estimated }
-  | { type: 'run.done'; runId; stopReason }
-  | { type: 'run.error'; runId; message; retryable }
+  | { type: 'run.done'; runId; stopReason }                      // stopReason 'cancelled' after run.cancel
+  | { type: 'run.error'; runId; code; message; retryable }       // code = stable AppError code
   | { type: 'log'; level; message }
 ```
+
+Every run ends with exactly one terminal event (`run.done` or `run.error`). Cancelling is not an error: it ends with the usage known so far (estimated if the provider had not reported it) and `run.done { stopReason: 'cancelled' }`. If the runner process dies, the shell reports `run.error { code: 'runner_crashed', retryable: true }` for its active runs. The full protocol reference is in `docs/architecture.md`.
 
 #### 4.2 Connection adapters
 
@@ -161,8 +164,10 @@ Three columns, Slack style:
 | 9 | Web: same UI served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | Agent switches connection when it hits a limit |
 
-### 7. Open decisions (ADR in Phase 0)
+### 7. Decisions
 
-Desktop ORM (drizzle vs kysely); license (Apache-2.0 vs MIT); name; how to run the runner (Node embedded in Electron via `ELECTRON_RUN_AS_NODE` vs a separate `node` binary); implementation of the `google-drive` server (own vs community).
+Resolved in Phase 0 (see `docs/adr/`): name **Comitiva** and license **Apache-2.0** (ADR 0001); the runner runs as **Electron in Node mode via `ELECTRON_RUN_AS_NODE`** (ADR 0002); desktop ORM **Drizzle** (ADR 0003); canonical blocks in the Anthropic format (ADR 0004); JSON Schema generated with zod 4 (ADR 0005).
+
+Still open: implementation of the `google-drive` server (own vs community), decided in Phase 5b; behavior on Linux without a keyring (refuse vs warned opt-in to obfuscated storage), decided in Phase 1.
 
 ---

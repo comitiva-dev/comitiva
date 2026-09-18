@@ -1,3 +1,22 @@
-export { startFakeAnthropic } from './fakeAnthropic.js';
-export type { FakeAnthropic, FakeAnthropicOptions } from './fakeAnthropic.js';
-export { anthropicConnection, testAgent, userText } from './fixtures.js';
+export { startFakeProviders } from './fakeProviders.js';
+export type {
+  FakeProviderId,
+  FakeProviders,
+  FakeProvidersOptions,
+  FakeRequest,
+} from './fakeProviders.js';
+export {
+  anthropicConnection,
+  fakeConnections,
+  googleConnection,
+  ollamaConnection,
+  openaiConnection,
+  testAgent,
+  userText,
+} from './fixtures.js';
+
+import { startFakeProviders, type FakeProviders } from './fakeProviders.js';
+/** @deprecated Phase 0 name; the Anthropic routes live at the root of `startFakeProviders`. */
+export const startFakeAnthropic = startFakeProviders;
+/** @deprecated use FakeProviders */
+export type FakeAnthropic = FakeProviders;

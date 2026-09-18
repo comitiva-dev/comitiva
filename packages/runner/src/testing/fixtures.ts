@@ -18,6 +18,65 @@ export function anthropicConnection(
   };
 }
 
+export function openaiConnection(
+  baseUrl: string,
+): Extract<Connection, { provider: 'openai-compatible' }> {
+  return {
+    id: 'conn-openai',
+    name: 'OpenAI-compatible',
+    kind: 'api',
+    provider: 'openai-compatible',
+    config: { baseUrl, preset: 'custom', defaultModel: 'gpt-fake-mini' },
+    secretRef: 'connection:conn-openai',
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function googleConnection(baseUrl?: string): Extract<Connection, { provider: 'google' }> {
+  return {
+    id: 'conn-google',
+    name: 'Gemini',
+    kind: 'api',
+    provider: 'google',
+    config: { defaultModel: 'gemini-fake-flash', ...(baseUrl ? { baseUrl } : {}) },
+    secretRef: 'connection:conn-google',
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function ollamaConnection(baseUrl: string): Extract<Connection, { provider: 'ollama' }> {
+  return {
+    id: 'conn-ollama',
+    name: 'Ollama',
+    kind: 'api',
+    provider: 'ollama',
+    config: { baseUrl, defaultModel: 'llama-fake:latest' },
+    secretRef: null,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+/** One connection per API provider, all pointing at a fake server's URLs. */
+export function fakeConnections(urls: {
+  anthropic: string;
+  openai: string;
+  google: string;
+  ollama: string;
+}): Connection[] {
+  return [
+    anthropicConnection(urls.anthropic),
+    openaiConnection(urls.openai),
+    googleConnection(urls.google),
+    ollamaConnection(urls.ollama),
+  ];
+}
+
 export function testAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: 'agent-1',

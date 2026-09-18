@@ -6,15 +6,16 @@ import { LineSplitter, encodeLine } from '../src/util/jsonl.js';
 import { createLogger } from '../src/util/logger.js';
 import {
   anthropicConnection,
-  startFakeAnthropic,
+  ollamaConnection,
+  startFakeProviders,
   testAgent,
   userText,
-  type FakeAnthropic,
+  type FakeProviders,
 } from '../src/testing/index.js';
 
-let fake: FakeAnthropic;
+let fake: FakeProviders;
 beforeAll(async () => {
-  fake = await startFakeAnthropic();
+  fake = await startFakeProviders();
 });
 afterAll(() => fake.close());
 
@@ -80,6 +81,29 @@ describe('RunnerServer', () => {
     h.send({ id: '2', type: 'ping' });
     await h.response('2');
     expect(h.events.some((e) => e.type === 'log' && e.level === 'warn')).toBe(true);
+  });
+
+  it('answers connection.listModels with the adapter result', async () => {
+    const h = harness();
+    h.send({
+      id: 'm1',
+      type: 'connection.listModels',
+      connection: ollamaConnection(fake.urls.ollama),
+    });
+    expect(await h.response('m1')).toMatchObject({
+      ok: true,
+      result: [{ id: 'llama-fake:latest' }, { id: 'qwen-fake:7b' }],
+    });
+    h.send({
+      id: 'm2',
+      type: 'connection.listModels',
+      connection: anthropicConnection(fake.url),
+      secret: 'bad-key',
+    });
+    expect(await h.response('m2')).toMatchObject({
+      ok: false,
+      error: { code: 'auth_failed', retryable: false },
+    });
   });
 
   it('answers not_implemented for later-phase requests', async () => {

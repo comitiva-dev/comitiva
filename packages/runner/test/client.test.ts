@@ -5,20 +5,21 @@ import type { RunEvent } from '@comitiva/contract';
 import { RunnerClient } from '../src/client/RunnerClient.js';
 import {
   anthropicConnection,
-  startFakeAnthropic,
+  fakeConnections,
+  startFakeProviders,
   testAgent,
   userText,
-  type FakeAnthropic,
+  type FakeProviders,
 } from '../src/testing/index.js';
 
 // Exercises the real bundled binary (built by the test script) as a child process.
 const binPath = fileURLToPath(new URL('../dist/bin.cjs', import.meta.url));
 
-let fake: FakeAnthropic;
+let fake: FakeProviders;
 const clients: RunnerClient[] = [];
 
 beforeAll(async () => {
-  fake = await startFakeAnthropic();
+  fake = await startFakeProviders();
 });
 afterAll(() => fake.close());
 afterEach(async () => {
@@ -78,6 +79,109 @@ describe('RunnerClient + runner binary', () => {
       secret: 'sk-test',
     });
     expect(ok.ok).toBe(true);
+  });
+
+  describe.each(['anthropic', 'openai-compatible', 'google', 'ollama'] as const)(
+    '%s through the binary',
+    (provider) => {
+      const connection = () => fakeConnections(fake.urls).find((c) => c.provider === provider)!;
+      const secret = provider === 'ollama' ? undefined : 'sk-test';
+
+      it('tests the connection', async () => {
+        const { client } = newClient();
+        await client.start();
+        const ok = await client.testConnection({
+          type: 'connection.test',
+          connection: connection(),
+          ...(secret ? { secret } : {}),
+        });
+        expect(ok).toMatchObject({ ok: true });
+        const bad = await client.testConnection({
+          type: 'connection.test',
+          connection: connection(),
+          secret: 'bad-key',
+        });
+        expect(bad).toMatchObject({ ok: false, error: { code: 'auth_failed', retryable: false } });
+      });
+
+      it('lists models', async () => {
+        const { client } = newClient();
+        await client.start();
+        const models = await client.listModels({
+          type: 'connection.listModels',
+          connection: connection(),
+          ...(secret ? { secret } : {}),
+        });
+        expect(models.length).toBeGreaterThan(0);
+        expect(models.every((m) => m.id !== '')).toBe(true);
+        await expect(
+          client.listModels({
+            type: 'connection.listModels',
+            connection: connection(),
+            secret: 'bad-key',
+          }),
+        ).rejects.toMatchObject({ code: 'auth_failed' });
+      });
+
+      it('streams a run with exact usage', async () => {
+        const { client, of } = newClient();
+        await client.start();
+        const { runId } = client.startRun({
+          conversationId: `conv-${provider}`,
+          agent: testAgent({ model: null }),
+          connection: connection(),
+          ...(secret ? { secret } : {}),
+          messages: [userText(`conv-${provider}`, '[chunks:5] [interval:1]')],
+        });
+        await expect.poll(() => of(runId).at(-1)?.type).toBe('run.done');
+        const events = of(runId);
+        expect(events.filter((e) => e.type === 'run.text_delta')).toHaveLength(5);
+        expect(events.at(-2)).toMatchObject({
+          type: 'run.usage',
+          outputTokens: 10,
+          estimated: false,
+        });
+        expect(events.at(-1)).toMatchObject({ stopReason: 'end_turn' });
+      });
+    },
+  );
+
+  it('runs all four providers in parallel and cancels one without affecting the others', async () => {
+    const { client, of } = newClient();
+    await client.start();
+    const runs = fakeConnections(fake.urls).map((connection) => {
+      const chunks = connection.provider === 'ollama' ? 400 : 40;
+      return {
+        provider: connection.provider,
+        ...client.startRun({
+          conversationId: `conv-p-${connection.provider}`,
+          agent: testAgent({ model: null }),
+          connection,
+          ...(connection.provider === 'ollama' ? {} : { secret: 'sk-test' }),
+          messages: [userText('c', `[chunks:${chunks}] [interval:5]`)],
+        }),
+      };
+    });
+    // All four stream at the same time.
+    for (const r of runs) await expect.poll(() => of(r.runId).length).toBeGreaterThan(2);
+    const ollama = runs.find((r) => r.provider === 'ollama')!;
+    client.cancelRun(ollama.runId);
+
+    for (const r of runs) {
+      await expect.poll(() => of(r.runId).at(-1)?.type, { timeout: 5000 }).toBe('run.done');
+    }
+    for (const r of runs) {
+      const events = of(r.runId);
+      if (r === ollama) {
+        expect(events.at(-1)).toMatchObject({ stopReason: 'cancelled' });
+        expect(events.at(-2)).toMatchObject({ type: 'run.usage', estimated: true });
+        expect(events.filter((e) => e.type === 'run.text_delta').length).toBeLessThan(400);
+      } else {
+        expect(events.at(-1)).toMatchObject({ stopReason: 'end_turn' });
+        expect(events.filter((e) => e.type === 'run.text_delta')).toHaveLength(40);
+      }
+    }
+    await expect.poll(() => fake.aborted).toBeGreaterThan(0);
   });
 
   it('turns a crash into run.error(runner_crashed) for active runs and emits crash', async () => {

@@ -42,8 +42,9 @@ pnpm add -Dw typescript@~6.0 turbo eslint@^10 prettier @eslint/js typescript-esl
 # 3. contract
 pnpm --filter @comitiva/contract add zod@^4 && pnpm --filter @comitiva/contract add -D tsup tsx
 
-# 4. runner (MCP SDK, OpenAI and Gemini clients join in their phases)
-pnpm --filter @comitiva/runner add @anthropic-ai/sdk pino zod@^4 && pnpm --filter @comitiva/runner add -D tsup tsx
+# 4. runner (the MCP SDK joins in Phase 5; openai, @google/genai and msw joined in Phase 1)
+pnpm --filter @comitiva/runner add @anthropic-ai/sdk openai @google/genai pino zod@^4
+pnpm --filter @comitiva/runner add -D tsup tsx msw
 
 # 5. mcp-servers (scaffold only in Phase 0)
 pnpm --filter @comitiva/mcp-servers add -D tsup
@@ -130,7 +131,7 @@ Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` re
 - [x] `pnpm lint && pnpm typecheck && pnpm test` green
 - [x] `pnpm dev` opens a window; `app.getVersion` returns the version via IPC (through `Backend.app.getVersion()`)
 - [x] runner starts as a child process and answers `ping`
-- [x] spike: two Anthropic responses streaming simultaneously, independent cancel (e2e against a fake provider; real key pending, see STATUS)
+- [x] spike: two Anthropic responses streaming simultaneously, independent cancel (e2e against a fake provider; real key pending, see STATUS). The spike was removed in Phase 1; parallel streams and cancel are covered by the runner integration tests.
 - [x] runner event → paint latency measured and recorded in `docs/STATUS.md`
 - [x] ADRs: ORM, license, runner execution, canonical block format (plus JSON Schema, toolchain)
 - [ ] CI green on mac/win/linux (workflow written and replayed locally; the repo has no remote yet)
@@ -149,9 +150,11 @@ packages/contract/src/
 │                      tool-approval.ts usage-record.ts usage-policy.ts
 ├── blocks.ts          Block = TextBlock | ImageBlock | DocumentBlock | ToolUseBlock | ToolResultBlock
 ├── provider-config.ts ProviderId, per-provider config schemas (Connection is a union on `provider`)
+├── providers.ts       providerDescriptors: capabilities, key requirement, base URL, presets (plain data, P1)
 ├── errors.ts          ErrorCode, AppErrorShape, AppError
 ├── runner-protocol.ts RunnerRequest, RunnerEvent, results (PingResult, TestResult, …), PROTOCOL_VERSION
-├── ipc.ts             desktop IPC contract (channels + input/output schemas, DesktopApi, IpcResult)
+├── ipc.ts             desktop IPC contract (channels + input/output schemas, DesktopApi, IpcResult;
+│                      ConnectionDraft/Probe/Patch/Target/Summary, SecretStorageStatus)
 ├── ipc-channels.ts    channel names only (no zod) for the sandboxed preload
 └── schema.ts          zod → JSON Schema; scripts/write-schema.ts writes ../schema/*.json
 
@@ -161,13 +164,13 @@ packages/runner/src/
 ├── version.ts
 ├── server/            RunnerServer.ts Transport.ts RequestRouter.ts
 ├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts (P5)
-├── providers/         ProviderRegistry.ts ProviderAdapter.ts
-│   ├── api/           AnthropicAdapter.ts             OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts (P1)
+├── providers/         ProviderRegistry.ts (+ createDefaultRegistry) ProviderAdapter.ts
+│   ├── api/           shared.ts AnthropicAdapter.ts OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts
 │   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts parsers/ (P2)
 ├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts (P5)
 ├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts (P6)
 ├── client/            RunnerClient.ts        (embedded by shells)
-├── testing/           fakeAnthropic.ts fixtures.ts  (exported as @comitiva/runner/testing)
+├── testing/           fakeProviders.ts fixtures.ts  (exported as @comitiva/runner/testing)
 └── util/              jsonl.ts errors.ts logger.ts
 
 packages/mcp-servers/src/            index.ts (scaffold)
@@ -176,17 +179,18 @@ packages/mcp-servers/src/            index.ts (scaffold)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
-├── e2e/spike.spec.ts
+├── e2e/connections.spec.ts
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
-    │   ├── db/                      schema.ts Database.ts migrations/0000_init.sql (+ meta/)   repositories/*.ts (P1+)
+    │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test, meta/)
+    │   │                            repositories/ConnectionRepository.ts (P1; others P3+)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
-    │   ├── services/                SpikeService.ts (P0 only)
-    │   │                            ConversationService.ts AgentService.ts ConnectionService.ts
-    │   │                            ToolServerService.ts ApprovalService.ts UsageService.ts TitleService.ts (P1+)
+    │   ├── services/                ConnectionService.ts (P1)
+    │   │                            ConversationService.ts AgentService.ts ToolServerService.ts
+    │   │                            ApprovalService.ts UsageService.ts TitleService.ts (P3+)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
@@ -194,10 +198,11 @@ apps/desktop/
         ├── index.html               CSP
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
-            ├── store/               spike.ts context.tsx (P0)   agents.ts conversations.ts messages.ts ui.ts (P3+)
-            ├── lib/                 paint.ts stats.ts
-            ├── components/          KeyBar.tsx Pane.tsx (P0)   Sidebar/ Chat/ Composer/ ToolBlock/ ApprovalCard/ Forms/ Settings/
-            ├── screens/             ChatScreen ConnectionsScreen ToolsScreen UsageScreen SettingsScreen (P1+)
+            ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts conversations.ts messages.ts (P3+)
+            ├── lib/                 connectionForm.ts time.ts
+            ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
+            │                        Chat/ Composer/ ToolBlock/ ApprovalCard/ Settings/ (P3+)
+            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   ChatScreen ToolsScreen UsageScreen SettingsScreen (P3+)
             └── i18n/                index.ts en.json pt-BR.json
 ```
 
@@ -219,7 +224,7 @@ erDiagram
     CONNECTION ||--o{ USAGE_RECORD : "consumption"
     CONNECTION ||--o| USAGE_POLICY : "limit (Phase 10)"
 
-    CONNECTION { text id PK; text name; text kind; text provider; json config; text secret_ref; int enabled; text created_at; text updated_at }
+    CONNECTION { text id PK; text name; text kind; text provider; json config; text secret_ref; int enabled; text created_at; text updated_at; text last_test_at; int last_test_ok; int last_test_latency_ms; text last_test_error_code }
     AGENT { text id PK; text name; text avatar; text connection_id FK; text model; text role; json params; text permission_policy; json fallback_connection_ids; json tags; text created_at; text updated_at }
     AGENT_ROOT { text agent_id FK; text path; text mode }
     TOOL_SERVER { text id PK; text name; text transport; text command; json args; json env; text url; json headers; int builtin; int enabled }
@@ -240,6 +245,11 @@ CREATE TABLE connections (
   provider TEXT NOT NULL, config TEXT NOT NULL DEFAULT '{}', secret_ref TEXT,
   enabled INTEGER NOT NULL DEFAULT 1, created_at TEXT NOT NULL, updated_at TEXT NOT NULL
 );
+-- 0001_connection_last_test (Phase 1): outcome of the last "Test connection", cleared when config or key change
+ALTER TABLE connections ADD last_test_at TEXT;
+ALTER TABLE connections ADD last_test_ok INTEGER;
+ALTER TABLE connections ADD last_test_latency_ms INTEGER;
+ALTER TABLE connections ADD last_test_error_code TEXT;
 
 CREATE TABLE tool_servers (
   id TEXT PRIMARY KEY, name TEXT NOT NULL, transport TEXT NOT NULL CHECK (transport IN ('stdio','http')),
@@ -425,7 +435,7 @@ interface ProviderAdapter {
 interface RunContext {
   tools: ToolDef[];                                            // aggregated from the agent's servers
   callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  mcpConfigForCli(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses (P2)
+  mcpConfigForCli?(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses (P2)
   log(level: 'debug' | 'info' | 'warn', msg: string): void;
 }
 
@@ -433,19 +443,38 @@ interface RunContext {
 class ProviderRegistry {
   register(adapter: ProviderAdapter): void;
   get(id: ProviderId): ProviderAdapter;                        // throws AppError('unknown_provider')
-  list(): ProviderDescriptor[];                                // used by the UI to build forms
+  list(): RegisteredProvider[];                                // { id, kind, capabilities }
 }
+function createDefaultRegistry(): ProviderRegistry;            // the four API adapters; RunnerServer's default
+// Form metadata (label, key requirement, base URL, presets) is static data in
+// @comitiva/contract (`providerDescriptors`), so shells build forms without the runner;
+// adapters take `capabilities` from there. How to add one: docs/providers.md.
 
-// providers/api/AnthropicAdapter.ts (pattern for the others)
+// providers/api/shared.ts — the rules every API adapter follows
+function streamTurn(opts: { signal; usage: UsageTracker; toAppError; body: () => AsyncGenerator<AdapterEvent, StopReason> }): AsyncIterable<AdapterEvent>;
+// one run.usage then run.done; abort → usage so far (estimated) + done(cancelled) at once, even if the SDK hangs
+class UsageTracker { static for(input): UsageTracker; addText(t); report({ input?, output?, cacheRead?, cacheWrite?, final? }); event() }
+function httpError(status, message, cause?): AppError;        // 401/403 auth_failed, 429 rate_limited, 5xx provider_unavailable, 4xx provider_error
+function networkError(err): AppError;                          // refused/DNS → provider_unavailable, timeout → timeout (both retryable)
+function withDeadline<T>(fn: (signal) => Promise<T>, toAppError, ms = 15000): Promise<T>;   // listModels
+function probe(fn, toAppError, ms = 15000): Promise<TestResult>;                            // testConnection, never throws
+
+// providers/api/AnthropicAdapter.ts (OpenAICompatibleAdapter, GoogleAdapter and OllamaAdapter follow the same shape)
 class AnthropicAdapter implements ProviderAdapter {
   private client(config, secret): Anthropic;
   private toProviderMessages(messages: Message[]): MessageParam[];   // Block[] → Anthropic format
   private toProviderTools(tools: ToolDef[]): Tool[];
   run(input, ctx, signal) { return toolLoop({ callModel: (m, t, s) => this.stream(m, t, s), ... }); }
   private async *stream(...): AsyncIterable<AdapterEvent>;          // SDK stream → text_delta/tool_use/usage/done
-  // apiKey is always explicit (never ambient env); errors → auth_failed | rate_limited | provider_unavailable |
-  // provider_error | timeout; abort → usage (estimated if no message_delta yet) + done(cancelled)
+  // apiKey and base URL are always explicit (never ambient env); errors → auth_failed | rate_limited |
+  // provider_unavailable | provider_error | timeout; abort → usage (estimated if no message_delta yet) + done(cancelled)
 }
+// OpenAICompatibleAdapter: openai SDK, Chat Completions + stream_options.include_usage; key optional
+//   (no Authorization header without one); OpenAI preset sends max_completion_tokens.
+// GoogleAdapter: @google/genai (Gemini API keys, not Vertex), generateContentStream, thinking tokens count as output;
+//   400 API_KEY_INVALID → auth_failed.
+// OllamaAdapter: fetch /api/chat (NDJSON), /api/tags, /api/version; optional bearer key.
+// Phase 1 adapters other than Anthropic are text-only: image and tool blocks → unsupported_content.
 
 // providers/cli/CliHarnessAdapter.ts
 abstract class CliHarnessAdapter implements ProviderAdapter {
@@ -493,7 +522,8 @@ class RunnerClient extends EventEmitter {
   startRun(req: RunStartPayload): { runId: string };            // returns at once; start failures arrive as run.error
   cancelRun(runId: string): void;
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void;
-  testConnection(req): Promise<TestResult>;
+  testConnection(req): Promise<TestResult>;                     // provider failures come back as { ok: false }
+  listModels(req): Promise<ModelInfo[]>;                        // rejects with the provider's AppError
   activeRunIds(): string[];
   on(event: 'run.event', h: (e: RunEvent & { receivedAt: number }) => void): this;
   on(event: 'log', h: (e: LogEvent) => void): this;
@@ -606,7 +636,12 @@ class Database {
 interface Repository<T, Create, Update> {
   list(filter?): T[]; get(id): T | null; create(data: Create): T; update(id, data: Update): T; delete(id): void;
 }
-class ConnectionRepository implements Repository<Connection, ...> { /* + hasAgents(id) */ }
+class ConnectionRepository {
+  list(): ConnectionRecord[]; get(id); require(id) /* not_found */; create(NewConnection); update(id, changes);
+  preview(current, changes): Connection;   // validated result without writing (lets the service validate before touching secrets)
+  delete(id) /* connection_in_use while agents use it */; hasAgents(id); recordTest(id, TestResult);
+  // ConnectionRecord = { connection, lastTest }; config validated by zod on read and write; only secret_ref stored
+}
 class AgentRepository { /* + roots/toolServers loaded together; alwaysAllowed(agentId) */ }
 class ConversationRepository { /* + listByAgent(agentId, {archived}); setStatus; setHarnessSession; touch */ }
 class MessageRepository { /* + listByConversation(id, {limit, before}); appendText(id, text); setContent; setStatus; nextSeq */ }
@@ -618,13 +653,27 @@ interface SecretStore {
   get(ref: string): Promise<string | null>;
   has(ref: string): Promise<boolean>;
   delete(ref: string): Promise<void>;
+  status(): { available: boolean; weak: boolean };          // → IPC secrets.getStatus (UI banner)
 }
 class ElectronSecretStore implements SecretStore {
-  constructor(filePath: string, crypto: SafeStorageLike);   // safeStorage injected (fake in tests)
+  constructor(filePath: string, crypto: SafeStorageLike, opts?: { allowWeak?: boolean });   // safeStorage injected (fake in tests)
   // safeStorage.encryptString → file <userData>/secrets.bin (JSON { version: 1, entries: { ref: base64 } }),
   // atomic write (tmp + rename, 0600), serialized
   // refuses to operate (secret_store_unavailable) if !safeStorage.isEncryptionAvailable()
-  isWeak(): boolean;              // Linux basic_text backend; main only enables it with COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1
+  isWeak(): boolean;              // Linux basic_text backend
+  // Without a keyring (basic_text) it refuses to store keys (secret_store_unavailable, SPEC §7) unless
+  // allowWeak, which main sets only with COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1 (tests/CI).
+}
+
+// main/services/ConnectionService.ts
+class ConnectionService {
+  constructor(deps: { repo: ConnectionRepository; secrets: SecretStore; runner: Pick<RunnerClient, 'testConnection' | 'listModels'> });
+  list(): Promise<ConnectionSummary[]>;                  // { connection, hasSecret, lastTest }; never a key
+  create(draft: ConnectionDraft): Promise<ConnectionSummary>;   // key → SecretStore under connection:<id>, validated first
+  update(id, patch: ConnectionPatch): Promise<ConnectionSummary>; // apiKey: omitted keeps, string replaces, null removes
+  delete(id): Promise<void>;                             // row + key
+  test(target: ConnectionTarget): Promise<TestResult>;   // { id } recorded as lastTest; { probe } (+ id to reuse the stored key) is not
+  listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
 }
 
 // main/services/ConversationService.ts
@@ -659,8 +708,8 @@ IPC channels (defined in `contract/ipc.ts`, all with input and output schemas; n
 ```
 app.getVersion
 runner.getStatus
-spike.getState | saveApiKey | testApiKey | send | cancel | reset | reportLatency   (Phase 0 only)
-connections.list | create | update | delete | test | listModels
+secrets.getStatus                                                    (P1)
+connections.list | create | update | delete | test | listModels     (P1)
 toolServers.list | create | update | delete | test | connectGoogle (5b)
 agents.list | create | update | delete | duplicate
 conversations.listByAgent | create | rename | archive | setStatus
@@ -668,8 +717,7 @@ messages.list | send | cancel | retry
 approvals.decide
 usage.summary | timeseries | export
 dialogs.pickFolder
-events: conversation.updated, message.delta, message.block, message.completed, approval.requested, runner.status
-        spike.event (Phase 0 only)
+events: runner.status (P0); conversation.updated, message.delta, message.block, message.completed, approval.requested (P4+)
 ```
 
 ---
@@ -681,8 +729,9 @@ events: conversation.updated, message.delta, message.block, message.completed, a
 interface Backend {
   app: { getVersion() };
   runner: { getStatus() };
-  capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };
-  connections: { list(); create(d); update(id, d); delete(id); test(id); listModels(id) };
+  secrets: { getStatus() };                                    // { available, weak }
+  capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };   // (P2+)
+  connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target) };
   toolServers: { list(); create(d); update(id, d); delete(id); test(id) };
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id) };
   conversations: { listByAgent(agentId); create(agentId); rename(id, t); archive(id) };
@@ -692,9 +741,11 @@ interface Backend {
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
-// Phase 0 implements only app.getVersion, runner.getStatus, the temporary spike.* group and onEvent.
+// Phase 1 implements app, runner, secrets, connections and onEvent (runner.status).
 
-// renderer/src/store/*.ts (Zustand)
+// renderer/src/store/*.ts (Zustand vanilla stores created with the Backend injected; StoresProvider + useApp/useConnections)
+appStore:               version, runnerStatus (pushed status wins over init), secretStatus, section (sidebar navigation)
+connectionsStore:       items: ConnectionSummary[], testing, editor (closed | create | edit id), confirmDelete, notice (error code)
 useAgentsStore:         agents[], selectedAgentId, statusByAgent (derived from conversations), unreadByAgent
 useConversationsStore:  byAgent: Record<agentId, Conversation[]>, selectedByAgent
 useMessagesStore:       byConversation: Record<convId, Message[]>, streamingText: Record<convId, string>,
@@ -702,7 +753,9 @@ useMessagesStore:       byConversation: Record<convId, Message[]>, streamingText
 useUiStore:             rightPanelOpen, theme, quickSwitcherOpen, pendingApprovals: Record<convId, ToolCallEvent>
 ```
 
-Main components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renders fields from `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
+Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.
+
+Later components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renders fields from `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
 
 ---
 
@@ -716,7 +769,7 @@ echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs
 
 pnpm test                     # everything
 pnpm --filter @comitiva/runner test -- --watch
-pnpm --filter desktop test:e2e    # electron-vite build + Playwright against a fake Anthropic server
+pnpm --filter desktop test:e2e    # electron-vite build + Playwright against the fake four-provider server
 
 pnpm contract:schema          # regenerates packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate                                  # Drizzle migration from db/schema.ts (commit it)
@@ -730,7 +783,7 @@ sqlite3 "$HOME/Library/Application Support/comitiva/comitiva.db" '.tables'   # m
 
 Debugging the runner: `COMITIVA_RUNNER_LOG=debug pnpm dev` makes the runner log to stderr (never to stdout, which is the protocol channel). Main writes that stderr to `<userData>/logs/runner.log` with rotation (5 MB, one backup).
 
-Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA_ANTHROPIC_BASE_URL` (spike endpoint override), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI: allow Linux `basic_text`), `COMITIVA_DELTA_FLUSH_MS` (latency experiments).
+Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI: allow Linux `basic_text`). The Phase 0 spike vars (`COMITIVA_ANTHROPIC_BASE_URL`, `COMITIVA_DELTA_FLUSH_MS`) went away with the spike; point a connection's base URL at a fake server instead.
 
 ---
 
@@ -739,7 +792,7 @@ Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA
 - **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
-- **Tests**: runner and mcp-servers with vitest and fakes (a real local fake Anthropic SSE server in `@comitiva/runner/testing` instead of msw, fake in-memory MCP server, fake shell binary for CLI); runner integration tests spawn the bundled `dist/bin.cjs`; desktop main under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app for the two-parallel-conversations flow against the fake provider.
+- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. Later phases add a fake in-memory MCP server and a fake shell binary for CLI. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four).
 - **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
 - **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 

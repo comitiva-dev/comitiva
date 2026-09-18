@@ -168,6 +168,8 @@ Three columns, Slack style:
 
 Resolved in Phase 0 (see `docs/adr/`): name **Comitiva** and license **Apache-2.0** (ADR 0001); the runner runs as **Electron in Node mode via `ELECTRON_RUN_AS_NODE`** (ADR 0002); desktop ORM **Drizzle** (ADR 0003); canonical blocks in the Anthropic format (ADR 0004); JSON Schema generated with zod 4 (ADR 0005).
 
-Still open: implementation of the `google-drive` server (own vs community), decided in Phase 5b; behavior on Linux without a keyring (refuse vs warned opt-in to obfuscated storage), decided in Phase 1.
+Resolved in Phase 1: on Linux without a keyring (Chromium's `basic_text` backend), Comitiva **refuses** to store API keys and explains how to get a keyring; connections without a key (Ollama, LM Studio) keep working. Obfuscated storage is only for tests and CI (`COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`).
+
+Still open: implementation of the `google-drive` server (own vs community), decided in Phase 5b.
 
 ---

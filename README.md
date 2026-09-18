@@ -6,7 +6,7 @@ Comitiva is an open source desktop app where you connect LLMs (APIs such as Anth
 
 It is not a coding tool. Agents research, write, review and organize files; code is just one case.
 
-> **Status: Phase 0.** The monorepo, CI and an architecture spike are in place. Two Anthropic conversations stream in parallel through a standalone runner process, with independent cancel. See [docs/STATUS.md](docs/STATUS.md) and the roadmap in [SPEC.md](SPEC.md#6-roadmap).
+> **Status: Phase 1.** API connections work end to end: Anthropic, any OpenAI-compatible endpoint (OpenAI, OpenRouter, Groq, LM Studio, …), Gemini and Ollama can be added, tested and asked for their models from the Connections screen. Keys stay in the OS keychain. Agents and chat come next. See [docs/STATUS.md](docs/STATUS.md) and the roadmap in [SPEC.md](SPEC.md#6-roadmap).
 
 ## How it is built
 
@@ -32,11 +32,11 @@ pnpm install
 pnpm dev            # on Ubuntu 24.04+: pnpm dev -- --noSandbox (see CONTRIBUTING.md)
 ```
 
-In the spike window, paste an Anthropic API key, press **Save**, then type a message in both panes and press **Send** in each. Cancel one while the other keeps streaming.
+Open **Connections**, press **Add connection**, pick a provider, paste a key (none is needed for Ollama or LM Studio), press **Fetch models** and **Test**, then **Save**.
 
 ```bash
 pnpm lint && pnpm typecheck && pnpm test   # all checks
-pnpm --filter desktop test:e2e             # end-to-end, no API key needed (fake provider)
+pnpm --filter desktop test:e2e             # end-to-end, no API key needed (fake providers)
 pnpm package                               # build an installer for your platform
 ```
 
@@ -45,7 +45,7 @@ pnpm package                               # build an installer for your platfor
 | Path | Package | What |
 |---|---|---|
 | `packages/contract` | `@comitiva/contract` | Entities, blocks, runner protocol and IPC schemas; JSON Schema output |
-| `packages/runner` | `@comitiva/runner` | Runner process, `RunnerClient`, provider adapters |
+| `packages/runner` | `@comitiva/runner` | Runner process, `RunnerClient`, provider adapters ([how to add one](docs/providers.md)) |
 | `packages/mcp-servers` | `@comitiva/mcp-servers` | Built-in MCP servers (filesystem, Google Drive) — upcoming |
 | `apps/desktop` | `desktop` | Electron app |
 

@@ -14,7 +14,7 @@ flowchart LR
   RN["Runner (Node process)<br/>RunnerServer · RunManager · adapters"]
   DB[("SQLite<br/>comitiva.db")]
   S[("secrets.bin<br/>safeStorage blobs")]
-  LLM["LLM providers<br/>Anthropic API, …"]
+  LLM["LLM providers<br/>Anthropic · OpenAI-compatible · Gemini · Ollama"]
 
   R -- "LocalBackend → invoke / on" --> P
   P -- "ipcRenderer (contract/ipc.ts)" --> M
@@ -40,8 +40,8 @@ Transport: JSON lines. Each message is one JSON object followed by `\n`. Request
 | `type` | Payload | Result | Phase |
 |---|---|---|---|
 | `ping` | — | `{ version, protocolVersion }` | 0 |
-| `connection.test` | `connection`, `secret?` | `{ ok: true, latencyMs } \| { ok: false, error }` | 0 |
-| `connection.listModels` | `connection`, `secret?` | `ModelInfo[]` | 1 |
+| `connection.test` | `connection`, `secret?` | `{ ok: true, latencyMs } \| { ok: false, error }` (provider failures are a result, not a protocol error; 15 s deadline) | 0 |
+| `connection.listModels` | `connection`, `secret?` | `ModelInfo[]` (`{ id, name?, contextWindow? }`); provider failures answer `ok: false` with the mapped code | 1 |
 | `toolServer.start` / `toolServer.stop` | `toolServer`, `secrets?` / `toolServerId` | `ToolDef[]` / `{}` | 5 |
 | `run.start` | `runId`, `conversationId`, `agent`, `connection`, `secret?`, `messages`, `harnessSessionId?`, `alwaysAllowed?` | `{ runId }` (returns right away; the run streams events) | 0 |
 | `run.cancel` | `runId` | `{ cancelled: boolean }` (idempotent) | 0 |
@@ -69,7 +69,8 @@ Every `run.*` event carries `ts`, the runner's emission time in epoch millisecon
 - Runs are independent and concurrent. Each has its own `AbortController` (`RunManager` → `Run`).
 - Every run ends with **exactly one terminal event**, `run.done` or `run.error`, and emits nothing after it.
 - **Cancel** aborts the provider request (the HTTP stream is closed), then emits the usage known so far and `run.done { stopReason: 'cancelled' }`. Cancel is not an error. If cancel lands before the provider reports output tokens, `outputTokens` is estimated from the streamed text and `estimated: true` is set.
-- Provider errors become stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, …). The raw provider message goes in `message` for logs and is never shown as a UI title.
+- Provider errors become stable codes, the same for every provider: 401/403 → `auth_failed`; 429 → `rate_limited` (retryable); 5xx → `provider_unavailable` (retryable); other 4xx → `provider_error`; no response → `provider_unavailable` or `timeout` (retryable). The raw provider message goes in `message` for logs and is never shown as a UI title. Adapter rules and how to add one: `docs/providers.md`.
+- Adapters never read credentials or endpoints from the environment; the key arrives per request and is not stored.
 - If the runner process dies, `RunnerClient` rejects pending requests and emits `run.error { code: 'runner_crashed', retryable: true }` for every active run. `RunnerSupervisor` restarts the process with exponential backoff (1 s, 2 s, 4 s … 30 s).
 
 ### Example session
@@ -92,27 +93,29 @@ Try it by hand: `pnpm --filter @comitiva/runner build && echo '{"id":"1","type":
 ## Streaming path and batching
 
 ```
-provider SSE → AnthropicAdapter → Run (stamps ts) → stdout
-  → RunnerClient (parse + validate) → SpikeService / ConversationService
+provider stream → adapter (Anthropic / OpenAI-compatible / Gemini / Ollama) → Run (stamps ts) → stdout
+  → RunnerClient (parse + validate) → ConversationService (Phase 4)
   → coalesce text per conversation, flush every 16 ms → webContents.send
   → preload → LocalBackend → Zustand store → React paint
 ```
 
-Main forwards deltas to the renderer at most once per frame (16 ms) per conversation, instead of once per token. SQLite writes (from Phase 4) are batched separately, about every 250 ms. Measured latencies are in `docs/STATUS.md`.
+Main forwards deltas to the renderer at most once per frame (16 ms) per conversation, instead of once per token (measured in Phase 0; applies again when chat lands in Phase 4). SQLite writes (from Phase 4) are batched separately, about every 250 ms. Measured latencies are in `docs/STATUS.md`.
 
 ## Boundaries (non-negotiable)
 
 | Rule | Enforced by |
 |---|---|
 | `packages/runner` and `packages/mcp-servers` have zero Electron dependencies. | ESLint `no-restricted-imports` on those paths; the runner is tested under plain Node. |
-| Secrets never touch SQLite, IPC payloads to the renderer, or logs. | The DB schema has only `secret_ref`. `runInvoke` strips outputs to their schema (tested). pino redacts `secret`/`apiKey`. The renderer drops the key draft after saving. |
+| Secrets never touch SQLite, IPC payloads to the renderer, or logs. | The DB schema has only `secret_ref` (tested). `runInvoke` strips outputs to their schema; connection outputs carry `hasSecret`, never a key (tested). pino redacts `secret`/`apiKey`. The form's typed key dies with the form, and the stored key is never sent back. The e2e scans `comitiva.db*` and `secrets.bin` for the keys. |
 | The renderer depends only on the `Backend` interface. | ESLint bans `electron`, `main/`, `preload/` and `@comitiva/runner` imports in the renderer, and `window.api` outside `LocalBackend.ts`. |
 | The filesystem MCP server rejects paths outside the agent's roots, including symlink escapes. | Phase 5 (`RootGuard`). |
 | Nothing in the core assumes code, Git or terminals. | Review. |
 
 ## Secrets
 
-`ElectronSecretStore` encrypts values with `safeStorage` (Keychain / DPAPI / libsecret) and writes a JSON map of base64 blobs to `<userData>/secrets.bin`. Writes are atomic (tmp + rename, mode 0600) and serialized. When the OS offers no keyring (Linux `basic_text` backend), `safeStorage` refuses to encrypt and so does the store; the app then shows a warning. Tests and CI opt into obfuscated storage with `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`.
+`ElectronSecretStore` encrypts values with `safeStorage` (Keychain / DPAPI / libsecret) and writes a JSON map of base64 blobs to `<userData>/secrets.bin`. Writes are atomic (tmp + rename, mode 0600) and serialized. Keys are stored under `connection:<id>`; the `connections` row holds only that ref.
+
+When the OS offers no keyring (Linux `basic_text` backend), the store **refuses** to save keys (`secret_store_unavailable`). The Connections screen shows a banner explaining how to get a keyring, and keyless connections (Ollama, LM Studio) keep working. This is the Phase 1 decision (SPEC §7). Tests and CI opt into obfuscated storage with `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`.
 
 ## Data locations
 
@@ -123,4 +126,3 @@ Main forwards deltas to the renderer at most once per frame (16 ms) per conversa
 | `comitiva.db` | SQLite (WAL), Drizzle migrations |
 | `secrets.bin` | Encrypted secrets |
 | `logs/runner.log` | Runner stderr and supervisor events (rotates at 5 MB) |
-| `logs/latency.jsonl` | Event → paint latency samples reported by the renderer (spike) |

@@ -7,6 +7,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 - `SPEC.md` — what the product is, domain model, architecture, roadmap by phase. Source of truth.
 - `docs/design.md` — how it is built: file layout, package names, data model, classes and methods, runner protocol, flows, commands. Follow it unless there is a reason to deviate; if you deviate, say so and update it in the same commit.
 - `docs/architecture.md` — processes, runner protocol, boundaries, data locations.
+- `docs/providers.md` — how to add a provider adapter (rules, shared helpers, conformance tests).
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
@@ -14,7 +15,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 
 ```
 packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
-packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs) + RunnerClient + testing/ fake Anthropic
+packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs) + RunnerClient + testing/ fake providers
 packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (Phase 5+)
 apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
 ```
@@ -45,13 +46,13 @@ pnpm install                        # pnpm 10 via corepack (packageManager field
 pnpm dev                            # desktop in dev; on Ubuntu 24.04+: pnpm dev -- --noSandbox
 pnpm build                          # all packages (turbo, dependency order)
 pnpm lint | pnpm typecheck | pnpm test | pnpm format:check
-pnpm --filter desktop test:e2e      # builds the app and runs Playwright against a fake Anthropic server
+pnpm --filter desktop test:e2e      # builds the app and runs Playwright against the fake four-provider server
 pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate   # generate a Drizzle migration from schema.ts
 pnpm package                        # electron-builder for the current platform → apps/desktop/release/
 echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs   # talk to the runner by hand
 ```
 
-Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ANTHROPIC_BASE_URL` (point the spike at a fake server), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`), `COMITIVA_DELTA_FLUSH_MS` (latency measurement).
+Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`; without it the app refuses to store keys on a keyring-less Linux).
 
 More detail: `docs/design.md` §8.

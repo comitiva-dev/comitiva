@@ -1,0 +1,35 @@
+{
+  "name": "comitiva",
+  "private": true,
+  "description": "Agentic chat for your whole team",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@12.4.2",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "dev": "turbo run dev --filter=desktop",
+    "build": "turbo run build",
+    "lint": "turbo run lint",
+    "typecheck": "turbo run typecheck",
+    "test": "turbo run test",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "contract:schema": "pnpm --filter @comitiva/contract run schema",
+    "runner:dev": "pnpm --filter @comitiva/runner run dev",
+    "package": "pnpm --filter desktop run package"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^24.13.5",
+    "eslint": "^10.10.0",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.7",
+    "turbo": "^2.10.13",
+    "typescript": "~6.0.3",
+    "typescript-eslint": "^8.70.0",
+    "vitest": "^5.0.1"
+  }
+}

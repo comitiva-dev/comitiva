@@ -1,0 +1,8 @@
+dist
+out
+release
+coverage
+pnpm-lock.yaml
+packages/contract/schema
+apps/desktop/src/main/db/migrations
+*.md

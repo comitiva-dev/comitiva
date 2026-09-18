@@ -1,0 +1,12 @@
+node_modules/
+dist/
+out/
+release/
+coverage/
+.turbo/
+*.tsbuildinfo
+.env
+.env.*
+test-results/
+playwright-report/
+.DS_Store

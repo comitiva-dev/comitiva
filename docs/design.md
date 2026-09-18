@@ -122,7 +122,7 @@ Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` re
 |---|---|---|
 | packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`; subpath `./ipc-channels` has no zod) |
 | packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`; subpaths `./bin`, `./testing`) |
-| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bins `comitiva-mcp-filesystem`, `comitiva-mcp-gdrive`) |
+| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bins `comitiva-mcp-filesystem` (P5), `comitiva-mcp-gdrive` (P5b); none yet) |
 | apps/desktop | `desktop` | no |
 
 ### 1.5 Phase 0 exit checklist
@@ -333,9 +333,9 @@ An `assistant` message can mix `text` and `tool_use`; the following `tool` messa
 sequenceDiagram
     participant M as Electron main (RunnerSupervisor)
     participant R as Runner (RunnerServer)
-    M->>R: spawn(execPath, [runner.js], { env: ELECTRON_RUN_AS_NODE=1 })
+    M->>R: spawn(execPath, [runner/bin.cjs], { env: ELECTRON_RUN_AS_NODE=1 })
     M->>R: {"id":"1","type":"ping"}
-    R-->>M: {"type":"response","id":"1","ok":true,"result":{"version":"0.1.0"}}
+    R-->>M: {"type":"response","id":"1","ok":true,"result":{"version":"0.1.0","protocolVersion":1}}
     Note over M,R: from here on, requests and events flow as JSON lines
     R--xM: process dies
     M->>M: backoff (1s, 2s, 4s… max 30s), mark active runs as error(retryable)
@@ -349,14 +349,17 @@ sequenceDiagram
 class JsonLinesTransport {
   constructor(input: NodeJS.ReadableStream, output: NodeJS.WritableStream);
   onMessage(handler: (msg: unknown) => void): void;
+  onMalformed(handler: (line: string) => void): void;   // non-JSON line → the server answers with a `log` event
+  onClose(handler: () => void): void;                   // stdin ended → the server stops
   send(msg: RunnerEvent): void;        // serializes + '\n'; never throws
 }
 
 // server/RunnerServer.ts
 class RunnerServer {
-  constructor(transport: JsonLinesTransport, deps: { registry: ProviderRegistry; mcp: McpClientManager; runs: RunManager });
+  constructor(opts: { input: ReadableStream; output: WritableStream; logger?; registry?: ProviderRegistry; onExit?: () => void });
+  // builds JsonLinesTransport, RunManager and RequestRouter itself; McpClientManager joins in Phase 5
   start(): void;                        // validates each line with the RunnerRequest schema, dispatches to RequestRouter
-  stop(): Promise<void>;                // cancels runs, closes MCP clients
+  stop(): Promise<void>;                // idempotent: cancels runs (closes MCP clients from P5), then onExit
 }
 
 // server/RequestRouter.ts
@@ -414,22 +417,22 @@ interface ProviderAdapter {
   readonly id: ProviderId;
   readonly kind: 'api' | 'cli';
   readonly capabilities: Capabilities;
-  testConnection(config: ConnectionConfig, secret?: string): Promise<TestResult>;
-  listModels?(config: ConnectionConfig, secret?: string): Promise<ModelInfo[]>;
+  testConnection(connection: Connection, secret?: string): Promise<TestResult>;
+  listModels?(connection: Connection, secret?: string): Promise<ModelInfo[]>;
   run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent>;
 }
 
 interface RunContext {
   tools: ToolDef[];                                            // aggregated from the agent's servers
   callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  mcpConfigForCli(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses
+  mcpConfigForCli(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses (P2)
   log(level: 'debug' | 'info' | 'warn', msg: string): void;
 }
 
 // providers/ProviderRegistry.ts
 class ProviderRegistry {
   register(adapter: ProviderAdapter): void;
-  get(id: ProviderId): ProviderAdapter;                        // throws UnknownProviderError
+  get(id: ProviderId): ProviderAdapter;                        // throws AppError('unknown_provider')
   list(): ProviderDescriptor[];                                // used by the UI to build forms
 }
 
@@ -676,6 +679,8 @@ events: conversation.updated, message.delta, message.block, message.completed, a
 ```ts
 // renderer/src/backend/Backend.ts — the UI only knows this
 interface Backend {
+  app: { getVersion() };
+  runner: { getStatus() };
   capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };
   connections: { list(); create(d); update(id, d); delete(id); test(id); listModels(id) };
   toolServers: { list(); create(d); update(id, d); delete(id); test(id) };

@@ -1,28 +1,19 @@
-import { useTranslation } from 'react-i18next';
-import { KeyBar } from './components/KeyBar';
-import { Pane } from './components/Pane';
-import { useSpike } from './store/context';
-import { PANES } from './store/spike';
+import { Sidebar } from './components/Sidebar/Sidebar';
+import { ConnectionsScreen } from './screens/ConnectionsScreen';
+import { PlaceholderScreen } from './screens/PlaceholderScreen';
+import { useApp } from './store/context';
 
 export function App() {
-  const { t } = useTranslation();
-  const version = useSpike((s) => s.version);
-  const runnerStatus = useSpike((s) => s.runnerStatus);
-
+  const section = useApp((s) => s.section);
   return (
-    <div className="flex h-screen flex-col">
-      <header className="flex gap-4 border-b border-gray-400 p-3">
-        <h1 className="font-bold">{t('app.title')}</h1>
-        <span data-testid="version">{version && t('app.version', { version })}</span>
-        <span data-testid="runner-status" data-status={runnerStatus}>
-          {t('app.runner', { status: t(`runnerStatus.${runnerStatus}`) })}
-        </span>
-      </header>
-      <KeyBar />
-      <main className="grid min-h-0 flex-1 grid-cols-2 gap-3 p-3">
-        {PANES.map((id) => (
-          <Pane key={id} id={id} />
-        ))}
+    <div className="flex h-screen bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
+      <Sidebar />
+      <main className="flex min-w-0 flex-1 overflow-y-auto">
+        {section === 'connections' ? (
+          <ConnectionsScreen />
+        ) : (
+          <PlaceholderScreen section={section} />
+        )}
       </main>
     </div>
   );

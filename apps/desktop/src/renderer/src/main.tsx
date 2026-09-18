@@ -4,18 +4,20 @@ import './i18n';
 import './index.css';
 import { App } from './App';
 import { LocalBackend } from './backend/LocalBackend';
-import { SpikeStoreProvider } from './store/context';
-import { createSpikeStore } from './store/spike';
+import { createAppStore } from './store/app';
+import { createConnectionsStore } from './store/connections';
+import { StoresProvider } from './store/context';
 
 const backend = new LocalBackend();
-const store = createSpikeStore(backend);
-backend.onEvent((event) => store.getState().handleEvent(event));
-void store.getState().init();
+const stores = { app: createAppStore(backend), connections: createConnectionsStore(backend) };
+backend.onEvent((event) => stores.app.getState().handleEvent(event));
+void stores.app.getState().init();
+void stores.connections.getState().load();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <SpikeStoreProvider store={store}>
+    <StoresProvider stores={stores}>
       <App />
-    </SpikeStoreProvider>
+    </StoresProvider>
   </StrictMode>,
 );

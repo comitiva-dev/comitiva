@@ -1,8 +1,8 @@
 {
   "app": {
-    "title": "Comitiva — Phase 0 spike",
+    "title": "Comitiva",
     "version": "v{{version}}",
-    "runner": "Runner: {{status}}"
+    "runner": "Runner {{status}}"
   },
   "runnerStatus": {
     "starting": "starting",
@@ -10,44 +10,81 @@
     "restarting": "restarting",
     "stopped": "stopped"
   },
-  "key": {
-    "label": "Anthropic API key",
-    "placeholder": "sk-ant-…",
-    "save": "Save",
-    "test": "Test",
-    "saved": "A key is saved.",
-    "missing": "No key saved yet.",
-    "saving": "Saving…",
-    "testing": "Testing…",
-    "ok": "Key works.",
-    "failed": "Key check failed: {{error}}",
-    "weak": "Warning: no OS keychain found, so the key is only obfuscated on disk."
-  },
-  "model": {
-    "label": "Model"
-  },
-  "pane": {
-    "title": "Conversation {{id}}",
-    "placeholder": "Type a message…",
-    "send": "Send",
+  "common": {
     "cancel": "Cancel",
-    "reset": "Reset",
-    "status": {
-      "idle": "idle",
-      "streaming": "streaming…",
-      "done": "done",
-      "cancelled": "cancelled",
-      "error": "error"
-    },
-    "usage": "Tokens: in {{input}} · out {{output}} · cache read {{cacheRead}} · cache write {{cacheWrite}}",
-    "noUsage": "Tokens: —",
-    "latency": "Event → paint: p50 {{p50}} ms · p95 {{p95}} ms · max {{max}} ms (n={{n}})"
+    "save": "Save",
+    "saving": "Saving…",
+    "dismiss": "Dismiss"
+  },
+  "nav": {
+    "label": "Main",
+    "agents": "Agents",
+    "connections": "Connections",
+    "tools": "Tools",
+    "usage": "Usage",
+    "settings": "Settings"
+  },
+  "sidebar": {
+    "noAgents": "No agents yet. Agents arrive soon; set up a connection first."
+  },
+  "placeholder": {
+    "agents": "Agents are personas with a role, a connection and tools. They arrive in a later phase.",
+    "tools": "Tools (local folders, Google Drive, any MCP server) arrive in a later phase.",
+    "usage": "Token usage and costs per connection and agent arrive in a later phase.",
+    "settings": "Language, theme and other preferences arrive in a later phase."
+  },
+  "secrets": {
+    "unavailableTitle": "API keys cannot be stored securely on this system",
+    "unavailableBody": "No OS keyring was found (on Linux, install and unlock GNOME Keyring or KWallet, then restart Comitiva). Connections that need no key, such as Ollama or LM Studio, still work."
+  },
+  "connections": {
+    "title": "Connections",
+    "subtitle": "Ways to reach a language model. Keys stay in your OS keychain.",
+    "add": "Add connection",
+    "emptyTitle": "No connections yet",
+    "emptyBody": "Add Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama or LM Studio to get started.",
+    "enabled": "Enabled",
+    "test": "Test",
+    "testing": "Testing…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "testOk": "Connected in {{ms}} ms",
+    "neverTested": "Not tested yet",
+    "lastTestOk": "OK · {{ms}} ms · {{when}}",
+    "lastTestFailed": "{{error}} · {{when}}",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteBody": "Its stored API key is removed too. This cannot be undone.",
+    "form": {
+      "createTitle": "New connection",
+      "editTitle": "Edit connection",
+      "provider": "Provider",
+      "preset": "Service",
+      "customPreset": "Custom endpoint",
+      "name": "Name",
+      "nameRequired": "Give the connection a name.",
+      "apiKey": "API key",
+      "optional": "(optional)",
+      "keyPlaceholder": "Paste the key",
+      "keySavedPlaceholder": "A key is saved. Leave blank to keep it.",
+      "removeKey": "Remove the saved key",
+      "keyRequired": "This provider needs an API key.",
+      "baseUrl": "Base URL",
+      "baseUrlAdvancedHint": "Leave blank to use the provider's endpoint.",
+      "baseUrlInvalid": "Enter a full URL, like https://example.com/v1.",
+      "advanced": "Advanced: custom endpoint",
+      "defaultModel": "Default model",
+      "modelPlaceholder": "Type or fetch a model",
+      "fetchModels": "Fetch models",
+      "fetching": "Fetching…",
+      "modelsFound_one": "{{count}} model found",
+      "modelsFound_other": "{{count}} models found"
+    }
   },
   "errors": {
     "auth_failed": "The API key was rejected.",
     "rate_limited": "Rate limited by the provider. Try again shortly.",
-    "provider_unavailable": "The provider is unavailable right now.",
-    "provider_error": "The provider rejected the request.",
+    "provider_unavailable": "Could not reach the provider. Check the URL and your network.",
+    "provider_error": "The provider rejected the request. Check the base URL and model.",
     "binary_not_found": "The CLI binary was not found.",
     "not_logged_in": "The CLI is not logged in.",
     "outside_roots": "That path is outside the allowed folders.",
@@ -56,11 +93,13 @@
     "not_implemented": "Not implemented yet.",
     "unknown_provider": "Unknown provider.",
     "unsupported_content": "That content is not supported yet.",
-    "secret_missing": "Save an API key first.",
+    "secret_missing": "An API key is required.",
     "secret_store_unavailable": "Secure storage is not available on this system.",
     "runner_crashed": "The runner stopped unexpectedly. You can retry.",
     "runner_unavailable": "The runner is not running.",
     "timeout": "The request timed out.",
-    "internal": "Something went wrong."
+    "internal": "Something went wrong.",
+    "connection_in_use": "This connection is used by agents. Move them to another connection first.",
+    "not_found": "That item no longer exists."
   }
 }

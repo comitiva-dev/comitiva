@@ -1,21 +1,29 @@
 import { createContext, useContext, type ReactNode } from 'react';
 import { useStore } from 'zustand';
-import type { SpikeState, SpikeStore } from './spike';
+import type { AppState, AppStore } from './app';
+import type { ConnectionsState, ConnectionsStore } from './connections';
 
-const SpikeStoreContext = createContext<SpikeStore | null>(null);
-
-export function SpikeStoreProvider({
-  store,
-  children,
-}: {
-  store: SpikeStore;
-  children: ReactNode;
-}) {
-  return <SpikeStoreContext.Provider value={store}>{children}</SpikeStoreContext.Provider>;
+export interface Stores {
+  app: AppStore;
+  connections: ConnectionsStore;
 }
 
-export function useSpike<T>(selector: (state: SpikeState) => T): T {
-  const store = useContext(SpikeStoreContext);
-  if (!store) throw new Error('SpikeStoreProvider is missing');
-  return useStore(store, selector);
+const StoresContext = createContext<Stores | null>(null);
+
+export function StoresProvider({ stores, children }: { stores: Stores; children: ReactNode }) {
+  return <StoresContext.Provider value={stores}>{children}</StoresContext.Provider>;
+}
+
+function useStores(): Stores {
+  const stores = useContext(StoresContext);
+  if (!stores) throw new Error('StoresProvider is missing');
+  return stores;
+}
+
+export function useApp<T>(selector: (state: AppState) => T): T {
+  return useStore(useStores().app, selector);
+}
+
+export function useConnections<T>(selector: (state: ConnectionsState) => T): T {
+  return useStore(useStores().connections, selector);
 }

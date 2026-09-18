@@ -1,4 +1,11 @@
-import type { IpcInput, IpcInvokeChannel, IpcOutput } from '@comitiva/contract';
+import type {
+  ConnectionDraft,
+  ConnectionPatch,
+  ConnectionTarget,
+  IpcInput,
+  IpcInvokeChannel,
+  IpcOutput,
+} from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
 
 /** Backend over the preload bridge. The only module allowed to touch window.api. */
@@ -23,23 +30,21 @@ export class LocalBackend implements Backend {
     getStatus: async () => (await this.api.invoke('runner.getStatus', undefined)).status,
   };
 
-  spike = {
-    getState: () => this.api.invoke('spike.getState', undefined),
-    saveApiKey: (apiKey: string) => this.api.invoke('spike.saveApiKey', { apiKey }),
-    testApiKey: () => this.api.invoke('spike.testApiKey', undefined),
-    send: (conversationId: string, text: string, model: string) =>
-      this.api.invoke('spike.send', { conversationId, text, model }),
-    cancel: (conversationId: string) => this.api.invoke('spike.cancel', { conversationId }),
-    reset: (conversationId: string) => this.api.invoke('spike.reset', { conversationId }),
-    reportLatency: (conversationId: string, samplesMs: number[]) =>
-      this.api.invoke('spike.reportLatency', { conversationId, samplesMs }),
+  secrets = {
+    getStatus: () => this.api.invoke('secrets.getStatus', undefined),
+  };
+
+  connections = {
+    list: () => this.api.invoke('connections.list', undefined),
+    create: (draft: ConnectionDraft) => this.api.invoke('connections.create', draft),
+    update: (id: string, patch: ConnectionPatch) =>
+      this.api.invoke('connections.update', { id, patch }),
+    delete: (id: string) => this.api.invoke('connections.delete', { id }),
+    test: (target: ConnectionTarget) => this.api.invoke('connections.test', target),
+    listModels: (target: ConnectionTarget) => this.api.invoke('connections.listModels', target),
   };
 
   onEvent(handler: (event: BackendEvent) => void): () => void {
-    const offs = [
-      this.api.on('spike.event', (event) => handler({ type: 'spike', event })),
-      this.api.on('runner.status', ({ status }) => handler({ type: 'runner.status', status })),
-    ];
-    return () => offs.forEach((off) => off());
+    return this.api.on('runner.status', ({ status }) => handler({ type: 'runner.status', status }));
   }
 }

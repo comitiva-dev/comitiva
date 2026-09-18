@@ -1,8 +1,8 @@
 {
   "app": {
-    "title": "Comitiva — spike da Fase 0",
+    "title": "Comitiva",
     "version": "v{{version}}",
-    "runner": "Runner: {{status}}"
+    "runner": "Runner {{status}}"
   },
   "runnerStatus": {
     "starting": "iniciando",
@@ -10,44 +10,81 @@
     "restarting": "reiniciando",
     "stopped": "parado"
   },
-  "key": {
-    "label": "Chave de API da Anthropic",
-    "placeholder": "sk-ant-…",
-    "save": "Salvar",
-    "test": "Testar",
-    "saved": "Há uma chave salva.",
-    "missing": "Nenhuma chave salva ainda.",
-    "saving": "Salvando…",
-    "testing": "Testando…",
-    "ok": "A chave funciona.",
-    "failed": "Falha ao verificar a chave: {{error}}",
-    "weak": "Atenção: nenhum chaveiro do sistema foi encontrado; a chave fica apenas ofuscada no disco."
-  },
-  "model": {
-    "label": "Modelo"
-  },
-  "pane": {
-    "title": "Conversa {{id}}",
-    "placeholder": "Digite uma mensagem…",
-    "send": "Enviar",
+  "common": {
     "cancel": "Cancelar",
-    "reset": "Limpar",
-    "status": {
-      "idle": "ociosa",
-      "streaming": "respondendo…",
-      "done": "concluída",
-      "cancelled": "cancelada",
-      "error": "erro"
-    },
-    "usage": "Tokens: entrada {{input}} · saída {{output}} · cache lido {{cacheRead}} · cache gravado {{cacheWrite}}",
-    "noUsage": "Tokens: —",
-    "latency": "Evento → pintura: p50 {{p50}} ms · p95 {{p95}} ms · máx {{max}} ms (n={{n}})"
+    "save": "Salvar",
+    "saving": "Salvando…",
+    "dismiss": "Fechar"
+  },
+  "nav": {
+    "label": "Principal",
+    "agents": "Agentes",
+    "connections": "Conexões",
+    "tools": "Ferramentas",
+    "usage": "Uso",
+    "settings": "Configurações"
+  },
+  "sidebar": {
+    "noAgents": "Nenhum agente ainda. Eles chegam em breve; configure uma conexão primeiro."
+  },
+  "placeholder": {
+    "agents": "Agentes são personas com um papel, uma conexão e ferramentas. Chegam em uma fase posterior.",
+    "tools": "Ferramentas (pastas locais, Google Drive, qualquer servidor MCP) chegam em uma fase posterior.",
+    "usage": "Uso de tokens e custos por conexão e agente chegam em uma fase posterior.",
+    "settings": "Idioma, tema e outras preferências chegam em uma fase posterior."
+  },
+  "secrets": {
+    "unavailableTitle": "Não é possível guardar chaves de API com segurança neste sistema",
+    "unavailableBody": "Nenhum chaveiro do sistema foi encontrado (no Linux, instale e desbloqueie o GNOME Keyring ou o KWallet e reinicie o Comitiva). Conexões sem chave, como Ollama ou LM Studio, continuam funcionando."
+  },
+  "connections": {
+    "title": "Conexões",
+    "subtitle": "Formas de chegar a um modelo de linguagem. As chaves ficam no chaveiro do sistema.",
+    "add": "Adicionar conexão",
+    "emptyTitle": "Nenhuma conexão ainda",
+    "emptyBody": "Adicione Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama ou LM Studio para começar.",
+    "enabled": "Ativa",
+    "test": "Testar",
+    "testing": "Testando…",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "testOk": "Conectado em {{ms}} ms",
+    "neverTested": "Ainda não testada",
+    "lastTestOk": "OK · {{ms}} ms · {{when}}",
+    "lastTestFailed": "{{error}} · {{when}}",
+    "deleteTitle": "Excluir “{{name}}”?",
+    "deleteBody": "A chave de API guardada também é removida. Não dá para desfazer.",
+    "form": {
+      "createTitle": "Nova conexão",
+      "editTitle": "Editar conexão",
+      "provider": "Provedor",
+      "preset": "Serviço",
+      "customPreset": "Endpoint personalizado",
+      "name": "Nome",
+      "nameRequired": "Dê um nome à conexão.",
+      "apiKey": "Chave de API",
+      "optional": "(opcional)",
+      "keyPlaceholder": "Cole a chave",
+      "keySavedPlaceholder": "Há uma chave salva. Deixe em branco para mantê-la.",
+      "removeKey": "Remover a chave salva",
+      "keyRequired": "Este provedor precisa de uma chave de API.",
+      "baseUrl": "URL base",
+      "baseUrlAdvancedHint": "Deixe em branco para usar o endpoint do provedor.",
+      "baseUrlInvalid": "Informe uma URL completa, como https://exemplo.com/v1.",
+      "advanced": "Avançado: endpoint personalizado",
+      "defaultModel": "Modelo padrão",
+      "modelPlaceholder": "Digite ou busque um modelo",
+      "fetchModels": "Buscar modelos",
+      "fetching": "Buscando…",
+      "modelsFound_one": "{{count}} modelo encontrado",
+      "modelsFound_other": "{{count}} modelos encontrados"
+    }
   },
   "errors": {
     "auth_failed": "A chave de API foi recusada.",
     "rate_limited": "Limite de requisições do provedor atingido. Tente de novo em instantes.",
-    "provider_unavailable": "O provedor está indisponível no momento.",
-    "provider_error": "O provedor recusou a requisição.",
+    "provider_unavailable": "Não foi possível alcançar o provedor. Confira a URL e sua rede.",
+    "provider_error": "O provedor recusou a requisição. Confira a URL base e o modelo.",
     "binary_not_found": "O executável da CLI não foi encontrado.",
     "not_logged_in": "A CLI não está autenticada.",
     "outside_roots": "Esse caminho está fora das pastas permitidas.",
@@ -56,11 +93,13 @@
     "not_implemented": "Ainda não implementado.",
     "unknown_provider": "Provedor desconhecido.",
     "unsupported_content": "Esse conteúdo ainda não é suportado.",
-    "secret_missing": "Salve uma chave de API primeiro.",
+    "secret_missing": "É preciso uma chave de API.",
     "secret_store_unavailable": "O armazenamento seguro não está disponível neste sistema.",
     "runner_crashed": "O runner parou inesperadamente. Você pode tentar de novo.",
     "runner_unavailable": "O runner não está em execução.",
     "timeout": "A requisição excedeu o tempo limite.",
-    "internal": "Algo deu errado."
+    "internal": "Algo deu errado.",
+    "connection_in_use": "Esta conexão é usada por agentes. Mova-os para outra conexão antes.",
+    "not_found": "Esse item não existe mais."
   }
 }

@@ -1,0 +1,74 @@
+import { useTranslation } from 'react-i18next';
+import type { Section } from '../../store/app';
+import { useApp } from '../../store/context';
+import { ui } from '../ui';
+
+const settingsSections: Array<Exclude<Section, 'agents'>> = [
+  'connections',
+  'tools',
+  'usage',
+  'settings',
+];
+
+export function Sidebar() {
+  const { t } = useTranslation();
+  const section = useApp((s) => s.section);
+  const setSection = useApp((s) => s.setSection);
+  const version = useApp((s) => s.version);
+  const runnerStatus = useApp((s) => s.runnerStatus);
+
+  const item = (id: Section, label: string) => (
+    <button
+      key={id}
+      data-testid={`nav-${id}`}
+      aria-current={section === id ? 'page' : undefined}
+      onClick={() => setSection(id)}
+      className={`w-full rounded-md px-2.5 py-1.5 text-left text-sm ${
+        section === id
+          ? 'bg-neutral-200 font-medium text-neutral-900 dark:bg-neutral-800 dark:text-neutral-100'
+          : 'text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800/60'
+      }`}
+    >
+      {label}
+    </button>
+  );
+
+  return (
+    <nav
+      aria-label={t('nav.label')}
+      className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950"
+    >
+      <div className="px-4 py-4 text-lg font-bold tracking-tight">{t('app.title')}</div>
+
+      <div className="flex-1 overflow-y-auto px-2">
+        {item('agents', t('nav.agents'))}
+        <p className={`px-2.5 py-2 text-xs ${ui.muted}`}>{t('sidebar.noAgents')}</p>
+      </div>
+
+      <div className="flex flex-col gap-0.5 border-t border-neutral-200 px-2 py-2 dark:border-neutral-800">
+        {settingsSections.map((id) => item(id, t(`nav.${id}`)))}
+      </div>
+
+      <footer className={`flex items-center justify-between px-4 py-2 text-xs ${ui.muted}`}>
+        <span data-testid="version">{version && t('app.version', { version })}</span>
+        <span
+          data-testid="runner-status"
+          data-status={runnerStatus}
+          className="flex items-center gap-1.5"
+        >
+          <span
+            aria-hidden
+            className={`h-2 w-2 rounded-full ${
+              runnerStatus === 'ready'
+                ? 'bg-emerald-500'
+                : runnerStatus === 'stopped'
+                  ? 'bg-red-500'
+                  : 'bg-amber-500'
+            }`}
+          />
+          {t('app.runner', { status: t(`runnerStatus.${runnerStatus}`) })}
+        </span>
+      </footer>
+    </nav>
+  );
+}

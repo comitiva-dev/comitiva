@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Database } from './Database';
@@ -56,7 +57,10 @@ describe('Database', () => {
     const applied = db.raw.prepare('SELECT count(*) AS n FROM __drizzle_migrations').get() as {
       n: number;
     };
-    expect(applied.n).toBe(1);
+    const journal = JSON.parse(readFileSync(join(migrations, 'meta', '_journal.json'), 'utf8')) as {
+      entries: unknown[];
+    };
+    expect(applied.n).toBe(journal.entries.length);
   });
 
   it('enforces CHECK constraints and foreign keys', () => {

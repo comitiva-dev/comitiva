@@ -33,6 +33,11 @@ export const connections = sqliteTable(
     enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
+    // Last "Test connection" outcome, shown in the connections list.
+    lastTestAt: text('last_test_at'),
+    lastTestOk: integer('last_test_ok', { mode: 'boolean' }),
+    lastTestLatencyMs: integer('last_test_latency_ms'),
+    lastTestErrorCode: text('last_test_error_code'),
   },
   (t) => [check('connections_kind_check', sql`${t.kind} IN ('api','cli')`)],
 );

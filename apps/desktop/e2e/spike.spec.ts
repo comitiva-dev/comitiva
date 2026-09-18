@@ -52,7 +52,9 @@ const pane = (id: 'a' | 'b') => page.getByTestId(`pane-${id}`);
 
 test('boots with IPC and a ready runner', async () => {
   await expect(page.getByTestId('version')).toHaveText('v0.1.0');
-  await expect(page.getByTestId('runner-status')).toHaveAttribute('data-status', 'ready');
+  await expect(page.getByTestId('runner-status')).toHaveAttribute('data-status', 'ready', {
+    timeout: 20_000,
+  });
   expect(await app.evaluate(({ app }) => app.getVersion())).toBe('0.1.0');
 });
 
@@ -68,16 +70,18 @@ test('saves and tests the API key without exposing it to the renderer', async ()
 });
 
 test('streams two conversations in parallel and cancels one independently', async () => {
-  await pane('a').getByTestId('input').fill('long [chunks:400] [interval:10]');
-  await pane('b').getByTestId('input').fill('short [chunks:80] [interval:10]');
+  // A streams for ~10 s and B for ~2 s, so both are mid-stream long enough to
+  // observe even on a loaded CI machine.
+  await pane('a').getByTestId('input').fill('long [chunks:1000] [interval:10]');
+  await pane('b').getByTestId('input').fill('short [chunks:200] [interval:10]');
   await pane('a').getByTestId('send').click();
   await pane('b').getByTestId('send').click();
 
-  // Both stream at the same time.
+  // Both stream at the same time: B is still streaming once A has output, and vice versa.
   await expect(pane('a').getByTestId('output')).toContainText('chunk 3');
   await expect(pane('b').getByTestId('output')).toContainText('chunk 3');
-  await expect(pane('a').getByTestId('status')).toHaveAttribute('data-status', 'streaming');
   await expect(pane('b').getByTestId('status')).toHaveAttribute('data-status', 'streaming');
+  await expect(pane('a').getByTestId('status')).toHaveAttribute('data-status', 'streaming');
 
   await pane('a').getByTestId('cancel').click();
   await expect(pane('a').getByTestId('status')).toHaveAttribute('data-status', 'cancelled');
@@ -85,9 +89,9 @@ test('streams two conversations in parallel and cancels one independently', asyn
     timeout: 15_000,
   });
 
-  await expect(pane('b').getByTestId('output')).toContainText('chunk 79');
-  await expect(pane('a').getByTestId('output')).not.toContainText('chunk 399');
-  await expect(pane('b').getByTestId('usage')).toContainText('160');
+  await expect(pane('b').getByTestId('output')).toContainText('chunk 199');
+  await expect(pane('a').getByTestId('output')).not.toContainText('chunk 999');
+  await expect(pane('b').getByTestId('usage')).toContainText('400');
   await expect(pane('a').getByTestId('usage')).not.toHaveText(/—/);
 
   const latency = pane('b').getByTestId('latency');
@@ -103,7 +107,9 @@ test('streams two conversations in parallel and cancels one independently', asyn
   await mkdir(join(appDir, 'test-results'), { recursive: true });
   await writeFile(join(appDir, 'test-results', 'latency.json'), JSON.stringify(stats, null, 2));
   await page.screenshot({ path: join(appDir, 'test-results', 'spike.png') });
-  console.log(`event → paint latency (fake provider, 10 ms/token): ${JSON.stringify(stats)}`);
+  console.log(
+    `event → paint latency (fake provider, 10 ms/token, 200 tokens): ${JSON.stringify(stats)}`,
+  );
 
   // Main also appended the samples to the latency log.
   await expect

@@ -20,7 +20,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
 | Check | Result |
 |---|---|
-| `pnpm install && pnpm lint && pnpm typecheck && pnpm test` | Green locally and in a fresh clone. 82 tests: contract 21, runner 31, desktop 29, mcp-servers 1. |
+| `pnpm install && pnpm lint && pnpm typecheck && pnpm test` | Green locally and in a fresh clone. 83 tests: contract 21, runner 31, desktop 30, mcp-servers 1. |
 | `pnpm --filter desktop test:e2e` | 3/3 green: boot and IPC version, key save and test, two parallel streams with independent cancel. |
 | `pnpm dev` | Opens the spike window. The runner starts as a child (`electron …/bin.cjs` in Node mode). |
 | `pnpm package` (Linux) | AppImage + tar.gz built. The packaged app starts the runner from `resources/runner/bin.cjs` and reaches `ready`. |
@@ -35,6 +35,7 @@ Measured from the runner's `ts` on each `run.text_delta` to just after the next 
 | 0 ms (setTimeout 0) | 80 | 11.8–13.8 ms | 19.2–21.3 ms | 21.5–22.0 ms |
 | **16 ms (chosen)** | 39–40 | **21.1–22.0 ms** | **32.5–45.2 ms** | 34.0–51.4 ms |
 | 50 ms (design.md's original) | 15–16 | 55.5–57.4 ms | 57.1–75.8 ms | 57.1–75.8 ms |
+| 16 ms, 200 tokens, 8 CPU-bound busy loops in parallel | ~98 | 20.9–22.1 ms | 35.7–40.9 ms | 52.1–56.0 ms |
 
 Reading: the pipeline itself (runner stdout → main → IPC → React commit) adds only a few ms. Most of the 0 ms figure is waiting for the next frame (≤ 16.7 ms). A 16 ms flush halves IPC traffic and keeps p50 around 20 ms, below perception for streaming text. 50 ms is visibly laggier. Decision: **16 ms** (design.md updated).
 
@@ -60,6 +61,7 @@ Real Anthropic key: **pending**. It needs a key pasted into the UI. The spike ap
 - **Google Drive MCP server**: own implementation vs a community one. Deferred to Phase 5b.
 - **Linux without a keyring**: the app now refuses to store secrets (safeStorage `basic_text`) unless `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`. We need a product decision for Phase 1: keep refusing, or allow obfuscated storage after an explicit, warned user opt-in.
 - **Linux dev sandbox**: Ubuntu 24.04+ blocks Chromium's sandbox for unpackaged Electron (AppArmor userns restriction). Dev and e2e use `--no-sandbox` on Linux; see CONTRIBUTING. Packaged builds need the same consideration (setuid `chrome-sandbox`, or an AppArmor profile in the .deb) in Phase 7.
+- **Race fixed during verification**: the renderer could miss the runner's `ready` if the status broadcast arrived while `init()` was fetching the status. Pushed status now wins, with a regression test.
 - **Signing and notarization, app icon**: Phase 7. CI builds are unsigned and use the default Electron icon.
 
 ## Next: Phase 1 — API connections, secure secrets, connections screen

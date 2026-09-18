@@ -6,26 +6,52 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 
 - `SPEC.md` — what the product is, domain model, architecture, roadmap by phase. Source of truth.
 - `docs/design.md` — how it is built: file layout, package names, data model, classes and methods, runner protocol, flows, commands. Follow it unless there is a reason to deviate; if you deviate, say so and update it in the same commit.
+- `docs/architecture.md` — processes, runner protocol, boundaries, data locations.
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
+## Layout
+
+```
+packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
+packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs) + RunnerClient + testing/ fake Anthropic
+packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (Phase 5+)
+apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
+```
+
 ## Non-negotiable rules
 
-- `packages/runner` and `packages/mcp-servers` have zero Electron dependencies. They are plain Node processes with a JSON-lines protocol.
+- `packages/runner` and `packages/mcp-servers` have zero Electron dependencies. They are plain Node processes with a JSON-lines protocol. (ESLint enforces it.)
 - Secrets never touch SQLite, IPC payloads to the renderer, or logs. Only `secretRef` travels; values go to the runner per request and are not persisted there.
-- The renderer depends only on the `Backend` interface, never on IPC or the runner directly.
+- The renderer depends only on the `Backend` interface, never on IPC or the runner directly. (ESLint enforces it; `window.api` is used only in `backend/LocalBackend.ts`.)
 - The filesystem MCP server rejects any path outside the agent's roots at the server level, including symlink escapes.
-- Implementation order inside a phase: contract → runner → main → renderer, with tests at each layer before the next.
+- Implementation order inside a phase: contract → runner → main → renderer, with tests at each layer before the next. A topic is done only when an integration or e2e test exercises the whole path.
 - Nothing in the core assumes code, Git or terminals. Comitiva is generic.
 
 ## Conventions
 
-- TypeScript strict, pnpm workspaces, turborepo. Package names `@comitiva/*`.
-- Conventional commits with package scope: `feat(runner): ...`, `fix(desktop): ...`, `docs: ...`.
-- Errors carry stable codes (`AppError`); the UI translates by code and never shows raw provider messages as titles.
-- Code, comments, commits and docs in English. UI strings go through i18n (en, pt-BR).
+- TypeScript strict (TS 6.0), pnpm 10 workspaces (hoisted), Turborepo. Package names `@comitiva/*`. Toolchain pins and why: ADR 0006.
+- Conventional commits with package scope: `feat(runner): ...`, `fix(desktop): ...`, `docs: ...`. Small commits.
+- Errors carry stable codes (`AppError` in contract); the UI translates by code and never shows raw provider messages as titles.
+- Code, comments, commits and docs in English. UI strings go through i18n (`renderer/src/i18n/en.json`, `pt-BR.json`).
+- Contract changes: edit zod in `packages/contract/src`, run `pnpm contract:schema`, commit the JSON. New IPC channels also go in `ipc-channels.ts` (a test checks it).
+- DB changes: edit `apps/desktop/src/main/db/schema.ts`, run `pnpm --filter desktop db:generate`, commit the migration.
 - Plan before coding. When something is ambiguous, ask instead of guessing product decisions.
 
 ## Commands
 
-See `docs/design.md` section 8. The short version: `pnpm dev`, `pnpm test`, `pnpm lint`, `pnpm typecheck`, `pnpm contract:schema`, `pnpm package`.
+```bash
+pnpm install                        # pnpm 10 via corepack (packageManager field)
+pnpm dev                            # desktop in dev; on Ubuntu 24.04+: pnpm dev -- --noSandbox
+pnpm build                          # all packages (turbo, dependency order)
+pnpm lint | pnpm typecheck | pnpm test | pnpm format:check
+pnpm --filter desktop test:e2e      # builds the app and runs Playwright against a fake Anthropic server
+pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
+pnpm --filter desktop db:generate   # generate a Drizzle migration from schema.ts
+pnpm package                        # electron-builder for the current platform → apps/desktop/release/
+echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs   # talk to the runner by hand
+```
+
+Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ANTHROPIC_BASE_URL` (point the spike at a fake server), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`), `COMITIVA_DELTA_FLUSH_MS` (latency measurement).
+
+More detail: `docs/design.md` §8.

@@ -32,7 +32,7 @@ jobs:
         run: pnpm contract:schema && git diff --exit-code packages/contract/schema
       - name: E2E (Electron under Xvfb)
         run: xvfb-run --auto-servernum pnpm --filter desktop test:e2e
-      - name: Upload e2e results (screenshot, latency)
+      - name: Upload e2e results (screenshots)
         if: always()
         uses: actions/upload-artifact@v4
         with:

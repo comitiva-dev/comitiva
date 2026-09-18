@@ -72,6 +72,9 @@ export function createSpikeStore(backend: Backend, opts: SpikeStoreOptions = {})
   const now = opts.now ?? preciseNow;
 
   return createStore<SpikeState>()((set, get) => {
+    // A status pushed by an event is always newer than the one init() fetched.
+    let runnerStatusFromEvent = false;
+
     const patchPane = (
       pane: PaneId,
       patch: Partial<PaneState> | ((p: PaneState) => Partial<PaneState>),
@@ -147,7 +150,7 @@ export function createSpikeStore(backend: Backend, opts: SpikeStoreOptions = {})
         ]);
         set({
           version,
-          runnerStatus,
+          ...(runnerStatusFromEvent ? {} : { runnerStatus }),
           hasApiKey: state.hasApiKey,
           weakSecretStorage: state.weakSecretStorage,
           model: get().model || state.defaultModel,
@@ -210,8 +213,10 @@ export function createSpikeStore(backend: Backend, opts: SpikeStoreOptions = {})
       },
 
       handleEvent(event) {
-        if (event.type === 'runner.status') set({ runnerStatus: event.status });
-        else applySpikeEvent(event.event);
+        if (event.type === 'runner.status') {
+          runnerStatusFromEvent = true;
+          set({ runnerStatus: event.status });
+        } else applySpikeEvent(event.event);
       },
     };
   });

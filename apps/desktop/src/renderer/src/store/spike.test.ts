@@ -46,6 +46,18 @@ describe('spike store', () => {
     });
   });
 
+  it('keeps a runner status pushed while init() was in flight', async () => {
+    let resolveStatus: (s: 'starting') => void = () => {};
+    const backend = fakeBackend();
+    backend.runner.getStatus = () => new Promise((r) => (resolveStatus = r));
+    const store = createSpikeStore(backend);
+    const init = store.getState().init();
+    store.getState().handleEvent({ type: 'runner.status', status: 'ready' });
+    resolveStatus('starting'); // stale answer arrives after the event
+    await init;
+    expect(store.getState().runnerStatus).toBe('ready');
+  });
+
   it('clears the key from renderer state once saved', async () => {
     const backend = fakeBackend();
     const store = createSpikeStore(backend);

@@ -7,13 +7,13 @@
 export const ipcInvokeChannels = [
   'app.getVersion',
   'runner.getStatus',
-  'spike.getState',
-  'spike.saveApiKey',
-  'spike.testApiKey',
-  'spike.send',
-  'spike.cancel',
-  'spike.reset',
-  'spike.reportLatency',
+  'secrets.getStatus',
+  'connections.list',
+  'connections.create',
+  'connections.update',
+  'connections.delete',
+  'connections.test',
+  'connections.listModels',
 ] as const;
 
-export const ipcEventChannels = ['spike.event', 'runner.status'] as const;
+export const ipcEventChannels = ['runner.status'] as const;

@@ -111,6 +111,16 @@
               "type": "string",
               "format": "uri"
             },
+            "preset": {
+              "type": "string",
+              "enum": [
+                "openai",
+                "openrouter",
+                "groq",
+                "lmstudio",
+                "custom"
+              ]
+            },
             "defaultModel": {
               "type": "string"
             }
@@ -173,6 +183,10 @@
         "config": {
           "type": "object",
           "properties": {
+            "baseUrl": {
+              "type": "string",
+              "format": "uri"
+            },
             "defaultModel": {
               "type": "string"
             }

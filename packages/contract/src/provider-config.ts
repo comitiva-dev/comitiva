@@ -20,13 +20,26 @@ export const AnthropicConfig = z.object({
 });
 export type AnthropicConfig = z.infer<typeof AnthropicConfig>;
 
+/** UI hint for OpenAI-compatible connections: picks the icon and the default base URL. */
+export const OpenAICompatiblePreset = z.enum([
+  'openai',
+  'openrouter',
+  'groq',
+  'lmstudio',
+  'custom',
+]);
+export type OpenAICompatiblePreset = z.infer<typeof OpenAICompatiblePreset>;
+
 export const OpenAICompatibleConfig = z.object({
   baseUrl: z.url(),
+  preset: OpenAICompatiblePreset.optional(),
   defaultModel: z.string().optional(),
 });
 export type OpenAICompatibleConfig = z.infer<typeof OpenAICompatibleConfig>;
 
 export const GoogleConfig = z.object({
+  /** Override for proxies, gateways and tests; defaults to Google's endpoint. */
+  baseUrl: z.url().optional(),
   defaultModel: z.string().optional(),
 });
 export type GoogleConfig = z.infer<typeof GoogleConfig>;

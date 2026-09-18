@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "Comitiva — spike da Fase 0",
+    "version": "v{{version}}",
+    "runner": "Runner: {{status}}"
+  },
+  "runnerStatus": {
+    "starting": "iniciando",
+    "ready": "pronto",
+    "restarting": "reiniciando",
+    "stopped": "parado"
+  },
+  "key": {
+    "label": "Chave de API da Anthropic",
+    "placeholder": "sk-ant-…",
+    "save": "Salvar",
+    "test": "Testar",
+    "saved": "Há uma chave salva.",
+    "missing": "Nenhuma chave salva ainda.",
+    "saving": "Salvando…",
+    "testing": "Testando…",
+    "ok": "A chave funciona.",
+    "failed": "Falha ao verificar a chave: {{error}}",
+    "weak": "Atenção: nenhum chaveiro do sistema foi encontrado; a chave fica apenas ofuscada no disco."
+  },
+  "model": {
+    "label": "Modelo"
+  },
+  "pane": {
+    "title": "Conversa {{id}}",
+    "placeholder": "Digite uma mensagem…",
+    "send": "Enviar",
+    "cancel": "Cancelar",
+    "reset": "Limpar",
+    "status": {
+      "idle": "ociosa",
+      "streaming": "respondendo…",
+      "done": "concluída",
+      "cancelled": "cancelada",
+      "error": "erro"
+    },
+    "usage": "Tokens: entrada {{input}} · saída {{output}} · cache lido {{cacheRead}} · cache gravado {{cacheWrite}}",
+    "noUsage": "Tokens: —",
+    "latency": "Evento → pintura: p50 {{p50}} ms · p95 {{p95}} ms · máx {{max}} ms (n={{n}})"
+  },
+  "errors": {
+    "auth_failed": "A chave de API foi recusada.",
+    "rate_limited": "Limite de requisições do provedor atingido. Tente de novo em instantes.",
+    "provider_unavailable": "O provedor está indisponível no momento.",
+    "provider_error": "O provedor recusou a requisição.",
+    "binary_not_found": "O executável da CLI não foi encontrado.",
+    "not_logged_in": "A CLI não está autenticada.",
+    "outside_roots": "Esse caminho está fora das pastas permitidas.",
+    "approval_denied": "A ação foi negada.",
+    "invalid_request": "A requisição é inválida.",
+    "not_implemented": "Ainda não implementado.",
+    "unknown_provider": "Provedor desconhecido.",
+    "unsupported_content": "Esse conteúdo ainda não é suportado.",
+    "secret_missing": "Salve uma chave de API primeiro.",
+    "secret_store_unavailable": "O armazenamento seguro não está disponível neste sistema.",
+    "runner_crashed": "O runner parou inesperadamente. Você pode tentar de novo.",
+    "runner_unavailable": "O runner não está em execução.",
+    "timeout": "A requisição excedeu o tempo limite.",
+    "internal": "Algo deu errado."
+  }
+}

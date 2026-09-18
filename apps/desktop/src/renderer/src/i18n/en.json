@@ -1,0 +1,66 @@
+{
+  "app": {
+    "title": "Comitiva — Phase 0 spike",
+    "version": "v{{version}}",
+    "runner": "Runner: {{status}}"
+  },
+  "runnerStatus": {
+    "starting": "starting",
+    "ready": "ready",
+    "restarting": "restarting",
+    "stopped": "stopped"
+  },
+  "key": {
+    "label": "Anthropic API key",
+    "placeholder": "sk-ant-…",
+    "save": "Save",
+    "test": "Test",
+    "saved": "A key is saved.",
+    "missing": "No key saved yet.",
+    "saving": "Saving…",
+    "testing": "Testing…",
+    "ok": "Key works.",
+    "failed": "Key check failed: {{error}}",
+    "weak": "Warning: no OS keychain found, so the key is only obfuscated on disk."
+  },
+  "model": {
+    "label": "Model"
+  },
+  "pane": {
+    "title": "Conversation {{id}}",
+    "placeholder": "Type a message…",
+    "send": "Send",
+    "cancel": "Cancel",
+    "reset": "Reset",
+    "status": {
+      "idle": "idle",
+      "streaming": "streaming…",
+      "done": "done",
+      "cancelled": "cancelled",
+      "error": "error"
+    },
+    "usage": "Tokens: in {{input}} · out {{output}} · cache read {{cacheRead}} · cache write {{cacheWrite}}",
+    "noUsage": "Tokens: —",
+    "latency": "Event → paint: p50 {{p50}} ms · p95 {{p95}} ms · max {{max}} ms (n={{n}})"
+  },
+  "errors": {
+    "auth_failed": "The API key was rejected.",
+    "rate_limited": "Rate limited by the provider. Try again shortly.",
+    "provider_unavailable": "The provider is unavailable right now.",
+    "provider_error": "The provider rejected the request.",
+    "binary_not_found": "The CLI binary was not found.",
+    "not_logged_in": "The CLI is not logged in.",
+    "outside_roots": "That path is outside the allowed folders.",
+    "approval_denied": "The action was denied.",
+    "invalid_request": "The request was invalid.",
+    "not_implemented": "Not implemented yet.",
+    "unknown_provider": "Unknown provider.",
+    "unsupported_content": "That content is not supported yet.",
+    "secret_missing": "Save an API key first.",
+    "secret_store_unavailable": "Secure storage is not available on this system.",
+    "runner_crashed": "The runner stopped unexpectedly. You can retry.",
+    "runner_unavailable": "The runner is not running.",
+    "timeout": "The request timed out.",
+    "internal": "Something went wrong."
+  }
+}

@@ -87,7 +87,8 @@ describe('AnthropicAdapter.run', () => {
       events.push(e);
       if (events.length === 3) controller.abort();
     }
-    expect(events.at(-2)).toMatchObject({ type: 'run.usage' });
+    // 3 deltas of "chunk N " (8 chars) before the abort → 24 chars ≈ 6 tokens, estimated.
+    expect(events.at(-2)).toMatchObject({ type: 'run.usage', outputTokens: 6, estimated: true });
     expect(events.at(-1)).toEqual({ type: 'run.done', stopReason: 'cancelled' });
     await expect.poll(() => fake.aborted).toBe(abortedBefore + 1);
   });

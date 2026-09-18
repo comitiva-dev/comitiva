@@ -42,16 +42,21 @@ export class AnthropicAdapter implements ProviderAdapter {
 
   async *run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
     const client = this.client(input.connection, input.secret);
-    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, seen: false };
+    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, seen: false, final: false };
+    let streamedChars = 0;
     let stopReason: StopReason = 'other';
 
+    // Output tokens are only reported in the final message_delta. When a run
+    // is cancelled before it, estimate from the streamed text (~4 chars/token).
     const usageEvent = (): AdapterEvent => ({
       type: 'run.usage',
       inputTokens: usage.input,
-      outputTokens: usage.output,
+      outputTokens: usage.final
+        ? usage.output
+        : Math.max(usage.output, Math.ceil(streamedChars / 4)),
       cacheReadTokens: usage.cacheRead,
       cacheWriteTokens: usage.cacheWrite,
-      estimated: false,
+      estimated: !usage.final,
     });
 
     try {
@@ -78,11 +83,14 @@ export class AnthropicAdapter implements ProviderAdapter {
             break;
           }
           case 'content_block_delta':
-            if (event.delta.type === 'text_delta')
+            if (event.delta.type === 'text_delta') {
+              streamedChars += event.delta.text.length;
               yield { type: 'run.text_delta', text: event.delta.text };
+            }
             break;
           case 'message_delta':
             usage.output = event.usage.output_tokens;
+            usage.final = true;
             if (event.delta.stop_reason) stopReason = mapStopReason(event.delta.stop_reason);
             break;
           default:

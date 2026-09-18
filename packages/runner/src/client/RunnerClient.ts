@@ -3,7 +3,9 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
+  ModelInfo,
   RunnerEvent,
+  TestResult,
   isRunEvent,
   type ApprovalDecision,
   type DistributiveOmit,
@@ -12,7 +14,6 @@ import {
   type RunEvent,
   type RunnerRequest,
   type RunStartRequest,
-  type TestResult,
 } from '@comitiva/contract';
 import { LineSplitter, encodeLine } from '../util/jsonl.js';
 
@@ -137,10 +138,18 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     this.request({ type: 'run.approval', runId, toolUseId, decision }).catch(() => {});
   }
 
-  testConnection(
+  /** Never rejects for provider failures: they come back as `{ ok: false, error }`. */
+  async testConnection(
     payload: Extract<RunnerRequestPayload, { type: 'connection.test' }>,
   ): Promise<TestResult> {
-    return this.request<TestResult>(payload);
+    return parseResult(TestResult, await this.request(payload), payload.type);
+  }
+
+  /** Rejects with the provider error (auth_failed, provider_unavailable, …). */
+  async listModels(
+    payload: Extract<RunnerRequestPayload, { type: 'connection.listModels' }>,
+  ): Promise<ModelInfo[]> {
+    return parseResult(ModelInfo.array(), await this.request(payload), payload.type);
   }
 
   activeRunIds(): string[] {
@@ -230,4 +239,14 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     if (this.stopping) this.emit('exit');
     else this.emit('crash', code, signal);
   }
+}
+
+function parseResult<T>(
+  schema: { safeParse(v: unknown): { success: true; data: T } | { success: false } },
+  value: unknown,
+  what: string,
+): T {
+  const parsed = schema.safeParse(value);
+  if (!parsed.success) throw new AppError('internal', `Runner sent an invalid ${what} result`);
+  return parsed.data;
 }

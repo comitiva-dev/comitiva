@@ -1,5 +1,6 @@
 import type {
   AgentParams,
+  Capabilities,
   Connection,
   ConnectionKind,
   Message,
@@ -11,14 +12,7 @@ import type {
   ToolResultContentBlock,
 } from '@comitiva/contract';
 
-export interface Capabilities {
-  streaming: boolean;
-  tools: boolean;
-  resume: boolean;
-  listModels: boolean;
-  usage: boolean;
-  images: boolean;
-}
+export type { Capabilities } from '@comitiva/contract';
 
 /** Events an adapter yields; the Run stamps them with `runId` and `ts`. */
 export type AdapterEvent = RunEventPayload;
@@ -42,6 +36,8 @@ export interface ToolResult {
 export interface RunContext {
   tools: ToolDef[];
   callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
+  /** Temporary MCP config file for CLI harnesses (Phase 2). */
+  mcpConfigForCli?(): Promise<{ path: string; cleanup(): void }>;
   log(level: 'debug' | 'info' | 'warn', msg: string): void;
 }
 

@@ -1,7 +1,15 @@
 import { AppError, type ProviderId } from '@comitiva/contract';
+import { AnthropicAdapter } from './api/AnthropicAdapter.js';
+import { GoogleAdapter } from './api/GoogleAdapter.js';
+import { OllamaAdapter } from './api/OllamaAdapter.js';
+import { OpenAICompatibleAdapter } from './api/OpenAICompatibleAdapter.js';
 import type { Capabilities, ProviderAdapter } from './ProviderAdapter.js';
 
-export interface ProviderDescriptor {
+/**
+ * What the runner can execute. Form metadata (labels, key requirement, base
+ * URL) is static data in `@comitiva/contract` (`providerDescriptors`).
+ */
+export interface RegisteredProvider {
   id: ProviderId;
   kind: ProviderAdapter['kind'];
   capabilities: Capabilities;
@@ -21,11 +29,21 @@ export class ProviderRegistry {
     return adapter;
   }
 
-  list(): ProviderDescriptor[] {
+  list(): RegisteredProvider[] {
     return [...this.adapters.values()].map((a) => ({
       id: a.id,
       kind: a.kind,
       capabilities: a.capabilities,
     }));
   }
+}
+
+/** Every adapter the runner ships with. */
+export function createDefaultRegistry(): ProviderRegistry {
+  const registry = new ProviderRegistry();
+  registry.register(new AnthropicAdapter());
+  registry.register(new OpenAICompatibleAdapter());
+  registry.register(new GoogleAdapter());
+  registry.register(new OllamaAdapter());
+  return registry;
 }

@@ -1,116 +1,120 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AppError,
+  providerDescriptors,
   type Block,
   type Connection,
   type Message,
+  type ModelInfo,
   type StopReason,
   type TestResult,
   type ToolResultContentBlock,
 } from '@comitiva/contract';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import {
+  UsageTracker,
+  httpError,
+  networkError,
+  probe,
+  streamTurn,
+  withDeadline,
+} from './shared.js';
 
 const DEFAULT_MAX_TOKENS = 16_000;
 
 type AnthropicConnection = Extract<Connection, { provider: 'anthropic' }>;
 
 /**
- * Anthropic Messages API adapter. Phase 0 streams text only; the tool loop
+ * Anthropic Messages API adapter. Streams text; the tool loop
  * (runs/ToolLoop.ts) arrives in Phase 5.
  */
 export class AnthropicAdapter implements ProviderAdapter {
   readonly id = 'anthropic' as const;
   readonly kind = 'api' as const;
-  readonly capabilities = {
-    streaming: true,
-    tools: false,
-    resume: false,
-    listModels: false,
-    usage: true,
-    images: true,
-  };
+  readonly capabilities = providerDescriptors.anthropic.capabilities;
 
-  async testConnection(connection: Connection, secret?: string): Promise<TestResult> {
-    const started = performance.now();
-    try {
-      await this.client(connection, secret).models.list({ limit: 1 });
-      return { ok: true, latencyMs: Math.round(performance.now() - started) };
-    } catch (err) {
-      return { ok: false, error: toAppError(err).toJSON() };
-    }
+  testConnection(connection: Connection, secret?: string): Promise<TestResult> {
+    return probe(
+      (signal) => this.client(connection, secret, 0).models.list({ limit: 1 }, { signal }),
+      toAppError,
+    );
   }
 
-  async *run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
-    const client = this.client(input.connection, input.secret);
-    const usage = { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, seen: false, final: false };
-    let streamedChars = 0;
-    let stopReason: StopReason = 'other';
+  listModels(connection: Connection, secret?: string): Promise<ModelInfo[]> {
+    return withDeadline(async (signal) => {
+      const models: ModelInfo[] = [];
+      for await (const m of this.client(connection, secret, 0).models.list(
+        { limit: 1000 },
+        { signal },
+      )) {
+        models.push({
+          id: m.id,
+          name: m.display_name,
+          ...(m.max_input_tokens ? { contextWindow: m.max_input_tokens } : {}),
+        });
+      }
+      return models;
+    }, toAppError);
+  }
 
-    // Output tokens are only reported in the final message_delta. When a run
-    // is cancelled before it, estimate from the streamed text (~4 chars/token).
-    const usageEvent = (): AdapterEvent => ({
-      type: 'run.usage',
-      inputTokens: usage.input,
-      outputTokens: usage.final
-        ? usage.output
-        : Math.max(usage.output, Math.ceil(streamedChars / 4)),
-      cacheReadTokens: usage.cacheRead,
-      cacheWriteTokens: usage.cacheWrite,
-      estimated: !usage.final,
-    });
+  run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+    const usage = UsageTracker.for(input);
+    return streamTurn({
+      signal,
+      usage,
+      toAppError,
+      body: async function* (this: AnthropicAdapter): AsyncGenerator<AdapterEvent, StopReason> {
+        const params: Anthropic.MessageCreateParamsStreaming = {
+          model: input.model,
+          max_tokens: input.params.maxTokens ?? DEFAULT_MAX_TOKENS,
+          messages: toProviderMessages(input.messages),
+          stream: true,
+        };
+        if (input.system !== '') params.system = input.system;
+        if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
+        if (input.params.topP !== undefined) params.top_p = input.params.topP;
 
-    try {
-      const params: Anthropic.MessageCreateParamsStreaming = {
-        model: input.model,
-        max_tokens: input.params.maxTokens ?? DEFAULT_MAX_TOKENS,
-        messages: toProviderMessages(input.messages),
-        stream: true,
-      };
-      if (input.system !== '') params.system = input.system;
-      if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
-      if (input.params.topP !== undefined) params.top_p = input.params.topP;
-
-      const stream = client.messages.stream(params, { signal });
-      for await (const event of stream) {
-        switch (event.type) {
-          case 'message_start': {
-            const u = event.message.usage;
-            usage.seen = true;
-            usage.input = u.input_tokens;
-            usage.output = u.output_tokens;
-            usage.cacheRead = u.cache_read_input_tokens ?? 0;
-            usage.cacheWrite = u.cache_creation_input_tokens ?? 0;
-            break;
-          }
-          case 'content_block_delta':
-            if (event.delta.type === 'text_delta') {
-              streamedChars += event.delta.text.length;
-              yield { type: 'run.text_delta', text: event.delta.text };
+        let stopReason: StopReason = 'other';
+        const stream = this.client(input.connection, input.secret).messages.stream(params, {
+          signal,
+        });
+        for await (const event of stream) {
+          switch (event.type) {
+            case 'message_start': {
+              const u = event.message.usage;
+              usage.report({
+                input: u.input_tokens,
+                output: u.output_tokens,
+                cacheRead: u.cache_read_input_tokens ?? 0,
+                cacheWrite: u.cache_creation_input_tokens ?? 0,
+              });
+              break;
             }
-            break;
-          case 'message_delta':
-            usage.output = event.usage.output_tokens;
-            usage.final = true;
-            if (event.delta.stop_reason) stopReason = mapStopReason(event.delta.stop_reason);
-            break;
-          default:
-            break;
+            case 'content_block_delta':
+              if (event.delta.type === 'text_delta') {
+                yield { type: 'run.text_delta', text: event.delta.text };
+              }
+              break;
+            case 'message_delta':
+              // Output tokens are only final in message_delta.
+              usage.report({ output: event.usage.output_tokens, final: true });
+              if (event.delta.stop_reason) stopReason = mapStopReason(event.delta.stop_reason);
+              break;
+            default:
+              break;
+          }
         }
-      }
-    } catch (err) {
-      if (signal.aborted || err instanceof Anthropic.APIUserAbortError) {
-        if (usage.seen) yield usageEvent();
-        yield { type: 'run.done', stopReason: 'cancelled' };
-        return;
-      }
-      throw toAppError(err);
-    }
-
-    yield usageEvent();
-    yield { type: 'run.done', stopReason };
+        return stopReason;
+      }.bind(this),
+    });
   }
 
-  private client(connection: Connection, secret: string | undefined): Anthropic {
+  /** `maxRetries` 0 for probes (fast feedback); the SDK default (2) for runs. */
+  private client(
+    connection: Connection,
+    secret: string | undefined,
+    maxRetries?: number,
+  ): Anthropic {
     if (connection.provider !== 'anthropic') {
       throw new AppError(
         'invalid_request',
@@ -122,7 +126,9 @@ export class AnthropicAdapter implements ProviderAdapter {
     // apiKey is always explicit: the runner never falls back to ambient env credentials.
     return new Anthropic({
       apiKey: secret,
-      ...(config.baseUrl ? { baseURL: config.baseUrl } : {}),
+      authToken: null,
+      baseURL: config.baseUrl ?? providerDescriptors.anthropic.baseUrl.default,
+      ...(maxRetries !== undefined ? { maxRetries } : {}),
     });
   }
 }
@@ -141,32 +147,16 @@ export function mapStopReason(reason: string): StopReason {
   }
 }
 
-/** Maps SDK errors to stable AppError codes, most specific first. */
+/** Maps SDK errors to stable AppError codes. */
 export function toAppError(err: unknown): AppError {
   if (err instanceof AppError) return err;
-  const opts = (retryable: boolean) => ({ retryable, cause: err });
-  if (
-    err instanceof Anthropic.AuthenticationError ||
-    err instanceof Anthropic.PermissionDeniedError
-  ) {
-    return new AppError('auth_failed', err.message, opts(false));
+  // Timeout is a subclass of connection error: check it first.
+  if (err instanceof Anthropic.APIConnectionTimeoutError) {
+    return new AppError('timeout', err.message, { retryable: true, cause: err });
   }
-  if (err instanceof Anthropic.RateLimitError)
-    return new AppError('rate_limited', err.message, opts(true));
-  if (err instanceof Anthropic.InternalServerError) {
-    return new AppError('provider_unavailable', err.message, opts(true));
-  }
-  if (err instanceof Anthropic.APIConnectionTimeoutError)
-    return new AppError('timeout', err.message, opts(true));
-  if (err instanceof Anthropic.APIConnectionError) {
-    return new AppError('provider_unavailable', err.message, opts(true));
-  }
-  if (err instanceof Anthropic.APIError) {
-    // 529 overloaded and other 5xx without a dedicated class.
-    if (typeof err.status === 'number' && err.status >= 500) {
-      return new AppError('provider_unavailable', err.message, opts(true));
-    }
-    return new AppError('provider_error', err.message, opts(false));
+  if (err instanceof Anthropic.APIConnectionError) return networkError(err);
+  if (err instanceof Anthropic.APIError && typeof err.status === 'number') {
+    return httpError(err.status, err.message, err);
   }
   return AppError.from(err);
 }

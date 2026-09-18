@@ -1,6 +1,5 @@
 import { AppError, RunnerRequest } from '@comitiva/contract';
-import { AnthropicAdapter } from '../providers/api/AnthropicAdapter.js';
-import { ProviderRegistry } from '../providers/ProviderRegistry.js';
+import { createDefaultRegistry, type ProviderRegistry } from '../providers/ProviderRegistry.js';
 import { RunManager } from '../runs/RunManager.js';
 import { createLogger, type Logger } from '../util/logger.js';
 import { RequestRouter } from './RequestRouter.js';
@@ -15,12 +14,6 @@ export interface RunnerServerOptions {
   onExit?: () => void;
 }
 
-export function defaultRegistry(): ProviderRegistry {
-  const registry = new ProviderRegistry();
-  registry.register(new AnthropicAdapter());
-  return registry;
-}
-
 export class RunnerServer {
   private readonly transport: JsonLinesTransport;
   private readonly logger: Logger;
@@ -31,7 +24,7 @@ export class RunnerServer {
   constructor(private readonly opts: RunnerServerOptions) {
     this.logger = opts.logger ?? createLogger();
     this.transport = new JsonLinesTransport(opts.input, opts.output);
-    const registry = opts.registry ?? defaultRegistry();
+    const registry = opts.registry ?? createDefaultRegistry();
     this.runs = new RunManager(registry, (e) => this.transport.send(e), this.logger);
     this.router = new RequestRouter({
       registry,

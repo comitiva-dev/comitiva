@@ -322,6 +322,9 @@
             },
             "defaultModel": {
               "type": "string"
+            },
+            "workingDirectory": {
+              "type": "string"
             }
           }
         }
@@ -391,6 +394,18 @@
             },
             "defaultModel": {
               "type": "string"
+            },
+            "workingDirectory": {
+              "type": "string"
+            },
+            "sandbox": {
+              "default": "workspace-write",
+              "type": "string",
+              "enum": [
+                "read-only",
+                "workspace-write",
+                "danger-full-access"
+              ]
             }
           }
         }
@@ -459,6 +474,9 @@
               }
             },
             "defaultModel": {
+              "type": "string"
+            },
+            "workingDirectory": {
               "type": "string"
             }
           }

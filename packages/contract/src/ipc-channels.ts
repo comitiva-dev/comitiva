@@ -14,6 +14,8 @@ export const ipcInvokeChannels = [
   'connections.delete',
   'connections.test',
   'connections.listModels',
+  'connections.detectBinary',
+  'dialogs.pickFolder',
 ] as const;
 
 export const ipcEventChannels = ['runner.status'] as const;

@@ -1,9 +1,10 @@
 import type { OpenAICompatiblePreset, ProviderId } from './provider-config.js';
 
 /**
- * Static description of each provider: what the runner adapter supports and
- * what the connection form needs. Plain data (no zod) so any shell can build
- * forms without asking the runner. Adapters take `capabilities` from here.
+ * Static description of each API provider: what the runner adapter supports
+ * and what the connection form needs. Plain data (no zod) so any shell can
+ * build forms without asking the runner. Adapters take `capabilities` from
+ * here. CLI harnesses are described in `cliProviderDescriptors` below.
  */
 
 export interface Capabilities {
@@ -108,4 +109,77 @@ export function secretRequirement(
 ): SecretRequirement {
   const d: ProviderDescriptor = providerDescriptors[provider];
   return d.presets?.find((p) => p.id === preset)?.secret ?? d.secret;
+}
+
+// ------------------------------------------------------------ CLI harnesses
+
+/** Static description of a CLI harness (Claude Code, Codex): what the form explains. */
+export interface CliProviderDescriptor {
+  id: ProviderId;
+  kind: 'cli';
+  label: string;
+  capabilities: Capabilities;
+  /** Executable name searched on PATH when the connection has no binary path. */
+  binaryName: string;
+  /** What the user runs in a terminal when the harness is not logged in. */
+  loginCommand: string;
+  /**
+   * `token`: text streams token by token. `message`: each assistant message
+   * arrives whole (Codex `exec --json` has no token deltas).
+   */
+  streaming: 'token' | 'message';
+  /**
+   * Whether the harness's own file tools can be turned off so writes go through
+   * Comitiva's approvals. `phase-5`: yes, once the filesystem server exists;
+   * `never`: not possible (the form warns).
+   */
+  nativeFileToolsDisableable: 'phase-5' | 'never';
+  /** Codex only: the harness has its own OS sandbox, chosen per connection. */
+  sandbox?: boolean;
+}
+
+const harness: Capabilities = {
+  streaming: true,
+  tools: false,
+  resume: true,
+  listModels: false,
+  usage: true,
+  images: false,
+};
+
+export const cliProviderDescriptors = {
+  'claude-code': {
+    id: 'claude-code',
+    kind: 'cli',
+    label: 'Claude Code',
+    capabilities: harness,
+    binaryName: 'claude',
+    loginCommand: 'claude auth login',
+    streaming: 'token',
+    nativeFileToolsDisableable: 'phase-5',
+  },
+  codex: {
+    id: 'codex',
+    kind: 'cli',
+    label: 'Codex',
+    capabilities: harness,
+    binaryName: 'codex',
+    loginCommand: 'codex login',
+    streaming: 'message',
+    nativeFileToolsDisableable: 'never',
+    sandbox: true,
+  },
+} as const satisfies Record<string, CliProviderDescriptor>;
+
+export type CliProviderId = keyof typeof cliProviderDescriptors;
+export const cliProviderIds = Object.keys(cliProviderDescriptors) as CliProviderId[];
+
+export const isApiProviderId = (p: string): p is ApiProviderId =>
+  (apiProviderIds as readonly string[]).includes(p);
+export const isCliProviderId = (p: string): p is CliProviderId =>
+  (cliProviderIds as readonly string[]).includes(p);
+
+/** The connection kind a provider implies (`gemini-cli` is a harness without an adapter yet). */
+export function providerKind(provider: ProviderId): 'api' | 'cli' {
+  return isApiProviderId(provider) ? 'api' : 'cli';
 }

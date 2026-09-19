@@ -4,11 +4,13 @@ import { Connection } from './entities/connection.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import {
   AnthropicConfig,
+  CliConfig,
+  CodexConfig,
   GoogleConfig,
   OllamaConfig,
   OpenAICompatibleConfig,
 } from './provider-config.js';
-import { ModelInfo, TestResult } from './runner-protocol.js';
+import { CliDetectResult, ModelInfo, TestResult } from './runner-protocol.js';
 
 export { ipcEventChannels, ipcInvokeChannels } from './ipc-channels.js';
 
@@ -35,25 +37,30 @@ function apiProviderVariants<T extends z.ZodRawShape>(extra: T) {
   ] as const;
 }
 
+/** One variant per CLI harness. They never take a key: the harness uses its own login. */
+function cliProviderVariants<T extends z.ZodRawShape>(extra: T) {
+  return [
+    z.object({ ...extra, provider: z.literal('claude-code'), config: CliConfig }),
+    z.object({ ...extra, provider: z.literal('codex'), config: CodexConfig }),
+  ] as const;
+}
+
 /** An API key typed by the user. Travels renderer → main only, never back. */
 const ApiKey = z.string().trim().min(1);
 
 /** A new connection as the form submits it. `kind` is derived from the provider. */
-export const ConnectionDraft = z.discriminatedUnion(
-  'provider',
-  apiProviderVariants({
-    name: z.string().trim().min(1),
-    enabled: z.boolean().optional(),
-    apiKey: ApiKey.optional(),
-  }),
-);
+const draftBase = { name: z.string().trim().min(1), enabled: z.boolean().optional() };
+export const ConnectionDraft = z.discriminatedUnion('provider', [
+  ...apiProviderVariants({ ...draftBase, apiKey: ApiKey.optional() }),
+  ...cliProviderVariants(draftBase),
+]);
 export type ConnectionDraft = z.infer<typeof ConnectionDraft>;
 
 /** Provider settings to test or list models with before (or without) saving. */
-export const ConnectionProbe = z.discriminatedUnion(
-  'provider',
-  apiProviderVariants({ apiKey: ApiKey.optional() }),
-);
+export const ConnectionProbe = z.discriminatedUnion('provider', [
+  ...apiProviderVariants({ apiKey: ApiKey.optional() }),
+  ...cliProviderVariants({}),
+]);
 export type ConnectionProbe = z.infer<typeof ConnectionProbe>;
 
 /**
@@ -103,6 +110,13 @@ export const SecretStorageStatus = z.object({
 });
 export type SecretStorageStatus = z.infer<typeof SecretStorageStatus>;
 
+/** Where to look for a CLI harness: the typed path, or PATH and the usual install dirs. */
+export const DetectBinaryInput = z.object({
+  provider: z.enum(['claude-code', 'codex']),
+  binaryPath: z.string().trim().min(1).optional(),
+});
+export type DetectBinaryInput = z.infer<typeof DetectBinaryInput>;
+
 const ById = z.object({ id: Id });
 
 export const ipcInvoke = {
@@ -118,6 +132,9 @@ export const ipcInvoke = {
   'connections.delete': { input: ById, output: z.void() },
   'connections.test': { input: ConnectionTarget, output: TestResult },
   'connections.listModels': { input: ConnectionTarget, output: z.array(ModelInfo) },
+  'connections.detectBinary': { input: DetectBinaryInput, output: CliDetectResult },
+  /** Native folder picker; null when cancelled. */
+  'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
 } as const;
 
 export type IpcInvokeChannel = keyof typeof ipcInvoke;

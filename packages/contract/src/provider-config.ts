@@ -50,9 +50,23 @@ export const OllamaConfig = z.object({
 });
 export type OllamaConfig = z.infer<typeof OllamaConfig>;
 
+/** Settings shared by every CLI harness connection. */
 export const CliConfig = z.object({
+  /** Absolute path to the binary; unset → found on PATH and the usual install dirs. */
   binaryPath: z.string().optional(),
+  /** Appended after Comitiva's own flags, so they can override them. One argv entry each. */
   extraArgs: z.array(z.string()).default([]),
   defaultModel: z.string().optional(),
+  /** Absolute path; unset → `<userData>/workspaces/<conversationId>`. */
+  workingDirectory: z.string().optional(),
 });
 export type CliConfig = z.infer<typeof CliConfig>;
+
+/** Codex's own sandbox for the commands and file edits it runs (`-c sandbox_mode`). */
+export const CodexSandbox = z.enum(['read-only', 'workspace-write', 'danger-full-access']);
+export type CodexSandbox = z.infer<typeof CodexSandbox>;
+
+export const CodexConfig = CliConfig.extend({
+  sandbox: CodexSandbox.default('workspace-write'),
+});
+export type CodexConfig = z.infer<typeof CodexConfig>;

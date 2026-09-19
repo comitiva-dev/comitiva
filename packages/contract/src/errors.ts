@@ -11,6 +11,7 @@ export const ErrorCode = z.enum([
   'provider_error',
   'binary_not_found',
   'not_logged_in',
+  'sandbox_unavailable',
   'outside_roots',
   'approval_denied',
   'invalid_request',

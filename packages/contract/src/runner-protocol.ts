@@ -7,6 +7,7 @@ import { Message } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
 import { AppErrorShape } from './errors.js';
+import { ProviderId } from './provider-config.js';
 
 /**
  * Runner protocol: JSON lines over stdin (requests) and stdout (events).
@@ -50,8 +51,20 @@ export const RunStartRequest = z.object({
   secret: z.string().optional(),
   messages: z.array(Message),
   harnessSessionId: z.string().optional(),
+  /**
+   * CLI harnesses: absolute directory the harness runs in (the runner creates
+   * it). The shell resolves it; API connections ignore it.
+   */
+  workingDirectory: z.string().optional(),
   /** `${toolServerId}:${toolName}` pairs with a recorded allow-always decision. */
   alwaysAllowed: z.array(z.string()).optional(),
+});
+/** Finds a CLI harness binary and reads its version (the form's "Detect"). */
+export const CliDetectRequest = z.object({
+  ...req,
+  type: z.literal('cli.detect'),
+  provider: ProviderId,
+  binaryPath: z.string().optional(),
 });
 export const RunCancelRequest = z.object({ ...req, type: z.literal('run.cancel'), runId: Id });
 export const RunApprovalRequest = z.object({
@@ -67,6 +80,7 @@ export const RunnerRequest = z.discriminatedUnion('type', [
   PingRequest,
   ConnectionTestRequest,
   ConnectionListModelsRequest,
+  CliDetectRequest,
   ToolServerStartRequest,
   ToolServerStopRequest,
   RunStartRequest,
@@ -78,6 +92,7 @@ export type RunnerRequest = z.infer<typeof RunnerRequest>;
 export type RunnerRequestType = RunnerRequest['type'];
 export type RunStartRequest = z.infer<typeof RunStartRequest>;
 export type ConnectionTestRequest = z.infer<typeof ConnectionTestRequest>;
+export type CliDetectRequest = z.infer<typeof CliDetectRequest>;
 
 // ---------------------------------------------------------------- results
 
@@ -106,6 +121,9 @@ export const ToolDef = z.object({
     .optional(),
 });
 export type ToolDef = z.infer<typeof ToolDef>;
+
+export const CliDetectResult = z.object({ path: z.string(), version: z.string() });
+export type CliDetectResult = z.infer<typeof CliDetectResult>;
 
 export const RunStartResult = z.object({ runId: Id });
 export type RunStartResult = z.infer<typeof RunStartResult>;

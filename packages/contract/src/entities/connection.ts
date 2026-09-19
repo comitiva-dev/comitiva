@@ -3,6 +3,7 @@ import { Id, IsoDate } from '../common.js';
 import {
   AnthropicConfig,
   CliConfig,
+  CodexConfig,
   GoogleConfig,
   OllamaConfig,
   OpenAICompatibleConfig,
@@ -49,7 +50,7 @@ export const Connection = z.discriminatedUnion('provider', [
     provider: z.literal('claude-code'),
     config: CliConfig,
   }),
-  z.object({ ...base, kind: z.literal('cli'), provider: z.literal('codex'), config: CliConfig }),
+  z.object({ ...base, kind: z.literal('cli'), provider: z.literal('codex'), config: CodexConfig }),
   z.object({
     ...base,
     kind: z.literal('cli'),

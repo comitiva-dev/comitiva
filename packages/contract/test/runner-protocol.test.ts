@@ -17,6 +17,13 @@ describe('RunnerRequest', () => {
     expect(RunnerRequest.parse(req)).toMatchObject({ type: 'run.start', runId: 'r1' });
   });
 
+  it('parses cli.detect', () => {
+    expect(
+      RunnerRequest.safeParse({ id: '1', type: 'cli.detect', provider: 'codex' }).success,
+    ).toBe(true);
+    expect(RunnerRequest.safeParse({ id: '1', type: 'cli.detect' }).success).toBe(false);
+  });
+
   it('parses ping, cancel and shutdown', () => {
     for (const r of [
       { id: '1', type: 'ping' },

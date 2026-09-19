@@ -29,8 +29,32 @@ describe('IPC contract', () => {
     expect(
       schema.safeParse({ name: 'x', provider: 'anthropic', config: {}, apiKey: '' }).success,
     ).toBe(false);
-    // CLI providers are not API connections.
-    expect(schema.safeParse({ name: 'x', provider: 'codex', config: {} }).success).toBe(false);
+  });
+
+  it('accepts CLI drafts without a key and applies their defaults', () => {
+    const schema = ipcInvoke['connections.create'].input;
+    const codex = schema.parse({ name: 'Codex', provider: 'codex', config: {} });
+    expect(codex.config).toEqual({ extraArgs: [], sandbox: 'workspace-write' });
+    const claude = schema.parse({
+      name: 'Claude Code',
+      provider: 'claude-code',
+      config: { binaryPath: '/usr/local/bin/claude', extraArgs: ['--effort', 'low'] },
+      apiKey: 'ignored',
+    });
+    // CLI harnesses use their own login: a key is stripped, never stored.
+    expect(claude).not.toHaveProperty('apiKey');
+    expect(
+      schema.safeParse({ name: 'x', provider: 'codex', config: { sandbox: 'yolo' } }).success,
+    ).toBe(false);
+    // gemini-cli has no adapter yet.
+    expect(schema.safeParse({ name: 'x', provider: 'gemini-cli', config: {} }).success).toBe(false);
+  });
+
+  it('validates binary detection input', () => {
+    const schema = ipcInvoke['connections.detectBinary'].input;
+    expect(schema.safeParse({ provider: 'claude-code' }).success).toBe(true);
+    expect(schema.safeParse({ provider: 'codex', binaryPath: '/x/codex' }).success).toBe(true);
+    expect(schema.safeParse({ provider: 'anthropic' }).success).toBe(false);
   });
 
   it('requires an id or a probe to test or list models', () => {

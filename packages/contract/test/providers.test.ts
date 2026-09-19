@@ -2,6 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ProviderId,
   apiProviderIds,
+  cliProviderDescriptors,
+  cliProviderIds,
+  providerKind,
   providerDescriptors,
   secretRequirement,
 } from '../src/index.js';
@@ -34,5 +37,18 @@ describe('provider descriptors', () => {
     expect(secretRequirement('openai-compatible', 'groq')).toBe('required');
     expect(secretRequirement('openai-compatible')).toBe('optional');
     expect(secretRequirement('ollama')).toBe('optional');
+  });
+
+  it('describes each CLI harness and derives the kind of every provider', () => {
+    expect([...cliProviderIds].sort()).toEqual(['claude-code', 'codex']);
+    for (const id of cliProviderIds) {
+      expect(cliProviderDescriptors[id].id).toBe(id);
+      expect(cliProviderDescriptors[id].kind).toBe('cli');
+    }
+    expect(cliProviderDescriptors.codex.streaming).toBe('message');
+    expect(cliProviderDescriptors.codex.nativeFileToolsDisableable).toBe('never');
+    for (const id of ProviderId.options) {
+      expect(providerKind(id)).toBe((apiProviderIds as string[]).includes(id) ? 'api' : 'cli');
+    }
   });
 });

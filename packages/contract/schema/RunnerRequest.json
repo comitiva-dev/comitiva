@@ -352,6 +352,9 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
                     }
                   }
                 }
@@ -421,6 +424,18 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
+                    },
+                    "sandbox": {
+                      "default": "workspace-write",
+                      "type": "string",
+                      "enum": [
+                        "read-only",
+                        "workspace-write",
+                        "danger-full-access"
+                      ]
                     }
                   }
                 }
@@ -489,6 +504,9 @@
                       }
                     },
                     "defaultModel": {
+                      "type": "string"
+                    },
+                    "workingDirectory": {
                       "type": "string"
                     }
                   }
@@ -850,6 +868,9 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
                     }
                   }
                 }
@@ -919,6 +940,18 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
+                    },
+                    "sandbox": {
+                      "default": "workspace-write",
+                      "type": "string",
+                      "enum": [
+                        "read-only",
+                        "workspace-write",
+                        "danger-full-access"
+                      ]
                     }
                   }
                 }
@@ -988,6 +1021,9 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
                     }
                   }
                 }
@@ -1014,6 +1050,39 @@
         "id",
         "type",
         "connection"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "type": {
+          "type": "string",
+          "const": "cli.detect"
+        },
+        "provider": {
+          "type": "string",
+          "enum": [
+            "anthropic",
+            "openai-compatible",
+            "google",
+            "ollama",
+            "claude-code",
+            "codex",
+            "gemini-cli"
+          ]
+        },
+        "binaryPath": {
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "type",
+        "provider"
       ]
     },
     {
@@ -1662,6 +1731,9 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
                     }
                   }
                 }
@@ -1731,6 +1803,18 @@
                     },
                     "defaultModel": {
                       "type": "string"
+                    },
+                    "workingDirectory": {
+                      "type": "string"
+                    },
+                    "sandbox": {
+                      "default": "workspace-write",
+                      "type": "string",
+                      "enum": [
+                        "read-only",
+                        "workspace-write",
+                        "danger-full-access"
+                      ]
                     }
                   }
                 }
@@ -1799,6 +1883,9 @@
                       }
                     },
                     "defaultModel": {
+                      "type": "string"
+                    },
+                    "workingDirectory": {
                       "type": "string"
                     }
                   }
@@ -2199,6 +2286,9 @@
           }
         },
         "harnessSessionId": {
+          "type": "string"
+        },
+        "workingDirectory": {
           "type": "string"
         },
         "alwaysAllowed": {

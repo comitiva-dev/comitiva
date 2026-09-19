@@ -1,4 +1,4 @@
-import { fileURLToPath } from 'node:url';
+import { join } from 'node:path';
 import type { Agent, CliConfig, CodexConfig, Connection, Message } from '@comitiva/contract';
 
 const now = '2026-01-01T00:00:00.000Z';
@@ -110,11 +110,15 @@ export function userText(conversationId: string, text: string, seq = 0): Message
   };
 }
 
-/** Paths of the fake harness binaries built next to this module (`dist/testing/bin`). */
-export function fakeHarnessBinaries(): { claude: string; codex: string } {
+/**
+ * Paths of the fake harness binaries (`dist/testing/bin`), given the runner
+ * package directory, e.g. `dirname(require.resolve('@comitiva/runner/package.json'))`.
+ * (No `import.meta` here: Playwright loads this module as CommonJS.)
+ */
+export function fakeHarnessBinaries(runnerPackageDir: string): { claude: string; codex: string } {
   return {
-    claude: fileURLToPath(new URL('./bin/fake-claude', import.meta.url)),
-    codex: fileURLToPath(new URL('./bin/fake-codex', import.meta.url)),
+    claude: join(runnerPackageDir, 'dist', 'testing', 'bin', 'fake-claude'),
+    codex: join(runnerPackageDir, 'dist', 'testing', 'bin', 'fake-codex'),
   };
 }
 

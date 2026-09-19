@@ -1,11 +1,14 @@
 import { ulid } from 'ulid';
 import {
   AppError,
+  providerKind,
+  type CliDetectResult,
   type Connection,
   type ConnectionDraft,
   type ConnectionPatch,
   type ConnectionSummary,
   type ConnectionTarget,
+  type DetectBinaryInput,
   type ModelInfo,
   type TestResult,
 } from '@comitiva/contract';
@@ -16,7 +19,7 @@ import type {
 } from '../db/repositories/ConnectionRepository';
 import type { SecretStore } from '../secrets/SecretStore';
 
-type RunnerPort = Pick<RunnerClient, 'testConnection' | 'listModels'>;
+type RunnerPort = Pick<RunnerClient, 'testConnection' | 'listModels' | 'detectCli'>;
 
 export interface ConnectionServiceDeps {
   repo: ConnectionRepository;
@@ -29,7 +32,8 @@ export const secretRefFor = (connectionId: string): string => `connection:${conn
 /**
  * Connections as the UI manages them. Keys go to the SecretStore under a
  * `secretRef`; SQLite and every value returned here carry only the ref and
- * `hasSecret`. Keys reach the runner per request and nowhere else.
+ * `hasSecret`. Keys reach the runner per request and nowhere else. CLI
+ * harness connections never have a key: the harness uses its own login.
  */
 export class ConnectionService {
   constructor(private readonly deps: ConnectionServiceDeps) {}
@@ -40,10 +44,11 @@ export class ConnectionService {
 
   async create(draft: ConnectionDraft): Promise<ConnectionSummary> {
     const id = ulid();
-    const secretRef = draft.apiKey ? secretRefFor(id) : null;
+    const apiKey = 'apiKey' in draft ? draft.apiKey : undefined;
+    const secretRef = apiKey ? secretRefFor(id) : null;
     // Validate before touching the secret store, so a bad draft stores nothing.
     this.deps.repo.preview(this.probeConnection(draft, id), {});
-    if (draft.apiKey && secretRef) await this.deps.secrets.set(secretRef, draft.apiKey);
+    if (apiKey && secretRef) await this.deps.secrets.set(secretRef, apiKey);
     try {
       const record = this.deps.repo.create({
         id,
@@ -62,6 +67,9 @@ export class ConnectionService {
 
   async update(id: string, patch: ConnectionPatch): Promise<ConnectionSummary> {
     const current = this.deps.repo.require(id).connection;
+    if (current.kind === 'cli' && typeof patch.apiKey === 'string') {
+      throw new AppError('invalid_request', 'CLI connections do not take an API key');
+    }
     const ref = current.secretRef ?? secretRefFor(id);
     const secretRef = patch.apiKey === undefined ? undefined : patch.apiKey === null ? null : ref;
     const changes = {
@@ -120,6 +128,15 @@ export class ConnectionService {
     });
   }
 
+  /** Finds a harness binary (the typed path, or PATH) and reads its version. */
+  detectBinary(input: DetectBinaryInput): Promise<CliDetectResult> {
+    return this.deps.runner.detectCli({
+      type: 'cli.detect',
+      provider: input.provider,
+      ...(input.binaryPath !== undefined ? { binaryPath: input.binaryPath } : {}),
+    });
+  }
+
   private async resolve(
     target: ConnectionTarget,
   ): Promise<{ connection: Connection; secret: string | undefined }> {
@@ -127,8 +144,10 @@ export class ConnectionService {
     const connection = target.probe
       ? this.deps.repo.preview(this.probeConnection(target.probe, target.id ?? 'probe'), {})
       : saved!;
+    if (connection.kind === 'cli') return { connection, secret: undefined };
+    const probeKey = target.probe && 'apiKey' in target.probe ? target.probe.apiKey : undefined;
     const secret =
-      target.probe?.apiKey ??
+      probeKey ??
       (saved?.secretRef
         ? ((await this.deps.secrets.get(saved.secretRef)) ?? undefined)
         : undefined);
@@ -144,7 +163,7 @@ export class ConnectionService {
     return {
       id,
       name: probe.name ?? 'probe',
-      kind: 'api',
+      kind: providerKind(probe.provider),
       provider: probe.provider,
       config: probe.config,
       secretRef: null,

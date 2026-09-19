@@ -1,4 +1,4 @@
-import { app, BrowserWindow, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
 import { Database } from './db/Database';
 import { ConnectionRepository } from './db/repositories/ConnectionRepository';
@@ -18,6 +18,14 @@ const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 function isTrustedUrl(url: string): boolean {
   if (devServerUrl && url.startsWith(devServerUrl)) return true;
   return url.startsWith('file://');
+}
+
+/** Native directory picker, attached to the focused window. */
+async function pickFolder(): Promise<string | null> {
+  const opts = { properties: ['openDirectory', 'createDirectory'] } as Electron.OpenDialogOptions;
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
+  return r.canceled ? null : (r.filePaths[0] ?? null);
 }
 
 function createWindow(): BrowserWindow {
@@ -87,6 +95,8 @@ async function bootstrap(): Promise<void> {
       'connections.delete': ({ id }) => connections.delete(id),
       'connections.test': (target) => connections.test(target),
       'connections.listModels': (target) => connections.listModels(target),
+      'connections.detectBinary': (input) => connections.detectBinary(input),
+      'dialogs.pickFolder': () => pickFolder(),
     },
     isTrustedUrl,
   );

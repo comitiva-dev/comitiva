@@ -4,7 +4,7 @@ import {
   AppError,
   Connection,
   ErrorCode,
-  apiProviderIds,
+  providerKind,
   type ConnectionTestRecord,
   type ProviderId,
   type TestResult,
@@ -38,8 +38,7 @@ export interface ConnectionChanges {
 
 type Row = typeof connections.$inferSelect;
 
-export const kindOf = (provider: ProviderId): Connection['kind'] =>
-  (apiProviderIds as readonly string[]).includes(provider) ? 'api' : 'cli';
+export const kindOf = (provider: ProviderId): Connection['kind'] => providerKind(provider);
 
 /**
  * Connections in SQLite. Only a `secretRef` is stored, never a secret value;

@@ -34,6 +34,7 @@ let secrets: MemorySecrets;
 let runner: {
   testConnection: ReturnType<typeof vi.fn>;
   listModels: ReturnType<typeof vi.fn>;
+  detectCli: ReturnType<typeof vi.fn>;
 };
 let service: ConnectionService;
 
@@ -45,6 +46,7 @@ beforeEach(() => {
   runner = {
     testConnection: vi.fn(async () => ({ ok: true as const, latencyMs: 42 })),
     listModels: vi.fn(async () => [{ id: 'm1' }]),
+    detectCli: vi.fn(async () => ({ path: '/usr/local/bin/claude', version: '2.1.278' })),
   };
   service = new ConnectionService({ repo, secrets, runner: runner as never });
 });
@@ -235,5 +237,69 @@ describe('ConnectionService', () => {
         connection: expect.objectContaining({ config: { baseUrl: 'http://gpu-box:11434' } }),
       }),
     );
+  });
+});
+
+describe('ConnectionService with CLI harnesses', () => {
+  const claude: ConnectionDraft = {
+    name: 'Claude Code',
+    provider: 'claude-code',
+    config: { binaryPath: '/usr/local/bin/claude', extraArgs: ['--effort', 'low'] },
+  };
+
+  it('creates a CLI connection with kind cli and no key', async () => {
+    const created = await service.create(claude);
+    expect(created.connection).toMatchObject({
+      kind: 'cli',
+      provider: 'claude-code',
+      secretRef: null,
+      config: { binaryPath: '/usr/local/bin/claude', extraArgs: ['--effort', 'low'] },
+    });
+    expect(created.hasSecret).toBe(false);
+    expect(secrets.values.size).toBe(0);
+  });
+
+  it('applies the Codex sandbox default when the config is stored', async () => {
+    // Without the IPC parse: the repository validates (and defaults) config on write.
+    const created = await service.create({
+      name: 'Codex',
+      provider: 'codex',
+      config: { extraArgs: [] },
+    } as unknown as ConnectionDraft);
+    expect(created.connection.config).toMatchObject({ sandbox: 'workspace-write' });
+  });
+
+  it('tests saved and unsaved CLI settings without touching secrets', async () => {
+    const created = await service.create(claude);
+    const get = vi.spyOn(secrets, 'get');
+    await service.test({ id: created.connection.id });
+    await service.test({
+      probe: { provider: 'codex', config: { extraArgs: [], sandbox: 'read-only' } },
+    });
+    expect(get).not.toHaveBeenCalled();
+    const sent = runner.testConnection.mock.calls.map(
+      (c) => c[0] as { connection: unknown; secret?: string },
+    );
+    expect(sent[0]).not.toHaveProperty('secret');
+    expect(sent[1]!.connection).toMatchObject({
+      kind: 'cli',
+      provider: 'codex',
+      config: { sandbox: 'read-only' },
+    });
+  });
+
+  it('refuses a key on a CLI connection', async () => {
+    const created = await service.create(claude);
+    await expect(service.update(created.connection.id, { apiKey: 'sk-x' })).rejects.toMatchObject({
+      code: 'invalid_request',
+    });
+  });
+
+  it('detects the binary through the runner', async () => {
+    await expect(service.detectBinary({ provider: 'claude-code' })).resolves.toEqual({
+      path: '/usr/local/bin/claude',
+      version: '2.1.278',
+    });
+    expect(runner.detectCli).toHaveBeenCalledWith({ type: 'cli.detect', provider: 'claude-code' });
   });
 });

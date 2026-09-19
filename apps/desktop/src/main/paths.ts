@@ -19,6 +19,10 @@ export const paths = {
   secrets(): string {
     return join(app.getPath('userData'), 'secrets.bin');
   },
+  /** Default working directories of CLI harness conversations. */
+  workspaces(): string {
+    return join(app.getPath('userData'), 'workspaces');
+  },
   log(name: string): string {
     return join(app.getPath('userData'), 'logs', name);
   },

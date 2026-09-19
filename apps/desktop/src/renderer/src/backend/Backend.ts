@@ -1,8 +1,10 @@
 import type {
+  CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
   ConnectionSummary,
   ConnectionTarget,
+  DetectBinaryInput,
   ErrorCode,
   ModelInfo,
   RunnerStatus,
@@ -33,6 +35,12 @@ export interface Backend {
     /** Resolves with `{ ok: false, error }` for provider failures; rejects only for bad input. */
     test(target: ConnectionTarget): Promise<TestResult>;
     listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
+    /** CLI harnesses: finds the binary (typed path or PATH) and reads its version. */
+    detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;
+  };
+  dialogs: {
+    /** A native folder picker; null when cancelled (or when the backend has none). */
+    pickFolder(): Promise<string | null>;
   };
   onEvent(handler: (event: BackendEvent) => void): () => void;
 }

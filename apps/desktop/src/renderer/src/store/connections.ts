@@ -1,9 +1,11 @@
 import { createStore } from 'zustand/vanilla';
 import type {
+  CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
   ConnectionSummary,
   ConnectionTarget,
+  DetectBinaryInput,
   ErrorCode,
   ModelInfo,
   TestResult,
@@ -38,6 +40,9 @@ export interface ConnectionsState {
   /** For the form: test or list models for unsaved settings. */
   probe(target: ConnectionTarget): Promise<TestResult>;
   listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
+  /** For the CLI form: "Detect" and "Choose…". */
+  detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;
+  pickFolder(): Promise<string | null>;
 }
 
 export type ConnectionsStore = ReturnType<typeof createConnectionsStore>;
@@ -118,6 +123,8 @@ export function createConnectionsStore(backend: Backend) {
 
       probe: (target) => backend.connections.test(target),
       listModels: (target) => backend.connections.listModels(target),
+      detectBinary: (input) => backend.connections.detectBinary(input),
+      pickFolder: () => backend.dialogs.pickFolder(),
     };
   });
 }

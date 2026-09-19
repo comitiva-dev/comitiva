@@ -1,4 +1,4 @@
-import type { ApiProviderId, OpenAICompatiblePreset } from '@comitiva/contract';
+import type { OpenAICompatiblePreset, ProviderId } from '@comitiva/contract';
 
 /**
  * A monogram badge per provider (and OpenAI-compatible preset). Deliberately
@@ -27,6 +27,18 @@ const badges: Record<string, { text: string; className: string }> = {
     text: 'LM',
     className: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950 dark:text-indigo-300',
   },
+  'claude-code': {
+    text: 'CC',
+    className: 'bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-300',
+  },
+  codex: {
+    text: 'Cx',
+    className: 'bg-teal-100 text-teal-900 dark:bg-teal-950 dark:text-teal-300',
+  },
+  'gemini-cli': {
+    text: 'GC',
+    className: 'bg-sky-100 text-sky-900 dark:bg-sky-950 dark:text-sky-300',
+  },
   custom: {
     text: '{}',
     className: 'bg-neutral-200 text-neutral-800 dark:bg-neutral-800 dark:text-neutral-200',
@@ -38,7 +50,7 @@ export function ProviderIcon({
   preset,
   size = 'md',
 }: {
-  provider: ApiProviderId;
+  provider: ProviderId;
   preset?: OpenAICompatiblePreset | undefined;
   size?: 'sm' | 'md';
 }) {

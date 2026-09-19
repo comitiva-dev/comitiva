@@ -1,6 +1,8 @@
 import {
   ConnectionDraft,
   apiProviderIds,
+  cliProviderDescriptors,
+  isCliProviderId,
   providerDescriptors,
   secretRequirement,
   type ApiProviderId,
@@ -9,6 +11,7 @@ import {
   type ConnectionSummary,
   type ConnectionTarget,
   type OpenAICompatiblePreset,
+  type ProviderId,
   type SecretRequirement,
 } from '@comitiva/contract';
 
@@ -36,7 +39,9 @@ export type FormProblem = 'name' | 'baseUrl' | 'apiKey';
 export const isApiProvider = (p: string): p is ApiProviderId =>
   (apiProviderIds as readonly string[]).includes(p);
 
-export function providerLabel(provider: ApiProviderId, preset?: OpenAICompatiblePreset): string {
+export function providerLabel(provider: ProviderId, preset?: OpenAICompatiblePreset): string {
+  if (isCliProviderId(provider)) return cliProviderDescriptors[provider].label;
+  if (!isApiProvider(provider)) return provider;
   const d = providerDescriptors[provider];
   const presets = 'presets' in d ? d.presets : undefined;
   const p = presets?.find((x) => x.id === preset);

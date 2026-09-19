@@ -2,6 +2,7 @@ import type {
   ConnectionDraft,
   ConnectionPatch,
   ConnectionTarget,
+  DetectBinaryInput,
   IpcInput,
   IpcInvokeChannel,
   IpcOutput,
@@ -42,6 +43,11 @@ export class LocalBackend implements Backend {
     delete: (id: string) => this.api.invoke('connections.delete', { id }),
     test: (target: ConnectionTarget) => this.api.invoke('connections.test', target),
     listModels: (target: ConnectionTarget) => this.api.invoke('connections.listModels', target),
+    detectBinary: (input: DetectBinaryInput) => this.api.invoke('connections.detectBinary', input),
+  };
+
+  dialogs = {
+    pickFolder: () => this.api.invoke('dialogs.pickFolder', undefined),
   };
 
   onEvent(handler: (event: BackendEvent) => void): () => void {

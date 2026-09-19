@@ -42,7 +42,7 @@
     "subtitle": "Formas de chegar a um modelo de linguagem. As chaves ficam no chaveiro do sistema.",
     "add": "Adicionar conexão",
     "emptyTitle": "Nenhuma conexão ainda",
-    "emptyBody": "Adicione Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama ou LM Studio para começar.",
+    "emptyBody": "Adicione Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama ou LM Studio, ou use o Claude Code ou o Codex com seu próprio login.",
     "enabled": "Ativa",
     "test": "Testar",
     "testing": "Testando…",
@@ -53,7 +53,7 @@
     "lastTestOk": "OK · {{ms}} ms · {{when}}",
     "lastTestFailed": "{{error}} · {{when}}",
     "deleteTitle": "Excluir “{{name}}”?",
-    "deleteBody": "A chave de API guardada também é removida. Não dá para desfazer.",
+    "deleteBody": "A chave de API guardada, se houver, também é removida. Não dá para desfazer.",
     "form": {
       "createTitle": "Nova conexão",
       "editTitle": "Editar conexão",
@@ -77,7 +77,43 @@
       "fetchModels": "Buscar modelos",
       "fetching": "Buscando…",
       "modelsFound_one": "{{count}} modelo encontrado",
-      "modelsFound_other": "{{count}} modelos encontrados"
+      "modelsFound_other": "{{count}} modelos encontrados",
+      "apiGroup": "Serviços de API",
+      "cliGroup": "Harnesses de CLI (seu próprio login)"
+    },
+    "cli": {
+      "autoAcceptTitle": "Roda sozinho, sem perguntar",
+      "autoAcceptBody": "O {{harness}} roda de forma não interativa e aceita toda ação que decidir tomar (editar arquivos, executar comandos) dentro do diretório de trabalho, sem perguntar antes. Use um diretório de trabalho que você aceite que ele altere.",
+      "nativeToolsWarning": "As edições de arquivo do próprio {{harness}} não passam pelas aprovações do Comitiva: acontecem direto, limitadas apenas pelo sandbox dele.",
+      "messageStreaming": "As respostas chegam uma mensagem por vez, não palavra por palavra.",
+      "binaryPath": "Caminho do binário",
+      "binaryPlaceholder": "Detectar `{{name}}` automaticamente",
+      "binaryHint": "Deixe em branco para procurar no PATH e nos locais de instalação comuns.",
+      "detect": "Detectar",
+      "detecting": "Detectando…",
+      "detected": "Encontrado: {{version}}",
+      "absolutePath": "Use um caminho completo, como /usr/local/bin/ferramenta.",
+      "workingDirectory": "Diretório de trabalho",
+      "workingDirectoryPlaceholder": "Uma pasta nova por conversa",
+      "workingDirectoryHint": "Deixe em branco para dar a cada conversa sua própria pasta na pasta de dados do Comitiva.",
+      "choose": "Escolher…",
+      "sandbox": "Sandbox",
+      "sandboxes": {
+        "workspace-write": "Escrita no workspace (padrão)",
+        "read-only": "Somente leitura",
+        "danger-full-access": "Acesso total (sem sandbox)"
+      },
+      "sandboxHelp": {
+        "workspace-write": "O Codex pode ler em qualquer lugar e escrever só dentro do diretório de trabalho, garantido pelo sistema operacional.",
+        "read-only": "O Codex pode ler, mas não alterar arquivos nem executar comandos que escrevem.",
+        "danger-full-access": "Sem sandbox do sistema: o Codex pode alterar tudo o que sua conta de usuário pode. Use só quando o sandbox não consegue iniciar neste sistema."
+      },
+      "modelPlaceholder": "O padrão do harness",
+      "extraArgs": "Argumentos extras",
+      "extraArgsHint": "Um argumento por linha, adicionados depois das flags do Comitiva (podem sobrescrevê-las).",
+      "loginHint": "Execute `{{command}}` em um terminal e teste de novo.",
+      "sandboxHint": "Mude o sandbox para Acesso total ou corrija o sandbox neste sistema.",
+      "testSlow": "O teste envia um prompt curto; um CLI pode demorar para iniciar."
     }
   },
   "errors": {
@@ -100,6 +136,7 @@
     "timeout": "A requisição excedeu o tempo limite.",
     "internal": "Algo deu errado.",
     "connection_in_use": "Esta conexão é usada por agentes. Mova-os para outra conexão antes.",
-    "not_found": "Esse item não existe mais."
+    "not_found": "Esse item não existe mais.",
+    "sandbox_unavailable": "O sandbox do harness não consegue iniciar neste sistema."
   }
 }

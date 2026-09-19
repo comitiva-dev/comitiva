@@ -42,7 +42,7 @@
     "subtitle": "Ways to reach a language model. Keys stay in your OS keychain.",
     "add": "Add connection",
     "emptyTitle": "No connections yet",
-    "emptyBody": "Add Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama or LM Studio to get started.",
+    "emptyBody": "Add Anthropic, OpenAI, OpenRouter, Groq, Gemini, Ollama or LM Studio, or use Claude Code or Codex with your own login.",
     "enabled": "Enabled",
     "test": "Test",
     "testing": "Testing…",
@@ -53,7 +53,7 @@
     "lastTestOk": "OK · {{ms}} ms · {{when}}",
     "lastTestFailed": "{{error}} · {{when}}",
     "deleteTitle": "Delete “{{name}}”?",
-    "deleteBody": "Its stored API key is removed too. This cannot be undone.",
+    "deleteBody": "Its stored API key, if any, is removed too. This cannot be undone.",
     "form": {
       "createTitle": "New connection",
       "editTitle": "Edit connection",
@@ -77,7 +77,43 @@
       "fetchModels": "Fetch models",
       "fetching": "Fetching…",
       "modelsFound_one": "{{count}} model found",
-      "modelsFound_other": "{{count}} models found"
+      "modelsFound_other": "{{count}} models found",
+      "apiGroup": "API services",
+      "cliGroup": "CLI harnesses (your own login)"
+    },
+    "cli": {
+      "autoAcceptTitle": "Runs on its own, without asking",
+      "autoAcceptBody": "{{harness}} runs non-interactively and accepts every action it decides to take (editing files, running commands) inside the working directory, without asking you first. Use a working directory you are comfortable letting it change.",
+      "nativeToolsWarning": "{{harness}}'s own file edits cannot be routed through Comitiva's approvals: they happen directly, limited only by its sandbox.",
+      "messageStreaming": "Replies arrive one message at a time, not word by word.",
+      "binaryPath": "Binary path",
+      "binaryPlaceholder": "Auto-detect `{{name}}`",
+      "binaryHint": "Leave blank to find it on PATH and in the usual install locations.",
+      "detect": "Detect",
+      "detecting": "Detecting…",
+      "detected": "Found {{version}}",
+      "absolutePath": "Use a full path, like /usr/local/bin/tool.",
+      "workingDirectory": "Working directory",
+      "workingDirectoryPlaceholder": "A new folder per conversation",
+      "workingDirectoryHint": "Leave blank to give each conversation its own folder in Comitiva's data folder.",
+      "choose": "Choose…",
+      "sandbox": "Sandbox",
+      "sandboxes": {
+        "workspace-write": "Workspace write (default)",
+        "read-only": "Read only",
+        "danger-full-access": "Full access (no sandbox)"
+      },
+      "sandboxHelp": {
+        "workspace-write": "Codex can read anywhere and write only inside the working directory, enforced by the OS.",
+        "read-only": "Codex can read but not change files or run commands that write.",
+        "danger-full-access": "No OS sandbox: Codex can change anything your user account can. Use it only when the sandbox cannot start on this system."
+      },
+      "modelPlaceholder": "The harness's default",
+      "extraArgs": "Extra arguments",
+      "extraArgsHint": "One argument per line, added after Comitiva's own flags (they can override them).",
+      "loginHint": "Run `{{command}}` in a terminal, then test again.",
+      "sandboxHint": "Switch the sandbox to Full access, or fix the sandbox on this system.",
+      "testSlow": "The test sends a short prompt; a CLI can take a while to start."
     }
   },
   "errors": {
@@ -100,6 +136,7 @@
     "timeout": "The request timed out.",
     "internal": "Something went wrong.",
     "connection_in_use": "This connection is used by agents. Move them to another connection first.",
-    "not_found": "That item no longer exists."
+    "not_found": "That item no longer exists.",
+    "sandbox_unavailable": "The harness's sandbox cannot start on this system."
   }
 }

@@ -1,5 +1,9 @@
 import { useTranslation } from 'react-i18next';
-import type { ConnectionSummary, OpenAICompatiblePreset } from '@comitiva/contract';
+import {
+  isCliProviderId,
+  type ConnectionSummary,
+  type OpenAICompatiblePreset,
+} from '@comitiva/contract';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { ConnectionForm } from '../components/Forms/ConnectionForm';
 import { ProviderIcon } from '../components/ProviderIcon';
@@ -103,7 +107,7 @@ function ConnectionRow({ item }: { item: ConnectionSummary }) {
   const askDelete = useConnections((s) => s.askDelete);
   const setEnabled = useConnections((s) => s.setEnabled);
   const { connection, lastTest } = item;
-  if (!isApiProvider(connection.provider)) return null;
+  if (!isApiProvider(connection.provider) && !isCliProviderId(connection.provider)) return null;
 
   const config = connection.config as { preset?: OpenAICompatiblePreset; defaultModel?: string };
   const id = connection.id;

@@ -35,7 +35,9 @@ export function fakeBackend() {
       delete: vi.fn(async () => {}),
       test: vi.fn(async () => ({ ok: true as const, latencyMs: 5 })),
       listModels: vi.fn(async () => [{ id: 'm1' }]),
+      detectBinary: vi.fn(async () => ({ path: '/usr/local/bin/claude', version: '9.9.9' })),
     },
+    dialogs: { pickFolder: vi.fn(async (): Promise<string | null> => '/home/me/work') },
     onEvent: vi.fn(() => () => {}),
   } satisfies Backend;
   return backend;

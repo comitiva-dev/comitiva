@@ -1,0 +1,11 @@
+{"type":"thread.started","thread_id":"01a0b7b8-8d94-7f43-a913-39cbac002be4"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"I’ll read the note, report the word, and create the requested confirmation file."}}
+{"type":"item.started","item":{"id":"item_1","type":"mcp_tool_call","server":"cua_repl","tool":"js","arguments":{"code":"await cua.getState();","title":"Inspect available workspace surfaces"},"result":null,"error":null,"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_1","type":"mcp_tool_call","server":"cua_repl","tool":"js","arguments":{"code":"await cua.getState();","title":"Inspect available workspace surfaces"},"result":null,"error":{"message":"MCP tool call requires approval, but approval policy is never"},"status":"failed"}}
+{"type":"item.started","item":{"id":"item_2","type":"file_change","changes":[{"path":"/work/out.txt","kind":"add"}],"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_2","type":"file_change","changes":[{"path":"/work/out.txt","kind":"add"}],"status":"failed"}}
+{"type":"item.started","item":{"id":"item_3","type":"file_change","changes":[{"path":"/work/out.txt","kind":"add"}],"status":"in_progress"}}
+{"type":"item.completed","item":{"id":"item_3","type":"file_change","changes":[{"path":"/work/out.txt","kind":"add"}],"status":"failed"}}
+{"type":"item.completed","item":{"id":"item_4","type":"agent_message","text":"I couldn’t access the workspace: its filesystem sandbox failed to initialize, so I wasn’t able to read `note.txt` or create `out.txt`."}}
+{"type":"turn.completed","usage":{"input_tokens":106170,"cached_input_tokens":97536,"cache_write_input_tokens":0,"output_tokens":862,"reasoning_output_tokens":276}}

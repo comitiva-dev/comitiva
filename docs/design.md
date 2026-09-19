@@ -166,12 +166,15 @@ packages/runner/src/
 ├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts (P5)
 ├── providers/         ProviderRegistry.ts (+ createDefaultRegistry) ProviderAdapter.ts
 │   ├── api/           shared.ts AnthropicAdapter.ts OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts
-│   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts parsers/ (P2)
+│   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts process.ts locateBinary.ts
+│                      prompt.ts parsers/ (claudeCode.ts codex.ts types.ts) (P2)
 ├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts (P5)
 ├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts (P6)
 ├── client/            RunnerClient.ts        (embedded by shells)
 ├── testing/           fakeProviders.ts fixtures.ts  (exported as @comitiva/runner/testing)
+│                      fakeHarness.ts → dist/testing/bin/fake-claude, fake-codex (P2)
 └── util/              jsonl.ts errors.ts logger.ts
+packages/runner/test/fixtures/{claude-code,codex}/   recorded harness output (scrubbed), P2
 
 packages/mcp-servers/src/            index.ts (scaffold)
 ├── filesystem/        server.ts RootGuard.ts tools/*.ts approval.ts (P5)
@@ -179,7 +182,7 @@ packages/mcp-servers/src/            index.ts (scaffold)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
-├── e2e/connections.spec.ts
+├── e2e/connections.spec.ts cli-connections.spec.ts (P2)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
@@ -188,7 +191,7 @@ apps/desktop/
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test, meta/)
     │   │                            repositories/ConnectionRepository.ts (P1; others P3+)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
-    │   ├── services/                ConnectionService.ts (P1)
+    │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2)
     │   │                            ConversationService.ts AgentService.ts ToolServerService.ts
     │   │                            ApprovalService.ts UsageService.ts TitleService.ts (P3+)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
@@ -199,8 +202,9 @@ apps/desktop/
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
             ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts conversations.ts messages.ts (P3+)
-            ├── lib/                 connectionForm.ts time.ts
+            ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
+            │                        Forms/CliConnectionForm.tsx Forms/FormShell.tsx (P2)
             │                        Chat/ Composer/ ToolBlock/ ApprovalCard/ Settings/ (P3+)
             ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   ChatScreen ToolsScreen UsageScreen SettingsScreen (P3+)
             └── i18n/                index.ts en.json pt-BR.json
@@ -377,6 +381,7 @@ class RequestRouter {
   handle(req: RunnerRequest): Promise<unknown>;   // switch on req.type → matching method
   // connection.test → registry.get(provider).testConnection
   // connection.listModels → registry.get(provider).listModels
+  // cli.detect → (registry.get(provider) as CliHarnessAdapter).detect(binaryPath)   (P2)
   // toolServer.start/stop → mcp.start/stop
   // run.start → runs.start ; run.cancel → runs.cancel ; run.approval → runs.resolveApproval
 }
@@ -445,12 +450,12 @@ class ProviderRegistry {
   get(id: ProviderId): ProviderAdapter;                        // throws AppError('unknown_provider')
   list(): RegisteredProvider[];                                // { id, kind, capabilities }
 }
-function createDefaultRegistry(): ProviderRegistry;            // the four API adapters; RunnerServer's default
+function createDefaultRegistry(): ProviderRegistry;            // four API adapters + Claude Code + Codex; RunnerServer's default
 // Form metadata (label, key requirement, base URL, presets) is static data in
 // @comitiva/contract (`providerDescriptors`), so shells build forms without the runner;
 // adapters take `capabilities` from there. How to add one: docs/providers.md.
 
-// providers/api/shared.ts — the rules every API adapter follows
+// providers/api/shared.ts — the rules every API adapter follows (CLI adapters reuse streamTurn, UsageTracker and httpError)
 function streamTurn(opts: { signal; usage: UsageTracker; toAppError; body: () => AsyncGenerator<AdapterEvent, StopReason> }): AsyncIterable<AdapterEvent>;
 // one run.usage then run.done; abort → usage so far (estimated) + done(cancelled) at once, even if the SDK hangs
 class UsageTracker { static for(input): UsageTracker; addText(t); report({ input?, output?, cacheRead?, cacheWrite?, final? }); event() }
@@ -476,19 +481,33 @@ class AnthropicAdapter implements ProviderAdapter {
 // OllamaAdapter: fetch /api/chat (NDJSON), /api/tags, /api/version; optional bearer key.
 // Phase 1 adapters other than Anthropic are text-only: image and tool blocks → unsupported_content.
 
-// providers/cli/CliHarnessAdapter.ts
+// providers/cli/CliHarnessAdapter.ts — one child process per turn (ADR 0007, docs/providers.md → CLI harnesses)
 abstract class CliHarnessAdapter implements ProviderAdapter {
-  kind = 'cli' as const;
-  protected abstract buildArgs(input: RunInput, mcpConfigPath?: string): string[];
-  protected abstract parseLine(line: string): AdapterEvent[];    // one JSON line → zero or more events
-  protected abstract versionArgs(): string[];
-  protected locateBinary(config: CliConfig): Promise<string>;     // config.binaryPath || which()
-  protected spawn(bin, args, opts: { cwd; env; signal }): ChildProcess;
-  async *run(input, ctx, signal) { /* mcp config → spawn → readline stdout → parseLine → yield; stderr → error */ }
-  async testConnection(config) { /* locate → --version → minimal prompt */ }
+  kind = 'cli' as const;                                          // capabilities from cliProviderDescriptors
+  constructor(options?: { env?; searchDirs?; idleTimeoutMs?; probeTimeoutMs? });
+  protected abstract buildArgs(turn: TurnSpec): string[];         // TurnSpec { config, model ('' → harness default), system, resume, mcpConfigPath, probe }
+  protected abstract createParser(opts: { usage; log; idPrefix }): HarnessParser;
+  protected abstract authCheck(bin, env, cwd): Promise<void>;     // throws not_logged_in
+  protected preflight(bin, env, cwd, connection): Promise<void>;  // Codex: sandbox probe → sandbox_unavailable
+  detect(binaryPath?): Promise<CliDetectResult>;                  // locateBinary + --version (cli.detect)
+  testConnection(connection): Promise<TestResult>;                // detect → auth → preflight → minimal prompt (90 s)
+  run(input, ctx, signal);                                        // streamTurn around: mkdir cwd → mcpConfigForCli (P5) →
+  // spawnHarness(prompt on stdin) → parser.push per line → parser.finish; lost session → one replay retry
 }
-class ClaudeCodeAdapter extends CliHarnessAdapter { /* -p, --output-format stream-json, --resume, --mcp-config */ }
-class CodexAdapter extends CliHarnessAdapter { /* exec --json ... verified via --help */ }
+interface HarnessParser {                                         // pure, tested against recorded fixtures
+  push(line: unknown): AdapterEvent[];
+  finish(exit, stderr): StopReason;                               // or throws the mapped AppError
+  sessionNotFound(stderr): boolean;
+}
+function spawnHarness(bin, args, { cwd, env, stdin, signal, idleTimeoutMs }): HarnessProcess;
+// { lines, exited, stderrTail(), kill() }: own process group (POSIX), SIGTERM then SIGKILL, idle timeout → timeout
+function locateBinary({ name, label, explicit?, env?, extraDirs? }): Promise<string>;   // binary_not_found with where it looked
+function buildPrompt(messages, resume: boolean): string;          // resume → last user message; else transcript + new message
+function harnessEnv(base): NodeJS.ProcessEnv;                     // drops ELECTRON_RUN_AS_NODE, COMITIVA_*, provider keys
+class ClaudeCodeAdapter extends CliHarnessAdapter { /* -p --output-format stream-json --verbose --include-partial-messages
+  --permission-mode bypassPermissions --setting-sources "" --strict-mcp-config [--model] [--append-system-prompt] [--resume] */ }
+class CodexAdapter extends CliHarnessAdapter { /* exec [resume] --json --skip-git-repo-check --ignore-user-config
+  -c sandbox_mode=… [-m] [-c developer_instructions=…] … [<thread_id>] - */ }
 ```
 
 ```ts
@@ -524,6 +543,8 @@ class RunnerClient extends EventEmitter {
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void;
   testConnection(req): Promise<TestResult>;                     // provider failures come back as { ok: false }
   listModels(req): Promise<ModelInfo[]>;                        // rejects with the provider's AppError
+  detectCli(req): Promise<CliDetectResult>;                     // cli.detect; rejects with binary_not_found (P2)
+  // request(payload, { timeoutMs? }): CLI connection tests use 120 s (a real prompt with a cold start)
   activeRunIds(): string[];
   on(event: 'run.event', h: (e: RunEvent & { receivedAt: number }) => void): this;
   on(event: 'log', h: (e: LogEvent) => void): this;
@@ -674,7 +695,10 @@ class ConnectionService {
   delete(id): Promise<void>;                             // row + key
   test(target: ConnectionTarget): Promise<TestResult>;   // { id } recorded as lastTest; { probe } (+ id to reuse the stored key) is not
   listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
+  detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;   // CLI harnesses (P2); CLI connections never read or store a key
 }
+function resolveWorkingDirectory(connection, conversationId, workspacesDir): string | undefined;
+// services/workingDirectory.ts (P2): config.workingDirectory, else <userData>/workspaces/<conversationId>; used by ConversationService (P4)
 
 // main/services/ConversationService.ts
 class ConversationService extends EventEmitter {
@@ -710,13 +734,14 @@ app.getVersion
 runner.getStatus
 secrets.getStatus                                                    (P1)
 connections.list | create | update | delete | test | listModels     (P1)
+connections.detectBinary                                            (P2)
 toolServers.list | create | update | delete | test | connectGoogle (5b)
 agents.list | create | update | delete | duplicate
 conversations.listByAgent | create | rename | archive | setStatus
 messages.list | send | cancel | retry
 approvals.decide
 usage.summary | timeseries | export
-dialogs.pickFolder
+dialogs.pickFolder                                                  (P2)
 events: runner.status (P0); conversation.updated, message.delta, message.block, message.completed, approval.requested (P4+)
 ```
 
@@ -731,7 +756,8 @@ interface Backend {
   runner: { getStatus() };
   secrets: { getStatus() };                                    // { available, weak }
   capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };   // (P2+)
-  connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target) };
+  connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target); detectBinary(input) };
+  dialogs: { pickFolder() };                                   // (P2) null when cancelled
   toolServers: { list(); create(d); update(id, d); delete(id); test(id) };
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id) };
   conversations: { listByAgent(agentId); create(agentId); rename(id, t); archive(id) };
@@ -754,6 +780,8 @@ useUiStore:             rightPanelOpen, theme, quickSwitcherOpen, pendingApprova
 ```
 
 Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.
+
+Phase 2: `Forms/ConnectionForm` picks the API form or `Forms/CliConnectionForm` by provider. Both use `Forms/FormShell` (side panel, shared `ProviderSelect` with API and CLI groups, `TestOutcome`). The CLI form (pure logic in `lib/cliConnectionForm.ts`, built from `cliProviderDescriptors`) has binary path + Detect, working directory + Choose…, Codex sandbox, default model, extra args (one per line), an always-visible auto-accept notice, and the Codex native-tools warning. Test failures add a hint by code (login command, sandbox, binary).
 
 Later components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renders fields from `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
 
@@ -789,10 +817,10 @@ Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA
 
 ## 9. Conventions
 
-- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
-- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. Later phases add a fake in-memory MCP server and a fake shell binary for CLI. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four).
+- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Later phases add a fake in-memory MCP server. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four).
 - **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
 - **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 

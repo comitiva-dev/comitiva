@@ -15,6 +15,7 @@ flowchart LR
   DB[("SQLite<br/>comitiva.db")]
   S[("secrets.bin<br/>safeStorage blobs")]
   LLM["LLM providers<br/>Anthropic · OpenAI-compatible · Gemini · Ollama"]
+  H["CLI harnesses (one child per turn)<br/>claude -p · codex exec"]
 
   R -- "LocalBackend → invoke / on" --> P
   P -- "ipcRenderer (contract/ipc.ts)" --> M
@@ -24,11 +25,13 @@ flowchart LR
   M --- DB
   M --- S
   RN -- "HTTPS (streaming)" --> LLM
+  RN -- "spawn: prompt on stdin, JSON lines on stdout" --> H
 ```
 
 - **Renderer** — React 19, Zustand, Tailwind, i18next. It depends only on the `Backend` interface (`renderer/src/backend/Backend.ts`). `LocalBackend` implements it over `window.api`; `RemoteBackend` (Phase 8) will implement it over HTTP + WebSocket.
 - **Preload** — Exposes `window.api = { invoke, on }` through `contextBridge`, allowlisted against the channel names in `@comitiva/contract/ipc-channels`. The window runs with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, a strict CSP, no navigation and no popups.
 - **Main** — Validates every IPC input with the zod schemas in `contract/ipc.ts` and strips every output to its schema (`runInvoke`). Owns SQLite (Drizzle), the `SecretStore`, and the `RunnerSupervisor`. It is the only process that sees secret values; it sends them to the runner per request.
+- **CLI harnesses** — Claude Code and Codex, spawned by the runner for each turn in the conversation's working directory, in their own process group. They run non-interactively with auto-accept and use their own login (ADR 0007, `docs/providers.md` → CLI harnesses).
 - **Runner** — A standalone Node process (`packages/runner/dist/bin.cjs`, self-contained). The desktop spawns it as `process.execPath` with `ELECTRON_RUN_AS_NODE=1` (ADR 0002). It is stateless as far as persistence goes: it receives the history and returns events. It must not import Electron (enforced by ESLint).
 
 ## Runner protocol
@@ -42,8 +45,9 @@ Transport: JSON lines. Each message is one JSON object followed by `\n`. Request
 | `ping` | — | `{ version, protocolVersion }` | 0 |
 | `connection.test` | `connection`, `secret?` | `{ ok: true, latencyMs } \| { ok: false, error }` (provider failures are a result, not a protocol error; 15 s deadline) | 0 |
 | `connection.listModels` | `connection`, `secret?` | `ModelInfo[]` (`{ id, name?, contextWindow? }`); provider failures answer `ok: false` with the mapped code | 1 |
+| `cli.detect` | `provider`, `binaryPath?` | `{ path, version }`; `binary_not_found` when missing or not answering `--version` | 2 |
 | `toolServer.start` / `toolServer.stop` | `toolServer`, `secrets?` / `toolServerId` | `ToolDef[]` / `{}` | 5 |
-| `run.start` | `runId`, `conversationId`, `agent`, `connection`, `secret?`, `messages`, `harnessSessionId?`, `alwaysAllowed?` | `{ runId }` (returns right away; the run streams events) | 0 |
+| `run.start` | `runId`, `conversationId`, `agent`, `connection`, `secret?`, `messages`, `harnessSessionId?`, `workingDirectory?` (CLI), `alwaysAllowed?` | `{ runId }` (returns right away; the run streams events) | 0 |
 | `run.cancel` | `runId` | `{ cancelled: boolean }` (idempotent) | 0 |
 | `run.approval` | `runId`, `toolUseId`, `decision` | `{}` | 5 |
 | `shutdown` | — | `{}`, then the runner cancels runs and exits | 0 |
@@ -59,7 +63,9 @@ Each request has an `id` chosen by the shell. The runner answers exactly once wi
 | `run.usage` | `runId`, `inputTokens`, `outputTokens`, `cacheReadTokens?`, `cacheWriteTokens?`, `estimated` |
 | `run.done` | `runId`, `stopReason` (`end_turn`, `max_tokens`, `stop_sequence`, `tool_use`, `refusal`, `pause_turn`, `max_iterations`, `cancelled`, `other`) |
 | `run.error` | `runId`, `code`, `message`, `retryable` |
-| `run.session`, `run.block`, `run.tool_call`, `run.tool_result` | Phases 2 and 5 |
+| `run.session` | `runId`, `harnessSessionId`: the CLI harness's session, sent before any output; the shell stores it and passes it back to resume (Phase 2) |
+| `run.block` | `runId`, `block`: a complete block. CLI harnesses report the tools they ran as `tool_use` / `tool_result` blocks with `toolServerId: 'harness:<provider>'` (Phase 2) |
+| `run.tool_call`, `run.tool_result` | Phase 5 |
 | `log` | `level`, `message` |
 
 Every `run.*` event carries `ts`, the runner's emission time in epoch milliseconds with sub-ms precision (`performance.timeOrigin + performance.now()`). It is used to measure latency across processes.
@@ -70,7 +76,8 @@ Every `run.*` event carries `ts`, the runner's emission time in epoch millisecon
 - Every run ends with **exactly one terminal event**, `run.done` or `run.error`, and emits nothing after it.
 - **Cancel** aborts the provider request (the HTTP stream is closed), then emits the usage known so far and `run.done { stopReason: 'cancelled' }`. Cancel is not an error. If cancel lands before the provider reports output tokens, `outputTokens` is estimated from the streamed text and `estimated: true` is set.
 - Provider errors become stable codes, the same for every provider: 401/403 → `auth_failed`; 429 → `rate_limited` (retryable); 5xx → `provider_unavailable` (retryable); other 4xx → `provider_error`; no response → `provider_unavailable` or `timeout` (retryable). The raw provider message goes in `message` for logs and is never shown as a UI title. Adapter rules and how to add one: `docs/providers.md`.
-- Adapters never read credentials or endpoints from the environment; the key arrives per request and is not stored.
+- Adapters never read credentials or endpoints from the environment; the key arrives per request and is not stored. CLI harnesses get the runner's env minus Comitiva's variables and provider keys, so they use their own login.
+- CLI harness turns: one child process per turn. The harness keeps the history (resume by `harnessSessionId`); without a session, or when the harness lost it, the history is replayed into a new one. Cancel kills the process group. A turn with no output for 10 minutes ends with `timeout`. CLI connection tests run a real minimal prompt, so `RunnerClient` waits up to 120 s for them.
 - If the runner process dies, `RunnerClient` rejects pending requests and emits `run.error { code: 'runner_crashed', retryable: true }` for every active run. `RunnerSupervisor` restarts the process with exponential backoff (1 s, 2 s, 4 s … 30 s).
 
 ### Example session
@@ -126,3 +133,4 @@ When the OS offers no keyring (Linux `basic_text` backend), the store **refuses*
 | `comitiva.db` | SQLite (WAL), Drizzle migrations |
 | `secrets.bin` | Encrypted secrets |
 | `logs/runner.log` | Runner stderr and supervisor events (rotates at 5 MB) |
+| `workspaces/<conversationId>/` | Default working directory of a CLI harness conversation (unless the connection sets one) |

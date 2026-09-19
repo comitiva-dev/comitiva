@@ -2,9 +2,107 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 1 — API connections, secure secrets, Connections screen (done)
+## Current phase: 2 — CLI harnesses (Claude Code, Codex), session resume (done)
 
 ### Done
+
+- **Research**: both CLIs were checked with `--help` and real recordings on this machine (Claude Code 2.1.278, codex-cli 0.155.1). The flags, line formats, history policy and failure shapes are in `docs/providers.md` → CLI harnesses. Decisions are in ADR 0007.
+- **Contract**:
+  - `CliConfig` gains `workingDirectory`, and `CodexConfig` adds `sandbox` (`workspace-write` by default, `read-only`, `danger-full-access`).
+  - `cliProviderDescriptors` holds the label, binary name, login command, streaming granularity and whether native file tools can be turned off. `providerKind()` and `isCliProviderId()` are new helpers.
+  - Drafts and probes accept `claude-code` and `codex`, without a key.
+  - New runner request `cli.detect`, plus `run.start.workingDirectory`.
+  - New error code `sandbox_unavailable`.
+  - New IPC channels `connections.detectBinary` and `dialogs.pickFolder`.
+- **Runner** (`providers/cli/`):
+  - `CliHarnessAdapter` runs one child process per turn:
+    - `locateBinary` checks the explicit path, then PATH, then the usual install dirs.
+    - The prompt goes on stdin.
+    - stdout is read as JSON lines.
+    - The stderr tail is kept for error messages.
+    - A turn with no output for 10 min ends with `timeout`.
+    - Cancel kills the process group (POSIX) or tree (Windows).
+  - History: with `harnessSessionId` the harness resumes the session; without one, the runner replays the history as a transcript. A lost session is retried once as a replay.
+  - Env hygiene: `ELECTRON_RUN_AS_NODE`, `COMITIVA_*` and provider keys are dropped.
+  - `ClaudeCodeAdapter`: `-p`, stream-json with partial messages, `bypassPermissions`, isolated with `--setting-sources ""` and `--strict-mcp-config`.
+  - `CodexAdapter`: `exec [resume] --json`, isolated with `--ignore-user-config`; the sandbox and the role go through `-c`.
+  - Pure parsers (`parsers/claudeCode.ts`, `parsers/codex.ts`) produce the session id, text deltas (Codex: one per message), harness tool calls as `tool_use` / `tool_result` blocks (`toolServerId: 'harness:<provider>'`), usage, stop reason and stable error codes.
+  - `testConnection` runs these steps: locate → `--version` → auth status → (Codex) `codex sandbox -- true` → a minimal prompt. The errors are actionable: `binary_not_found` with the path, `not_logged_in` with the login command, `sandbox_unavailable`.
+  - MCP passthrough is stubbed (`ctx.mcpConfigForCli`, Phase 5).
+  - `RunnerClient.detectCli`. `request()` takes `timeoutMs`; CLI connection tests wait up to 120 s.
+  - The fake harness (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded formats, with the same kind of prompt controls as the fake API server.
+- **Desktop main**:
+  - `ConnectionService` handles CLI drafts and probes (`kind` from the provider, and no key is ever read or stored for them) and adds `detectBinary`.
+  - IPC handlers for `connections.detectBinary` and `dialogs.pickFolder`.
+  - `resolveWorkingDirectory()` gives the connection's directory, else `<userData>/workspaces/<conversationId>`. It is ready for `ConversationService` in Phase 4.
+- **Renderer**:
+  - The provider picker has an API services group and a CLI harnesses group.
+  - `CliConnectionForm` has these fields:
+    - binary path with **Detect** (fills in the path, shows the version)
+    - working directory with **Choose…** (blank means one folder per conversation)
+    - Codex sandbox, with help text for each option
+    - default model (free text)
+    - extra args, one per line
+  - An always-visible notice explains auto-accept. Codex also carries a warning that its own file edits bypass Comitiva's approvals, and a note that it streams one message at a time.
+  - A failed test shows the error by code plus a hint (the login command, the sandbox, the binary).
+  - `FormShell` is shared with the API form. The list shows CLI rows with monograms (CC, Cx). Strings are in en and pt-BR.
+
+### History per harness
+
+| Harness | Kept by | How |
+|---|---|---|
+| Claude Code | the harness | `--resume <session_id>` (from `system/init`); only the new message is sent |
+| Codex | the harness | `codex exec resume <thread_id> -` (from `thread.started`); only the new message is sent |
+| Either, without a session (first turn, moved conversation, lost session) | Comitiva | the earlier messages are replayed as a transcript prompt, and a new session starts |
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 285 tests: contract 31, runner 188, desktop 65, mcp-servers 1. |
+| Parsers vs. recorded fixtures | 16 tests over 12 real recordings: simple turn, resume with a tool, thinking, long stream, not logged in, lost session (Claude); simple turn, resume, shell and file-change tools, sandbox failure, 401 retries, bad model, lost thread (Codex). |
+| Process wrapper and lookup | Line order (split and unterminated lines), stderr tail, exit codes, idle timeout, abort kills a grandchild (process group), missing binary, PATH before install dirs. |
+| Adapters vs. fake harness | Both harnesses: first turn in a new cwd with a clean env, resume sends only the new message, replay without a session, retry after a lost session, tool blocks, cancel mid-stream (estimated usage + `done(cancelled)`), not logged in, early exit with stderr, the connection's working directory, detect, test ok and its errors. Exact argv for both. Codex sandbox probe. |
+| Runner binary (`bin.cjs`, spawned) | Both harnesses through `RunnerClient`: `cli.detect` (found and missing), `connection.test`, a streamed turn with `run.session`, a resumed turn, and a turn cancelled mid-stream. |
+| `pnpm --filter desktop test:e2e` | 13/13 green (10 Phase 1 + 3 new): Claude Code detected on PATH, tested and saved; Codex with a sandbox, the native-tools warning, a relative working directory refused, tested in the form and from the list, and edit keeps the settings; a missing binary and a missing login (hint shows `claude auth login`). |
+| **Real CLIs**, by hand through `node packages/runner/dist/bin.cjs` | **Claude Code 2.1.278**: detect → `/home/…/.local/bin/claude`. Test ok (2.3 s). A turn streamed with exact usage and `end_turn`. The resumed turn remembered the first ("Mango" / "Mango"). Cancel after 2 deltas → `done(cancelled)`, estimated usage, no process left. **Codex 0.155.1**: detect ok. Test ok (3.8 s, full access). A turn, then a resumed turn that remembered it. Cancel mid-turn → `done(cancelled)` 0.3 s later, no process left. **Errors**: an empty `CLAUDE_CONFIG_DIR` / `CODEX_HOME` → `not_logged_in` with the login command; Codex `workspace-write` on this Ubuntu 24.04 → `sandbox_unavailable` ("bwrap: loopback: Failed RTM_NEWADDR"); a wrong path → `binary_not_found` "Claude Code not found at /opt/nope/claude". |
+| UI with the real CLIs | **Not done.** The UI path was verified with the fake binaries (e2e); the real binaries were verified through the runner. |
+
+### Deviations from the plan and design (all reflected in docs/design.md)
+
+1. CLI descriptors live in a separate `cliProviderDescriptors` map, so the API `providerDescriptors` keeps its exact typed shape.
+2. `streamTurn`, `UsageTracker` and `httpError` stay in `providers/api/shared.ts`, and the CLI adapters import them from there. The plan had moved them to `providers/shared/`.
+3. The fake harness generates lines in the recorded formats instead of replaying the fixture files, so `dist/testing` has no dependency on `test/`. The parsers are tested against the real recordings.
+4. `fakeHarnessBinaries(runnerPackageDir)` takes the package directory, because Playwright loads `@comitiva/runner/testing` as CommonJS (no `import.meta`).
+5. The Claude Code login command is `claude auth login` (what 2.1.278 has), not `claude login`.
+6. Working directories are resolved in main, but no run uses them from the app yet: chat arrives in Phase 4. The runner path is covered by tests.
+7. CLI connections need no model: without one, the harness uses its default (`--model` / `-m` are omitted).
+8. A relative working directory or binary path is refused in the form; `~` is not expanded for working directories.
+
+### Decisions
+
+- **Codex streaming**: `exec --json`, one message at a time. The experimental `app-server` gets revisited when it is stable.
+- **Native tools until Phase 5**: kept, with auto-accept, and explained in the form.
+- **Codex sandbox**: per connection, `workspace-write` by default. testConnection detects a sandbox that cannot start.
+- **Isolation**: harnesses do not load the user's CLI settings or MCP servers; `extraArgs` can override that.
+
+### Open
+
+- **Windows**: spawning `.cmd` shims and `taskkill /T` are implemented but not run on Windows. The fake harness is a POSIX script, so the CLI e2e is skipped there. The Codex sandbox probe on macOS is not verified either.
+- **Codex native writes**: `apply_patch` cannot be turned off, so Codex writes will never go through Comitiva's approvals. Phase 5 decides whether Codex only ever gets `read-only` when the agent has a `filesystem` server.
+- A harness that ignores SIGTERM is killed 3 s later; a runner crash mid-turn can orphan a harness. Revisit with the Phase 4 chat.
+- Carried over: real API provider check (Phase 1), CI on GitHub (no remote), Google Drive server choice (5b), Linux sandbox/signing/icon (Phase 7).
+
+## Next: Phase 3 — Agents: CRUD, role, model, avatar
+
+1. Contract: agent IPC (`agents.list | create | update | delete | duplicate`), with model picking per connection (API: `listModels`; CLI: free text or the harness default).
+2. Main: `AgentRepository` (with roots and tool servers loaded together) and `AgentService`; `connection_in_use` already guards deletes.
+3. Renderer: an agent form (name, avatar, connection, model, role, params) and agents in the sidebar.
+4. Done when an agent shows up in the sidebar.
+
+## Phase 1 — API connections, secure secrets, Connections screen (done)
+
+#### Done
 
 - **Contract**:
   - `providerDescriptors` (`providers.ts`) is static data per API provider: capabilities, key requirement, base URL mode and default, and presets for OpenAI-compatible (OpenAI, OpenRouter, Groq, LM Studio, custom). The runner adapters take their `capabilities` from it, and the renderer builds the form from it.
@@ -49,7 +147,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
   - Banner when keys cannot be stored. Strings in en and pt-BR. Light and dark via `prefers-color-scheme`.
 - **Docs**: `docs/providers.md` (how to add an adapter). design.md, architecture.md, SPEC §7, CLAUDE.md and README are synced.
 
-### Verification
+#### Verification
 
 | Check | Result |
 |---|---|
@@ -60,7 +158,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 | By hand | `connection.listModels` and `connection.test` (refused port → `provider_unavailable`, retryable) through `node packages/runner/dist/bin.cjs`. Screenshots of the list and form checked (`apps/desktop/test-results/`). |
 | Real provider | **Not verified.** No API key was provided, and neither Ollama nor LM Studio is installed on the dev machine. Everything above runs against msw and the local fake server. Next step: run test, listModels and a short streamed run with a real key per provider, and record the result here. |
 
-### Deviations from the plan and design (all reflected in docs/design.md)
+#### Deviations from the plan and design (all reflected in docs/design.md)
 
 1. Provider form metadata lives in `@comitiva/contract` (`providerDescriptors`), not in `ProviderRegistry.list()`, so the UI does not need a runner round trip. `ProviderRegistry.list()` returns `{ id, kind, capabilities }`.
 2. Adapter unit tests use msw (conformance suite), as asked for this phase. The real fake server was kept and extended to all four providers (`startFakeProviders`; `startFakeAnthropic` is a deprecated alias), because msw cannot reach the spawned runner or the e2e app.
@@ -70,22 +168,15 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 6. Provider icons are monogram badges, not brand logos (no trademark assets in the repo).
 7. The Phase 0 spike was deleted. Parallel streaming and cancel stay covered at the runner level; the UI-level streaming e2e returns with chat in Phase 4. `COMITIVA_ANTHROPIC_BASE_URL`, `COMITIVA_DELTA_FLUSH_MS` and `logs/latency.jsonl` went with it.
 
-### Decisions
+#### Decisions
 
 - **Linux without a keyring**: refuse. `ElectronSecretStore` rejects the `basic_text` backend (`secret_store_unavailable`), and the Connections screen shows a banner explaining how to install or unlock GNOME Keyring or KWallet. Keyless connections (Ollama, LM Studio) keep working. `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` stays for tests and CI only. Recorded in SPEC §7.
 
-### Open
+#### Open
 
 - **Real-provider check** (above).
 - **CI on GitHub**: still no remote; the workflow runs the same commands, and `test:e2e` now runs the connections e2e.
 - Carried over from Phase 0: Google Drive server choice (5b); Linux sandbox for packaged builds, signing and icon (Phase 7).
-
-## Next: Phase 2 — CLI harnesses (Claude Code, Codex), session resume
-
-1. Contract: CLI connection form metadata in `providerDescriptors` (binary path, extra args); `run.session`.
-2. Runner: `CliHarnessAdapter` with `ClaudeCodeAdapter` and `CodexAdapter` (verify flags via `--help`); a fake shell binary for tests; `testConnection` = locate + `--version` + a minimal prompt.
-3. Main and renderer: CLI connections in the same Connections screen, with a warning when native file tools cannot be disabled.
-4. Done when a turn streams and cancels in both.
 
 ## Phase 0 — monorepo, docs, CI, spike (done)
 

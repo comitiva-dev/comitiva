@@ -1,4 +1,5 @@
-import type { Agent, Connection, Message } from '@comitiva/contract';
+import { fileURLToPath } from 'node:url';
+import type { Agent, CliConfig, CodexConfig, Connection, Message } from '@comitiva/contract';
 
 const now = '2026-01-01T00:00:00.000Z';
 
@@ -106,5 +107,52 @@ export function userText(conversationId: string, text: string, seq = 0): Message
     status: 'complete',
     seq,
     createdAt: now,
+  };
+}
+
+/** Paths of the fake harness binaries built next to this module (`dist/testing/bin`). */
+export function fakeHarnessBinaries(): { claude: string; codex: string } {
+  return {
+    claude: fileURLToPath(new URL('./bin/fake-claude', import.meta.url)),
+    codex: fileURLToPath(new URL('./bin/fake-codex', import.meta.url)),
+  };
+}
+
+export function claudeCodeConnection(
+  binaryPath?: string,
+  config: Partial<CliConfig> = {},
+): Extract<Connection, { provider: 'claude-code' }> {
+  return {
+    id: 'conn-claude-code',
+    name: 'Claude Code',
+    kind: 'cli',
+    provider: 'claude-code',
+    config: { extraArgs: [], ...(binaryPath ? { binaryPath } : {}), ...config },
+    secretRef: null,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
+export function codexConnection(
+  binaryPath?: string,
+  config: Partial<CodexConfig> = {},
+): Extract<Connection, { provider: 'codex' }> {
+  return {
+    id: 'conn-codex',
+    name: 'Codex',
+    kind: 'cli',
+    provider: 'codex',
+    config: {
+      extraArgs: [],
+      sandbox: 'workspace-write',
+      ...(binaryPath ? { binaryPath } : {}),
+      ...config,
+    },
+    secretRef: null,
+    enabled: true,
+    createdAt: now,
+    updatedAt: now,
   };
 }

@@ -66,8 +66,9 @@ export class Run {
 
   private buildInput(): RunInput {
     const { agent, connection } = this.req;
-    const model = agent.model ?? connection.config.defaultModel;
-    if (!model)
+    // CLI harnesses fall back to their own default model ('' → no --model flag).
+    const model = agent.model ?? connection.config.defaultModel ?? '';
+    if (!model && connection.kind === 'api')
       throw new AppError('invalid_request', 'No model set on the agent or the connection');
     return {
       connection,
@@ -77,6 +78,7 @@ export class Run {
       params: agent.params,
       messages: this.req.messages,
       harnessSessionId: this.req.harnessSessionId,
+      workingDirectory: this.req.workingDirectory,
     };
   }
 

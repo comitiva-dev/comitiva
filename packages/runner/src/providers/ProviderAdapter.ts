@@ -26,6 +26,8 @@ export interface RunInput {
   params: AgentParams;
   messages: Message[];
   harnessSessionId: string | undefined;
+  /** CLI harnesses: where the harness runs (resolved by the shell). */
+  workingDirectory?: string | undefined;
 }
 
 export interface ToolResult {

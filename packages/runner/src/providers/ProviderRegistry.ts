@@ -3,11 +3,14 @@ import { AnthropicAdapter } from './api/AnthropicAdapter.js';
 import { GoogleAdapter } from './api/GoogleAdapter.js';
 import { OllamaAdapter } from './api/OllamaAdapter.js';
 import { OpenAICompatibleAdapter } from './api/OpenAICompatibleAdapter.js';
+import { ClaudeCodeAdapter } from './cli/ClaudeCodeAdapter.js';
+import { CodexAdapter } from './cli/CodexAdapter.js';
 import type { Capabilities, ProviderAdapter } from './ProviderAdapter.js';
 
 /**
  * What the runner can execute. Form metadata (labels, key requirement, base
- * URL) is static data in `@comitiva/contract` (`providerDescriptors`).
+ * URL) is static data in `@comitiva/contract` (`providerDescriptors`,
+ * `cliProviderDescriptors`).
  */
 export interface RegisteredProvider {
   id: ProviderId;
@@ -45,5 +48,7 @@ export function createDefaultRegistry(): ProviderRegistry {
   registry.register(new OpenAICompatibleAdapter());
   registry.register(new GoogleAdapter());
   registry.register(new OllamaAdapter());
+  registry.register(new ClaudeCodeAdapter());
+  registry.register(new CodexAdapter());
   return registry;
 }

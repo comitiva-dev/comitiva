@@ -7,7 +7,10 @@ export type {
 } from './fakeProviders.js';
 export {
   anthropicConnection,
+  claudeCodeConnection,
+  codexConnection,
   fakeConnections,
+  fakeHarnessBinaries,
   googleConnection,
   ollamaConnection,
   openaiConnection,

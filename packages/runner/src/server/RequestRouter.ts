@@ -1,8 +1,9 @@
 import type { PingResult, RunnerRequest, RunStartResult } from '@comitiva/contract';
 import { PROTOCOL_VERSION } from '@comitiva/contract';
+import { CliHarnessAdapter } from '../providers/cli/CliHarnessAdapter.js';
 import type { ProviderRegistry } from '../providers/ProviderRegistry.js';
 import type { RunManager } from '../runs/RunManager.js';
-import { notImplemented } from '../util/errors.js';
+import { invalidRequest, notImplemented } from '../util/errors.js';
 import { RUNNER_VERSION } from '../version.js';
 
 /** Dispatches validated requests to the component that owns them. */
@@ -23,6 +24,12 @@ export class RequestRouter {
         const adapter = this.deps.registry.get(req.connection.provider);
         if (!adapter.listModels) throw notImplemented(`listModels for ${adapter.id}`);
         return adapter.listModels(req.connection, req.secret);
+      }
+      case 'cli.detect': {
+        const adapter = this.deps.registry.get(req.provider);
+        if (!(adapter instanceof CliHarnessAdapter))
+          throw invalidRequest(`${req.provider} is not a CLI harness`);
+        return adapter.detect(req.binaryPath);
       }
       case 'run.start':
         this.deps.runs.start(req);

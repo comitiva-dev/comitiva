@@ -1,3 +1,4 @@
+import { chmodSync, copyFileSync, mkdirSync } from 'node:fs';
 import { defineConfig } from 'tsup';
 
 export default defineConfig([
@@ -20,5 +21,23 @@ export default defineConfig([
     noExternal: [/.*/],
     sourcemap: true,
     banner: { js: '#!/usr/bin/env node' },
+  },
+  // Fake CLI harness for tests: one script, installed under the names the
+  // adapters look for (it picks its behavior from its file name).
+  {
+    // ESM: the extensionless copies load as modules ("type": "module").
+    entry: { 'testing/fake-harness': 'src/testing/fakeHarness.ts' },
+    format: ['esm'],
+    target: 'node22',
+    platform: 'node',
+    banner: { js: '#!/usr/bin/env node' },
+    onSuccess: async () => {
+      mkdirSync('dist/testing/bin', { recursive: true });
+      for (const name of ['fake-claude', 'fake-codex']) {
+        const target = `dist/testing/bin/${name}`;
+        copyFileSync('dist/testing/fake-harness.js', target);
+        chmodSync(target, 0o755);
+      }
+    },
   },
 ]);

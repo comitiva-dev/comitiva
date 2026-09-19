@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import {
   AppError,
+  CliDetectResult,
   ModelInfo,
   RunnerEvent,
   TestResult,
@@ -86,7 +87,8 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     return this.request<PingResult>({ type: 'ping' });
   }
 
-  request<T>(payload: RunnerRequestPayload): Promise<T> {
+  /** `timeoutMs` overrides the client default for slow requests (CLI connection tests). */
+  request<T>(payload: RunnerRequestPayload, opts: { timeoutMs?: number } = {}): Promise<T> {
     const child = this.child;
     if (!child?.stdin?.writable) {
       return Promise.reject(
@@ -100,7 +102,7 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
         reject(
           new AppError('timeout', `Runner did not answer ${payload.type}`, { retryable: true }),
         );
-      }, this.requestTimeoutMs);
+      }, opts.timeoutMs ?? this.requestTimeoutMs);
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
       child.stdin!.write(encodeLine({ ...payload, id }));
     });
@@ -142,7 +144,13 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
   async testConnection(
     payload: Extract<RunnerRequestPayload, { type: 'connection.test' }>,
   ): Promise<TestResult> {
-    return parseResult(TestResult, await this.request(payload), payload.type);
+    // CLI harness tests run a real prompt with a cold start (90 s deadline in the runner).
+    const timeoutMs = payload.connection.kind === 'cli' ? 120_000 : undefined;
+    return parseResult(
+      TestResult,
+      await this.request(payload, timeoutMs ? { timeoutMs } : {}),
+      payload.type,
+    );
   }
 
   /** Rejects with the provider error (auth_failed, provider_unavailable, …). */
@@ -150,6 +158,13 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
     payload: Extract<RunnerRequestPayload, { type: 'connection.listModels' }>,
   ): Promise<ModelInfo[]> {
     return parseResult(ModelInfo.array(), await this.request(payload), payload.type);
+  }
+
+  /** Finds a CLI harness binary and reads its version; rejects with `binary_not_found`. */
+  async detectCli(
+    payload: Extract<RunnerRequestPayload, { type: 'cli.detect' }>,
+  ): Promise<CliDetectResult> {
+    return parseResult(CliDetectResult, await this.request(payload), payload.type);
   }
 
   activeRunIds(): string[] {

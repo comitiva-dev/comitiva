@@ -1,6 +1,7 @@
 import type { PingResult, RunnerRequest, RunStartResult } from '@comitiva/contract';
 import { PROTOCOL_VERSION } from '@comitiva/contract';
 import { CliHarnessAdapter } from '../providers/cli/CliHarnessAdapter.js';
+import type { McpClientManager } from '../mcp/McpClientManager.js';
 import type { ProviderRegistry } from '../providers/ProviderRegistry.js';
 import type { RunManager } from '../runs/RunManager.js';
 import { invalidRequest, notImplemented } from '../util/errors.js';
@@ -9,7 +10,12 @@ import { RUNNER_VERSION } from '../version.js';
 /** Dispatches validated requests to the component that owns them. */
 export class RequestRouter {
   constructor(
-    private readonly deps: { registry: ProviderRegistry; runs: RunManager; shutdown: () => void },
+    private readonly deps: {
+      registry: ProviderRegistry;
+      runs: RunManager;
+      mcp: McpClientManager;
+      shutdown: () => void;
+    },
   ) {}
 
   async handle(req: RunnerRequest): Promise<unknown> {
@@ -40,9 +46,14 @@ export class RequestRouter {
         this.deps.shutdown();
         return {};
       case 'toolServer.start':
+        return this.deps.mcp.start(req.toolServer, req.roots ?? []);
       case 'toolServer.stop':
+        await this.deps.mcp.stop(req.toolServerId);
+        return {};
       case 'run.approval':
-        throw notImplemented(req.type);
+        // An answer for a run that already ended (cancelled, crashed) is a no-op.
+        this.deps.runs.resolveApproval(req.runId, req.toolUseId, req.decision);
+        return {};
     }
   }
 }

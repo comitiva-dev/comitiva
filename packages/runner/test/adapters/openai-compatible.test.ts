@@ -65,6 +65,53 @@ const wire: Wire = {
   ],
   testRoute: '/models',
   testBody: { object: 'list', data: [] },
+  toolCallFrames: (call, usage) => [
+    chunk([{ index: 0, delta: { role: 'assistant', content: null }, finish_reason: null }]),
+    chunk([
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index: 0,
+              id: call.id,
+              type: 'function',
+              function: { name: call.name, arguments: '' },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ]),
+    ...JSON.stringify(call.input)
+      .match(/.{1,5}/g)!
+      .map((args) =>
+        chunk([
+          {
+            index: 0,
+            delta: { tool_calls: [{ index: 0, function: { arguments: args } }] },
+            finish_reason: null,
+          },
+        ]),
+      ),
+    chunk([{ index: 0, delta: {}, finish_reason: 'tool_calls' }]),
+    chunk([], {
+      usage: {
+        prompt_tokens: usage.input,
+        completion_tokens: usage.output,
+        total_tokens: usage.input + usage.output,
+      },
+    }),
+    'data: [DONE]\n\n',
+  ],
+  toolNamesIn: (body) =>
+    ((body as { tools?: Array<{ function: { name: string } }> }).tools ?? []).map(
+      (t) => t.function.name,
+    ),
+  toolResultIn: (body, call) =>
+    (
+      body as { messages: Array<{ role: string; tool_call_id?: string; content: string }> }
+    ).messages.find((m) => m.role === 'tool' && m.tool_call_id === call.id)?.content,
 };
 
 describeAdapterConformance(wire);

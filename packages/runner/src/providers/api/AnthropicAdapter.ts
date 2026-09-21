@@ -8,13 +8,16 @@ import {
   type ModelInfo,
   type StopReason,
   type TestResult,
+  type ToolDef,
   type ToolResultContentBlock,
 } from '@comitiva/contract';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import { toolLoop } from '../../runs/ToolLoop.js';
 import {
   UsageTracker,
   httpError,
   networkError,
+  parseJson,
   probe,
   streamTurn,
   withDeadline,
@@ -25,8 +28,8 @@ const DEFAULT_MAX_TOKENS = 16_000;
 type AnthropicConnection = Extract<Connection, { provider: 'anthropic' }>;
 
 /**
- * Anthropic Messages API adapter. Streams text; the tool loop
- * (runs/ToolLoop.ts) arrives in Phase 5.
+ * Anthropic Messages API adapter: streamed text and tool calls, driven by the
+ * shared tool loop (runs/ToolLoop.ts).
  */
 export class AnthropicAdapter implements ProviderAdapter {
   readonly id = 'anthropic' as const;
@@ -57,56 +60,101 @@ export class AnthropicAdapter implements ProviderAdapter {
     }, toAppError);
   }
 
-  run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+  run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
     const usage = UsageTracker.for(input);
     return streamTurn({
       signal,
       usage,
       toAppError,
-      body: async function* (this: AnthropicAdapter): AsyncGenerator<AdapterEvent, StopReason> {
-        const params: Anthropic.MessageCreateParamsStreaming = {
-          model: input.model,
-          max_tokens: input.params.maxTokens ?? DEFAULT_MAX_TOKENS,
-          messages: toProviderMessages(input.messages),
-          stream: true,
-        };
-        if (input.system !== '') params.system = input.system;
-        if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
-        if (input.params.topP !== undefined) params.top_p = input.params.topP;
-
-        let stopReason: StopReason = 'other';
-        const stream = this.client(input.connection, input.secret).messages.stream(params, {
-          signal,
-        });
-        for await (const event of stream) {
-          switch (event.type) {
-            case 'message_start': {
-              const u = event.message.usage;
-              usage.report({
-                input: u.input_tokens,
-                output: u.output_tokens,
-                cacheRead: u.cache_read_input_tokens ?? 0,
-                cacheWrite: u.cache_creation_input_tokens ?? 0,
-              });
-              break;
-            }
-            case 'content_block_delta':
-              if (event.delta.type === 'text_delta') {
-                yield { type: 'run.text_delta', text: event.delta.text };
-              }
-              break;
-            case 'message_delta':
-              // Output tokens are only final in message_delta.
-              usage.report({ output: event.usage.output_tokens, final: true });
-              if (event.delta.stop_reason) stopReason = mapStopReason(event.delta.stop_reason);
-              break;
-            default:
-              break;
-          }
-        }
-        return stopReason;
-      }.bind(this),
+      body: () =>
+        toolLoop({
+          ctx,
+          usage,
+          messages: input.messages,
+          maxIterations: input.params.maxToolIterations,
+          call: (messages, tools) => this.stream(input, messages, tools, usage, signal),
+        }),
     });
+  }
+
+  /** One Messages API call: text deltas, complete tool_use blocks, the stop reason. */
+  private async *stream(
+    input: RunInput,
+    messages: Message[],
+    tools: ToolDef[],
+    usage: UsageTracker,
+    signal: AbortSignal,
+  ): AsyncGenerator<AdapterEvent, StopReason> {
+    const params: Anthropic.MessageCreateParamsStreaming = {
+      model: input.model,
+      max_tokens: input.params.maxTokens ?? DEFAULT_MAX_TOKENS,
+      messages: toProviderMessages(messages),
+      stream: true,
+    };
+    if (input.system !== '') params.system = input.system;
+    if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
+    if (input.params.topP !== undefined) params.top_p = input.params.topP;
+    if (tools.length > 0) params.tools = tools.map(toProviderTool);
+
+    let stopReason: StopReason = 'other';
+    // tool_use blocks arrive as a start, JSON fragments, and a stop.
+    const pending = new Map<number, { id: string; name: string; json: string }>();
+    const stream = this.client(input.connection, input.secret).messages.stream(params, {
+      signal,
+    });
+    for await (const event of stream) {
+      switch (event.type) {
+        case 'message_start': {
+          const u = event.message.usage;
+          usage.report({
+            input: u.input_tokens,
+            output: u.output_tokens,
+            cacheRead: u.cache_read_input_tokens ?? 0,
+            cacheWrite: u.cache_creation_input_tokens ?? 0,
+          });
+          break;
+        }
+        case 'content_block_start':
+          if (event.content_block.type === 'tool_use') {
+            const { id, name } = event.content_block;
+            pending.set(event.index, { id, name, json: '' });
+          }
+          break;
+        case 'content_block_delta':
+          if (event.delta.type === 'text_delta') {
+            yield { type: 'run.text_delta', text: event.delta.text };
+          } else if (event.delta.type === 'input_json_delta') {
+            const p = pending.get(event.index);
+            if (p) p.json += event.delta.partial_json;
+          }
+          break;
+        case 'content_block_stop': {
+          const p = pending.get(event.index);
+          if (p) {
+            pending.delete(event.index);
+            yield {
+              type: 'run.block',
+              block: {
+                type: 'tool_use',
+                id: p.id,
+                toolServerId: '',
+                name: p.name,
+                input: parseJson(p.json),
+              },
+            };
+          }
+          break;
+        }
+        case 'message_delta':
+          // Output tokens are only final in message_delta.
+          usage.report({ output: event.usage.output_tokens, final: true });
+          if (event.delta.stop_reason) stopReason = mapStopReason(event.delta.stop_reason);
+          break;
+        default:
+          break;
+      }
+    }
+    return stopReason;
   }
 
   /** `maxRetries` 0 for probes (fast feedback); the SDK default (2) for runs. */
@@ -162,6 +210,14 @@ export function toAppError(err: unknown): AppError {
 }
 
 // ------------------------------------------------------------ translation
+
+function toProviderTool(tool: ToolDef): Anthropic.Tool {
+  return {
+    name: tool.name,
+    ...(tool.description ? { description: tool.description } : {}),
+    input_schema: { type: 'object', ...tool.inputSchema } as Anthropic.Tool.InputSchema,
+  };
+}
 
 export function toProviderMessages(messages: Message[]): Anthropic.MessageParam[] {
   return messages.map((m) => ({

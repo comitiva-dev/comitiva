@@ -16,6 +16,9 @@ import type { AddressInfo } from 'node:net';
  * - `[error:N]` → that HTTP error, in the provider's error format
  * - `[chunks:N]` → stream N text deltas `chunk i ` (default `chunks`)
  * - `[interval:MS]` → delay between deltas (default `intervalMs`)
+ * - `[tool:NAME {json}]` (repeatable) → the model calls these tools, one per
+ *   response, in order; once every call has a result it answers
+ *   `Result: <last tool result>` followed by the usual chunks
  * The key `bad-key` is rejected as the real provider would (401; Gemini: 400
  * API_KEY_INVALID). Errors carry `x-should-retry: false` so SDKs do not retry.
  */
@@ -114,12 +117,21 @@ async function handle(
   return anthropic(ctx, req.method ?? 'GET');
 }
 
+interface ToolCallScript {
+  name: string;
+  input: unknown;
+}
+
 interface Ctx {
   provider: FakeProviderId;
   path: string;
   apiKey: string | undefined;
   body: Record<string, unknown>;
   prompt: string;
+  /** The scripted tool call to make now, if any (with its sequence number). */
+  toolCall: (ToolCallScript & { n: number }) | null;
+  /** The text of the last tool result the client sent back, if any. */
+  lastResult: string | null;
   chunks: number;
   intervalMs: number;
   error: number | null;
@@ -145,12 +157,17 @@ function context(
         : bearer;
   const prompt = lastUserText(provider, body);
   const error = /\[error:(\d{3})\]/.exec(prompt);
+  const script = parseToolScript(prompt);
+  const results = toolResultsSinceUser(provider, body);
+  const next = script[results.length];
   return {
     provider,
     path,
     apiKey,
     body,
     prompt,
+    toolCall: next ? { ...next, n: results.length } : null,
+    lastResult: results.at(-1) ?? null,
     chunks: Number(/\[chunks:(\d+)\]/.exec(prompt)?.[1] ?? opts.chunks ?? 20),
     intervalMs: Number(/\[interval:(\d+)\]/.exec(prompt)?.[1] ?? opts.intervalMs ?? 10),
     error: apiKey === 'bad-key' ? 401 : error ? Number(error[1]) : null,
@@ -214,6 +231,27 @@ async function anthropic(ctx: Ctx, method: string): Promise<void> {
       },
     },
   });
+  if (ctx.toolCall) {
+    const call = ctx.toolCall;
+    send('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: `toolu_fake_${call.n}`, name: call.name, input: {} },
+    });
+    send('content_block_delta', {
+      type: 'content_block_delta',
+      index: 0,
+      delta: { type: 'input_json_delta', partial_json: JSON.stringify(call.input) },
+    });
+    send('content_block_stop', { type: 'content_block_stop', index: 0 });
+    send('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: 'tool_use', stop_sequence: null },
+      usage: { output_tokens: 5 },
+    });
+    send('message_stop', { type: 'message_stop' });
+    return stream.end();
+  }
   send('content_block_start', {
     type: 'content_block_start',
     index: 0,
@@ -273,11 +311,33 @@ async function openai(ctx: Ctx, method: string): Promise<void> {
       `data: ${JSON.stringify({ id, object: 'chat.completion.chunk', created: 0, model, choices, ...extra })}\n\n`,
     );
   chunk([{ index: 0, delta: { role: 'assistant', content: '' }, finish_reason: null }]);
-  const done = await streamChunks(ctx, stream, (text) =>
-    chunk([{ index: 0, delta: { content: text }, finish_reason: null }]),
-  );
-  if (!done) return;
-  chunk([{ index: 0, delta: {}, finish_reason: 'stop' }]);
+  let finish = 'stop';
+  if (ctx.toolCall) {
+    const call = ctx.toolCall;
+    finish = 'tool_calls';
+    chunk([
+      {
+        index: 0,
+        delta: {
+          tool_calls: [
+            {
+              index: 0,
+              id: `call_fake_${call.n}`,
+              type: 'function',
+              function: { name: call.name, arguments: JSON.stringify(call.input) },
+            },
+          ],
+        },
+        finish_reason: null,
+      },
+    ]);
+  } else {
+    const done = await streamChunks(ctx, stream, (text) =>
+      chunk([{ index: 0, delta: { content: text }, finish_reason: null }]),
+    );
+    if (!done) return;
+  }
+  chunk([{ index: 0, delta: {}, finish_reason: finish }]);
   const includeUsage =
     (ctx.body.stream_options as { include_usage?: boolean } | undefined)?.include_usage === true;
   if (includeUsage) {
@@ -352,6 +412,21 @@ async function google(ctx: Ctx, method: string): Promise<void> {
   const prompt = inputTokens(ctx);
   let sent = 0;
   const chunk = (data: unknown) => stream.write(`data: ${JSON.stringify(data)}\r\n\r\n`);
+  if (ctx.toolCall) {
+    chunk({
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [{ functionCall: { name: ctx.toolCall.name, args: ctx.toolCall.input } }],
+          },
+          finishReason: 'STOP',
+        },
+      ],
+      usageMetadata: { promptTokenCount: prompt, candidatesTokenCount: 5 },
+    });
+    return stream.end();
+  }
   const done = await streamChunks(ctx, stream, (text) => {
     sent++;
     chunk({
@@ -394,6 +469,26 @@ async function ollama(ctx: Ctx, method: string): Promise<void> {
   const model = typeof ctx.body.model === 'string' ? ctx.body.model : 'llama-fake:latest';
   const stream = openStream(ctx, 'application/x-ndjson');
   const line = (data: unknown) => stream.write(`${JSON.stringify(data)}\n`);
+  if (ctx.toolCall) {
+    line({
+      model,
+      message: {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ function: { name: ctx.toolCall.name, arguments: ctx.toolCall.input } }],
+      },
+      done: false,
+    });
+    line({
+      model,
+      message: { role: 'assistant', content: '' },
+      done: true,
+      done_reason: 'stop',
+      prompt_eval_count: inputTokens(ctx),
+      eval_count: 5,
+    });
+    return stream.end();
+  }
   const done = await streamChunks(ctx, stream, (text) =>
     line({ model, message: { role: 'assistant', content: text }, done: false }),
   );
@@ -445,6 +540,7 @@ async function streamChunks(
   stream: Stream,
   send: (text: string) => void,
 ): Promise<boolean> {
+  if (ctx.lastResult !== null) send(`Result: ${ctx.lastResult.slice(0, 500)}\n`);
   for (let i = 0; i < ctx.chunks; i++) {
     if (stream.closed) return false;
     send(`chunk ${i} `);
@@ -473,19 +569,98 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
-/** The last user text, whatever the provider's message format. */
-function lastUserText(provider: FakeProviderId, body: Record<string, unknown>): string {
-  const list = (provider === 'google' ? body.contents : body.messages) as
-    Array<{ role: string; content?: unknown; parts?: Array<{ text?: string }> }> | undefined;
-  const last = [...(list ?? [])].reverse().find((m) => m.role === 'user');
-  if (!last) return '';
-  if (last.parts) return last.parts.map((p) => p.text ?? '').join('\n');
-  if (typeof last.content === 'string') return last.content;
-  if (!Array.isArray(last.content)) return '';
-  return (last.content as Array<{ type: string; text?: string }>)
+type WireMessage = {
+  role: string;
+  content?: unknown;
+  parts?: Array<Record<string, unknown>>;
+};
+
+function wireMessages(provider: FakeProviderId, body: Record<string, unknown>): WireMessage[] {
+  return (
+    ((provider === 'google' ? body.contents : body.messages) as WireMessage[] | undefined) ?? []
+  );
+}
+
+/** Text a message carries (tool results are not text). */
+function textOf(m: WireMessage): string {
+  if (m.parts) return m.parts.map((p) => (typeof p.text === 'string' ? p.text : '')).join('\n');
+  if (typeof m.content === 'string') return m.content;
+  if (!Array.isArray(m.content)) return '';
+  return (m.content as Array<{ type: string; text?: string }>)
     .filter((b) => b.type === 'text')
     .map((b) => b.text ?? '')
     .join('\n');
+}
+
+/** The last user text, whatever the provider's message format (tool results are skipped). */
+function lastUserText(provider: FakeProviderId, body: Record<string, unknown>): string {
+  const last = [...wireMessages(provider, body)]
+    .reverse()
+    .find((m) => m.role === 'user' && textOf(m).trim() !== '');
+  return last ? textOf(last) : '';
+}
+
+/** Texts of the tool results sent after the last user text, in order. */
+function toolResultsSinceUser(provider: FakeProviderId, body: Record<string, unknown>): string[] {
+  const list = wireMessages(provider, body);
+  let start = 0;
+  list.forEach((m, i) => {
+    if (m.role === 'user' && textOf(m).trim() !== '') start = i + 1;
+  });
+  const out: string[] = [];
+  for (const m of list.slice(start)) {
+    if (m.role === 'tool' && typeof m.content === 'string') out.push(m.content);
+    for (const p of m.parts ?? []) {
+      const r = p.functionResponse as
+        { response?: { output?: string; error?: string } } | undefined;
+      if (r) out.push(r.response?.output ?? r.response?.error ?? '');
+    }
+    if (Array.isArray(m.content)) {
+      for (const b of m.content as Array<{ type: string; content?: unknown }>) {
+        if (b.type !== 'tool_result') continue;
+        out.push(
+          typeof b.content === 'string'
+            ? b.content
+            : ((b.content as Array<{ text?: string }> | undefined) ?? [])
+                .map((c) => c.text ?? '')
+                .join(''),
+        );
+      }
+    }
+  }
+  return out;
+}
+
+/** `[tool:NAME {json}]` controls, in order (the JSON may contain brackets). */
+export function parseToolScript(prompt: string): ToolCallScript[] {
+  const out: ToolCallScript[] = [];
+  const re = /\[tool:([A-Za-z0-9_-]+)\s*/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(prompt))) {
+    let i = re.lastIndex;
+    let input: unknown = {};
+    if (prompt[i] === '{') {
+      let depth = 0;
+      let inString = false;
+      const begin = i;
+      for (; i < prompt.length; i++) {
+        const c = prompt[i];
+        if (inString) {
+          if (c === '\\') i++;
+          else if (c === '"') inString = false;
+        } else if (c === '"') inString = true;
+        else if (c === '{') depth++;
+        else if (c === '}' && --depth === 0) {
+          i++;
+          break;
+        }
+      }
+      input = JSON.parse(prompt.slice(begin, i)) as unknown;
+    }
+    out.push({ name: m[1]!, input });
+    re.lastIndex = i;
+  }
+  return out;
 }
 
 function sleep(ms: number): Promise<void> {

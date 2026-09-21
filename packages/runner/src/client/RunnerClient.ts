@@ -7,6 +7,7 @@ import {
   ModelInfo,
   RunnerEvent,
   TestResult,
+  ToolServerStartResult,
   isRunEvent,
   type ApprovalDecision,
   type DistributiveOmit,
@@ -15,6 +16,7 @@ import {
   type RunEvent,
   type RunnerRequest,
   type RunStartRequest,
+  type ToolDef,
 } from '@comitiva/contract';
 import { LineSplitter, encodeLine } from '../util/jsonl.js';
 
@@ -138,6 +140,25 @@ export class RunnerClient extends EventEmitter<RunnerClientEvents> {
 
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void {
     this.request({ type: 'run.approval', runId, toolUseId, decision }).catch(() => {});
+  }
+
+  /**
+   * Starts (or reuses) an MCP server in the runner and returns its tools.
+   * Rejects with `tool_server_failed`. Servers can be slow to start (npx).
+   */
+  async startToolServer(
+    payload: Omit<Extract<RunnerRequestPayload, { type: 'toolServer.start' }>, 'type'>,
+  ): Promise<ToolDef[]> {
+    const result = await this.request(
+      { ...payload, type: 'toolServer.start' },
+      { timeoutMs: 45_000 },
+    );
+    return parseResult(ToolServerStartResult, result, 'toolServer.start');
+  }
+
+  /** Closes a server's MCP clients (disabled or deleted). */
+  async stopToolServer(toolServerId: string): Promise<void> {
+    await this.request({ type: 'toolServer.stop', toolServerId });
   }
 
   /** Never rejects for provider failures: they come back as `{ ok: false, error }`. */

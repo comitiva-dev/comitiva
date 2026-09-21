@@ -1,9 +1,11 @@
 import {
   AppError,
+  type Block,
   type ErrorCode,
   type Message,
   type StopReason,
   type TestResult,
+  type ToolResultBlock,
 } from '@comitiva/contract';
 import type { AdapterEvent, RunInput } from '../ProviderAdapter.js';
 
@@ -97,7 +99,9 @@ export const estimateTokens = (chars: number): number => Math.ceil(chars / 4);
 /**
  * Collects what the provider reports and fills the gaps with estimates, so a
  * turn always ends with one `run.usage` (with `estimated: true` when any part
- * was guessed, e.g. on cancel before the final usage arrives).
+ * was guessed, e.g. on cancel before the final usage arrives). A turn with
+ * tools makes several model calls: `nextCall()` closes one and the event sums
+ * them all.
  */
 export class UsageTracker {
   private input: number | undefined;
@@ -106,6 +110,8 @@ export class UsageTracker {
   private cacheWrite: number | undefined;
   private final = false;
   private streamedChars = 0;
+  /** Sums of the calls already closed by `nextCall()`. */
+  private done: UsageSum | null = null;
 
   constructor(private readonly estimatedInput: number) {}
 
@@ -118,7 +124,7 @@ export class UsageTracker {
     this.streamedChars += text.length;
   }
 
-  /** Records provider-reported counts; `final` marks the complete usage of the turn. */
+  /** Records provider-reported counts; `final` marks the complete usage of the call. */
   report(u: {
     input?: number | undefined;
     output?: number | undefined;
@@ -133,19 +139,58 @@ export class UsageTracker {
     if (u.final) this.final = true;
   }
 
+  /** Closes the current model call (the tool loop is about to make another). */
+  nextCall(): void {
+    this.done = this.sum();
+    this.input = this.output = this.cacheRead = this.cacheWrite = undefined;
+    this.final = false;
+    this.streamedChars = 0;
+  }
+
   event(): AdapterEvent {
-    const complete = this.final && this.input !== undefined && this.output !== undefined;
+    const s = this.sum();
     return {
       type: 'run.usage',
-      inputTokens: this.input ?? this.estimatedInput,
-      outputTokens: complete
-        ? this.output!
-        : Math.max(this.output ?? 0, estimateTokens(this.streamedChars)),
-      ...(this.cacheRead !== undefined ? { cacheReadTokens: this.cacheRead } : {}),
-      ...(this.cacheWrite !== undefined ? { cacheWriteTokens: this.cacheWrite } : {}),
-      estimated: !complete,
+      inputTokens: s.input,
+      outputTokens: s.output,
+      ...(s.cacheRead !== undefined ? { cacheReadTokens: s.cacheRead } : {}),
+      ...(s.cacheWrite !== undefined ? { cacheWriteTokens: s.cacheWrite } : {}),
+      estimated: s.estimated,
     };
   }
+
+  /** The closed calls plus the current one. */
+  private sum(): UsageSum {
+    const complete = this.final && this.input !== undefined && this.output !== undefined;
+    const current: UsageSum = {
+      input: this.input ?? this.estimatedInput,
+      output: complete
+        ? this.output!
+        : Math.max(this.output ?? 0, estimateTokens(this.streamedChars)),
+      cacheRead: this.cacheRead,
+      cacheWrite: this.cacheWrite,
+      estimated: !complete,
+    };
+    const d = this.done;
+    if (!d) return current;
+    const add = (a: number | undefined, b: number | undefined) =>
+      a === undefined && b === undefined ? undefined : (a ?? 0) + (b ?? 0);
+    return {
+      input: d.input + current.input,
+      output: d.output + current.output,
+      cacheRead: add(d.cacheRead, current.cacheRead),
+      cacheWrite: add(d.cacheWrite, current.cacheWrite),
+      estimated: d.estimated || current.estimated,
+    };
+  }
+}
+
+interface UsageSum {
+  input: number;
+  output: number;
+  cacheRead: number | undefined;
+  cacheWrite: number | undefined;
+  estimated: boolean;
 }
 
 function textLength(m: Message): number {
@@ -201,12 +246,12 @@ export async function* streamTurn(opts: {
 
 // --------------------------------------------------------------- messages
 
-/** Text-only view of a canonical message, for providers without block support yet. */
-export function plainText(m: Message, provider: string): string {
-  if (m.role === 'tool') {
-    throw new AppError('unsupported_content', `Tool results are not supported by ${provider} yet`);
-  }
-  return m.content
+/**
+ * Text of a message's text blocks, for providers without image or document
+ * support yet (tool blocks are translated by each adapter).
+ */
+export function plainText(blocks: readonly Block[], provider: string): string {
+  return blocks
     .map((b) => {
       if (b.type === 'text') return b.text;
       throw new AppError(
@@ -215,6 +260,24 @@ export function plainText(m: Message, provider: string): string {
       );
     })
     .join('\n');
+}
+
+/** A tool result as one string, for providers whose tool messages are text only. */
+export function toolResultText(block: ToolResultBlock): string {
+  const text = block.content
+    .map((c) => (c.type === 'text' ? c.text : `[${c.type} not shown]`))
+    .join('\n');
+  return block.isError && !/^[a-z_]+: /.test(text) ? `error: ${text}` : text;
+}
+
+/** A tool call's JSON input; an empty or cut-off one becomes `{}`. */
+export function parseJson(json: string): unknown {
+  if (json.trim() === '') return {};
+  try {
+    return JSON.parse(json) as unknown;
+  } catch {
+    return {};
+  }
 }
 
 /** Removes trailing slashes so paths can be appended safely. */

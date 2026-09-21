@@ -1,12 +1,15 @@
-import { ApiError, FinishReason, GoogleGenAI, type Content } from '@google/genai';
+import { ApiError, FinishReason, GoogleGenAI, type Content, type Part } from '@google/genai';
 import {
   AppError,
   providerDescriptors,
   type Connection,
+  type Message,
   type ModelInfo,
   type StopReason,
   type TestResult,
+  type ToolDef,
 } from '@comitiva/contract';
+import { toolLoop } from '../../runs/ToolLoop.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
 import {
   UsageTracker,
@@ -16,6 +19,7 @@ import {
   plainText,
   probe,
   streamTurn,
+  toolResultText,
   withDeadline,
 } from './shared.js';
 
@@ -23,7 +27,7 @@ type GoogleConnection = Extract<Connection, { provider: 'google' }>;
 
 /**
  * Gemini API adapter (Google AI Studio keys; Vertex AI is not supported).
- * Text only for now; tools and images arrive in later phases.
+ * Text and function calling; images arrive in a later phase.
  */
 export class GoogleAdapter implements ProviderAdapter {
   readonly id = 'google' as const;
@@ -60,57 +64,100 @@ export class GoogleAdapter implements ProviderAdapter {
     }, toAppError);
   }
 
-  run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+  run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
     const usage = UsageTracker.for(input);
     return streamTurn({
       signal,
       usage,
       toAppError,
-      body: async function* (this: GoogleAdapter): AsyncGenerator<AdapterEvent, StopReason> {
-        const stream = await this.client(
-          input.connection,
-          input.secret,
-        ).models.generateContentStream({
-          model: input.model,
-          contents: toProviderContents(input),
-          config: {
-            abortSignal: signal,
-            ...(input.system !== '' ? { systemInstruction: input.system } : {}),
-            ...(input.params.temperature !== undefined
-              ? { temperature: input.params.temperature }
-              : {}),
-            ...(input.params.topP !== undefined ? { topP: input.params.topP } : {}),
-            ...(input.params.maxTokens !== undefined
-              ? { maxOutputTokens: input.params.maxTokens }
-              : {}),
-          },
-        });
-        let stopReason: StopReason = 'other';
-        for await (const chunk of stream) {
-          const candidate = chunk.candidates?.[0];
-          for (const part of candidate?.content?.parts ?? []) {
-            // Thought summaries are not part of the answer.
-            if (part.text && !part.thought) yield { type: 'run.text_delta', text: part.text };
-          }
-          if (candidate?.finishReason) stopReason = mapStopReason(candidate.finishReason);
-          const u = chunk.usageMetadata;
-          if (u) {
-            usage.report({
-              input: u.promptTokenCount,
-              // Thinking tokens are billed as output.
-              output:
-                u.candidatesTokenCount !== undefined || u.thoughtsTokenCount !== undefined
-                  ? (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0)
-                  : undefined,
-              cacheRead: u.cachedContentTokenCount,
-              // Usage is cumulative per chunk; it is complete once the candidate finishes.
-              final: candidate?.finishReason !== undefined,
-            });
-          }
-        }
-        return stopReason;
-      }.bind(this),
+      body: () =>
+        toolLoop({
+          ctx,
+          usage,
+          messages: input.messages,
+          maxIterations: input.params.maxToolIterations,
+          call: (messages, tools) => this.stream(input, messages, tools, usage, signal),
+        }),
     });
+  }
+
+  /** One generateContentStream call: text deltas and function calls (complete per part). */
+  private async *stream(
+    input: RunInput,
+    messages: Message[],
+    tools: ToolDef[],
+    usage: UsageTracker,
+    signal: AbortSignal,
+  ): AsyncGenerator<AdapterEvent, StopReason> {
+    const stream = await this.client(input.connection, input.secret).models.generateContentStream({
+      model: input.model,
+      contents: toProviderContents(messages),
+      config: {
+        abortSignal: signal,
+        ...(input.system !== '' ? { systemInstruction: input.system } : {}),
+        ...(input.params.temperature !== undefined
+          ? { temperature: input.params.temperature }
+          : {}),
+        ...(input.params.topP !== undefined ? { topP: input.params.topP } : {}),
+        ...(input.params.maxTokens !== undefined
+          ? { maxOutputTokens: input.params.maxTokens }
+          : {}),
+        ...(tools.length > 0
+          ? {
+              tools: [
+                {
+                  functionDeclarations: tools.map((t) => ({
+                    name: t.name,
+                    ...(t.description ? { description: t.description } : {}),
+                    parametersJsonSchema: t.inputSchema,
+                  })),
+                },
+              ],
+            }
+          : {}),
+      },
+    });
+    let stopReason: StopReason = 'other';
+    let calls = 0;
+    for await (const chunk of stream) {
+      const candidate = chunk.candidates?.[0];
+      for (const part of candidate?.content?.parts ?? []) {
+        // Thought summaries are not part of the answer.
+        if (part.text && !part.thought) yield { type: 'run.text_delta', text: part.text };
+        const fc = part.functionCall;
+        if (fc?.name) {
+          yield {
+            type: 'run.block',
+            block: {
+              type: 'tool_use',
+              // The Gemini API usually omits ids; responses are matched by name and order.
+              id: fc.id ?? `gemini_${calls}_${Date.now().toString(36)}`,
+              toolServerId: '',
+              name: fc.name,
+              input: fc.args ?? {},
+              ...(part.thoughtSignature ? { signature: part.thoughtSignature } : {}),
+            },
+          };
+          calls++;
+        }
+      }
+      if (candidate?.finishReason) stopReason = mapStopReason(candidate.finishReason);
+      const u = chunk.usageMetadata;
+      if (u) {
+        usage.report({
+          input: u.promptTokenCount,
+          // Thinking tokens are billed as output.
+          output:
+            u.candidatesTokenCount !== undefined || u.thoughtsTokenCount !== undefined
+              ? (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0)
+              : undefined,
+          cacheRead: u.cachedContentTokenCount,
+          // Usage is cumulative per chunk; it is complete once the candidate finishes.
+          final: candidate?.finishReason !== undefined,
+        });
+      }
+    }
+    return stopReason;
   }
 
   private client(connection: Connection, secret: string | undefined): GoogleGenAI {
@@ -129,11 +176,48 @@ export class GoogleAdapter implements ProviderAdapter {
   }
 }
 
-export function toProviderContents(input: RunInput): Content[] {
-  return input.messages.map((m) => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: plainText(m, 'Gemini connections') }],
-  }));
+export function toProviderContents(messages: readonly Message[]): Content[] {
+  // functionResponse needs the call's name; tool results only carry the id.
+  const names = new Map<string, string>();
+  const where = 'Gemini connections';
+  return messages.map((m): Content => {
+    if (m.role === 'tool') {
+      return {
+        role: 'user',
+        parts: m.content.flatMap((b): Part[] => {
+          if (b.type !== 'tool_result') return [];
+          const text = toolResultText(b);
+          return [
+            {
+              functionResponse: {
+                ...(b.toolUseId.startsWith('gemini_') ? {} : { id: b.toolUseId }),
+                name: names.get(b.toolUseId) ?? 'unknown',
+                response: b.isError ? { error: text } : { output: text },
+              },
+            },
+          ];
+        }),
+      };
+    }
+    if (m.role === 'assistant') {
+      const parts: Part[] = [];
+      for (const b of m.content) {
+        if (b.type === 'tool_use') {
+          names.set(b.id, b.name);
+          parts.push({
+            functionCall: {
+              ...(b.id.startsWith('gemini_') ? {} : { id: b.id }),
+              name: b.name,
+              args: (b.input ?? {}) as Record<string, unknown>,
+            },
+            ...(b.signature ? { thoughtSignature: b.signature } : {}),
+          });
+        } else parts.push({ text: plainText([b], where) });
+      }
+      return { role: 'model', parts };
+    }
+    return { role: 'user', parts: [{ text: plainText(m.content, where) }] };
+  });
 }
 
 export function mapStopReason(reason: FinishReason | string): StopReason {

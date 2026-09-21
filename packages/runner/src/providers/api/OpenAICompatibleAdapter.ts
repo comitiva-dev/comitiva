@@ -3,18 +3,23 @@ import {
   AppError,
   providerDescriptors,
   type Connection,
+  type Message,
   type ModelInfo,
   type StopReason,
   type TestResult,
+  type ToolDef,
 } from '@comitiva/contract';
+import { toolLoop } from '../../runs/ToolLoop.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
 import {
   UsageTracker,
   httpError,
   networkError,
+  parseJson,
   plainText,
   probe,
   streamTurn,
+  toolResultText,
   withDeadline,
 } from './shared.js';
 
@@ -47,53 +52,89 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
     }, toAppError);
   }
 
-  run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+  run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
     const usage = UsageTracker.for(input);
-    const conn = asConnection(input.connection);
     return streamTurn({
       signal,
       usage,
       toAppError,
-      body: async function* (
-        this: OpenAICompatibleAdapter,
-      ): AsyncGenerator<AdapterEvent, StopReason> {
-        const params: OpenAI.ChatCompletionCreateParamsStreaming = {
-          model: input.model,
-          messages: toProviderMessages(input),
-          stream: true,
-          // Without this, most servers never report usage for streamed responses.
-          stream_options: { include_usage: true },
-        };
-        if (input.params.maxTokens !== undefined) {
-          // OpenAI's own reasoning models reject `max_tokens`; other servers expect it.
-          if (conn.config.preset === 'openai')
-            params.max_completion_tokens = input.params.maxTokens;
-          else params.max_tokens = input.params.maxTokens;
-        }
-        if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
-        if (input.params.topP !== undefined) params.top_p = input.params.topP;
-
-        let stopReason: StopReason = 'other';
-        const stream = await this.client(conn, input.secret).chat.completions.create(params, {
-          signal,
-        });
-        for await (const chunk of stream) {
-          const choice = chunk.choices[0];
-          const text = choice?.delta?.content;
-          if (text) yield { type: 'run.text_delta', text };
-          if (choice?.finish_reason) stopReason = mapStopReason(choice.finish_reason);
-          if (chunk.usage) {
-            usage.report({
-              input: chunk.usage.prompt_tokens,
-              output: chunk.usage.completion_tokens,
-              cacheRead: chunk.usage.prompt_tokens_details?.cached_tokens ?? undefined,
-              final: true,
-            });
-          }
-        }
-        return stopReason;
-      }.bind(this),
+      body: () =>
+        toolLoop({
+          ctx,
+          usage,
+          messages: input.messages,
+          maxIterations: input.params.maxToolIterations,
+          call: (messages, tools) => this.stream(input, messages, tools, usage, signal),
+        }),
     });
+  }
+
+  /** One Chat Completions call: text deltas, then the complete tool calls. */
+  private async *stream(
+    input: RunInput,
+    messages: Message[],
+    tools: ToolDef[],
+    usage: UsageTracker,
+    signal: AbortSignal,
+  ): AsyncGenerator<AdapterEvent, StopReason> {
+    const conn = asConnection(input.connection);
+    const params: OpenAI.ChatCompletionCreateParamsStreaming = {
+      model: input.model,
+      messages: toProviderMessages(input.system, messages),
+      stream: true,
+      // Without this, most servers never report usage for streamed responses.
+      stream_options: { include_usage: true },
+    };
+    if (input.params.maxTokens !== undefined) {
+      // OpenAI's own reasoning models reject `max_tokens`; other servers expect it.
+      if (conn.config.preset === 'openai') params.max_completion_tokens = input.params.maxTokens;
+      else params.max_tokens = input.params.maxTokens;
+    }
+    if (input.params.temperature !== undefined) params.temperature = input.params.temperature;
+    if (input.params.topP !== undefined) params.top_p = input.params.topP;
+    if (tools.length > 0) params.tools = tools.map(toProviderTool);
+
+    let stopReason: StopReason = 'other';
+    // Tool calls stream as fragments keyed by index: id and name first, then arguments.
+    const calls = new Map<number, { id: string; name: string; args: string }>();
+    const stream = await this.client(conn, input.secret).chat.completions.create(params, {
+      signal,
+    });
+    for await (const chunk of stream) {
+      const choice = chunk.choices[0];
+      const text = choice?.delta?.content;
+      if (text) yield { type: 'run.text_delta', text };
+      for (const call of choice?.delta?.tool_calls ?? []) {
+        const c = calls.get(call.index) ?? { id: '', name: '', args: '' };
+        if (call.id) c.id = call.id;
+        if (call.function?.name) c.name += call.function.name;
+        if (call.function?.arguments) c.args += call.function.arguments;
+        calls.set(call.index, c);
+      }
+      if (choice?.finish_reason) stopReason = mapStopReason(choice.finish_reason);
+      if (chunk.usage) {
+        usage.report({
+          input: chunk.usage.prompt_tokens,
+          output: chunk.usage.completion_tokens,
+          cacheRead: chunk.usage.prompt_tokens_details?.cached_tokens ?? undefined,
+          final: true,
+        });
+      }
+    }
+    for (const [index, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
+      yield {
+        type: 'run.block',
+        block: {
+          type: 'tool_use',
+          // Some servers omit ids; the loop needs one to pair the result.
+          id: c.id || `call_${index}_${Date.now().toString(36)}`,
+          toolServerId: '',
+          name: c.name,
+          input: parseJson(c.args),
+        },
+      };
+    }
+    return stopReason;
   }
 
   /** `maxRetries` 0 for probes (fast feedback); the SDK default (2) for runs. */
@@ -125,16 +166,57 @@ function asConnection(connection: Connection): OpenAICompatibleConnection {
   return connection;
 }
 
-export function toProviderMessages(input: RunInput): OpenAI.ChatCompletionMessageParam[] {
-  const messages: OpenAI.ChatCompletionMessageParam[] = [];
-  if (input.system !== '') messages.push({ role: 'system', content: input.system });
-  for (const m of input.messages) {
-    const content = plainText(m, 'OpenAI-compatible connections');
-    messages.push(
-      m.role === 'assistant' ? { role: 'assistant', content } : { role: 'user', content },
-    );
+export function toProviderMessages(
+  system: string,
+  messages: readonly Message[],
+): OpenAI.ChatCompletionMessageParam[] {
+  const out: OpenAI.ChatCompletionMessageParam[] = [];
+  if (system !== '') out.push({ role: 'system', content: system });
+  const where = 'OpenAI-compatible connections';
+  for (const m of messages) {
+    if (m.role === 'user') {
+      out.push({ role: 'user', content: plainText(m.content, where) });
+    } else if (m.role === 'assistant') {
+      const text = plainText(
+        m.content.filter((b) => b.type !== 'tool_use'),
+        where,
+      );
+      const calls = m.content.flatMap((b) =>
+        b.type === 'tool_use'
+          ? [
+              {
+                id: b.id,
+                type: 'function' as const,
+                function: { name: b.name, arguments: JSON.stringify(b.input ?? {}) },
+              },
+            ]
+          : [],
+      );
+      out.push({
+        role: 'assistant',
+        content: text === '' && calls.length > 0 ? null : text,
+        ...(calls.length > 0 ? { tool_calls: calls } : {}),
+      });
+    } else {
+      for (const b of m.content) {
+        if (b.type === 'tool_result') {
+          out.push({ role: 'tool', tool_call_id: b.toolUseId, content: toolResultText(b) });
+        }
+      }
+    }
   }
-  return messages;
+  return out;
+}
+
+function toProviderTool(tool: ToolDef): OpenAI.ChatCompletionTool {
+  return {
+    type: 'function',
+    function: {
+      name: tool.name,
+      ...(tool.description ? { description: tool.description } : {}),
+      parameters: { type: 'object', ...tool.inputSchema },
+    },
+  };
 }
 
 /** OpenRouter adds `name`/`context_length`, Groq adds `context_window`. */

@@ -52,6 +52,7 @@ const codex = (extra?: Record<string, string>) =>
 
 const ctx: RunContext = {
   tools: [],
+  toolServerId: () => '',
   callTool: () => Promise.reject(new Error('no tools')),
   log: () => {},
 };

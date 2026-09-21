@@ -2,10 +2,13 @@ import {
   AppError,
   providerDescriptors,
   type Connection,
+  type Message,
   type ModelInfo,
   type StopReason,
   type TestResult,
+  type ToolDef,
 } from '@comitiva/contract';
+import { toolLoop } from '../../runs/ToolLoop.js';
 import { LineSplitter } from '../../util/jsonl.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
 import {
@@ -16,14 +19,20 @@ import {
   plainText,
   probe,
   streamTurn,
+  toolResultText,
   trimSlash,
   withDeadline,
 } from './shared.js';
 
 type OllamaConnection = Extract<Connection, { provider: 'ollama' }>;
 
+interface OllamaToolCall {
+  id?: string;
+  function: { name: string; arguments?: Record<string, unknown> };
+}
+
 interface ChatChunk {
-  message?: { content?: string; thinking?: string };
+  message?: { content?: string; thinking?: string; tool_calls?: OllamaToolCall[] };
   done?: boolean;
   done_reason?: string;
   prompt_eval_count?: number;
@@ -59,43 +68,85 @@ export class OllamaAdapter implements ProviderAdapter {
     }, toAppError);
   }
 
-  run(input: RunInput, _ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+  run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
     const usage = UsageTracker.for(input);
     return streamTurn({
       signal,
       usage,
       toAppError,
-      body: async function* (this: OllamaAdapter): AsyncGenerator<AdapterEvent, StopReason> {
-        const options: Record<string, number> = {};
-        if (input.params.temperature !== undefined) options.temperature = input.params.temperature;
-        if (input.params.topP !== undefined) options.top_p = input.params.topP;
-        if (input.params.maxTokens !== undefined) options.num_predict = input.params.maxTokens;
-
-        const res = await this.request(input.connection, input.secret, '/api/chat', {
-          method: 'POST',
-          signal,
-          body: JSON.stringify({
-            model: input.model,
-            messages: toProviderMessages(input),
-            stream: true,
-            ...(Object.keys(options).length > 0 ? { options } : {}),
-          }),
-        });
-        if (!res.body) throw new AppError('provider_error', 'Ollama returned an empty body');
-
-        let stopReason: StopReason = 'other';
-        for await (const chunk of ndjson(res.body)) {
-          if (chunk.error) throw new AppError('provider_error', chunk.error);
-          const text = chunk.message?.content;
-          if (text) yield { type: 'run.text_delta', text };
-          if (chunk.done) {
-            stopReason = mapStopReason(chunk.done_reason);
-            usage.report({ input: chunk.prompt_eval_count, output: chunk.eval_count, final: true });
-          }
-        }
-        return stopReason;
-      }.bind(this),
+      body: () =>
+        toolLoop({
+          ctx,
+          usage,
+          messages: input.messages,
+          maxIterations: input.params.maxToolIterations,
+          call: (messages, tools) => this.stream(input, messages, tools, usage, signal),
+        }),
     });
+  }
+
+  /** One /api/chat call. Tool calls come whole in a message (and end with done_reason "stop"). */
+  private async *stream(
+    input: RunInput,
+    messages: Message[],
+    tools: ToolDef[],
+    usage: UsageTracker,
+    signal: AbortSignal,
+  ): AsyncGenerator<AdapterEvent, StopReason> {
+    const options: Record<string, number> = {};
+    if (input.params.temperature !== undefined) options.temperature = input.params.temperature;
+    if (input.params.topP !== undefined) options.top_p = input.params.topP;
+    if (input.params.maxTokens !== undefined) options.num_predict = input.params.maxTokens;
+
+    const res = await this.request(input.connection, input.secret, '/api/chat', {
+      method: 'POST',
+      signal,
+      body: JSON.stringify({
+        model: input.model,
+        messages: toProviderMessages(input.system, messages),
+        stream: true,
+        ...(tools.length > 0
+          ? {
+              tools: tools.map((t) => ({
+                type: 'function',
+                function: {
+                  name: t.name,
+                  ...(t.description ? { description: t.description } : {}),
+                  parameters: { type: 'object', ...t.inputSchema },
+                },
+              })),
+            }
+          : {}),
+        ...(Object.keys(options).length > 0 ? { options } : {}),
+      }),
+    });
+    if (!res.body) throw new AppError('provider_error', 'Ollama returned an empty body');
+
+    let stopReason: StopReason = 'other';
+    let calls = 0;
+    for await (const chunk of ndjson(res.body)) {
+      if (chunk.error) throw new AppError('provider_error', chunk.error);
+      const text = chunk.message?.content;
+      if (text) yield { type: 'run.text_delta', text };
+      for (const call of chunk.message?.tool_calls ?? []) {
+        yield {
+          type: 'run.block',
+          block: {
+            type: 'tool_use',
+            id: call.id ?? `ollama_${calls}_${Date.now().toString(36)}`,
+            toolServerId: '',
+            name: call.function.name,
+            input: call.function.arguments ?? {},
+          },
+        };
+        calls++;
+      }
+      if (chunk.done) {
+        stopReason = mapStopReason(chunk.done_reason);
+        usage.report({ input: chunk.prompt_eval_count, output: chunk.eval_count, final: true });
+      }
+    }
+    return stopReason;
   }
 
   /** fetch with the base URL, optional bearer key and HTTP errors mapped. */
@@ -141,12 +192,46 @@ async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatChu
   while (lines.length > 0) yield JSON.parse(lines.shift()!) as ChatChunk;
 }
 
-export function toProviderMessages(input: RunInput): Array<{ role: string; content: string }> {
-  const messages = input.messages.map((m) => ({
-    role: m.role === 'assistant' ? 'assistant' : 'user',
-    content: plainText(m, 'Ollama connections'),
-  }));
-  return input.system !== '' ? [{ role: 'system', content: input.system }, ...messages] : messages;
+type OllamaMessage =
+  | { role: 'system' | 'user'; content: string }
+  | { role: 'assistant'; content: string; tool_calls?: OllamaToolCall[] }
+  | { role: 'tool'; content: string; tool_name: string };
+
+export function toProviderMessages(system: string, messages: readonly Message[]): OllamaMessage[] {
+  const out: OllamaMessage[] = system !== '' ? [{ role: 'system', content: system }] : [];
+  const names = new Map<string, string>();
+  const where = 'Ollama connections';
+  for (const m of messages) {
+    if (m.role === 'user') out.push({ role: 'user', content: plainText(m.content, where) });
+    else if (m.role === 'assistant') {
+      const calls: OllamaToolCall[] = [];
+      for (const b of m.content) {
+        if (b.type !== 'tool_use') continue;
+        names.set(b.id, b.name);
+        calls.push({
+          function: { name: b.name, arguments: (b.input ?? {}) as Record<string, unknown> },
+        });
+      }
+      out.push({
+        role: 'assistant',
+        content: plainText(
+          m.content.filter((b) => b.type !== 'tool_use'),
+          where,
+        ),
+        ...(calls.length > 0 ? { tool_calls: calls } : {}),
+      });
+    } else {
+      for (const b of m.content) {
+        if (b.type !== 'tool_result') continue;
+        out.push({
+          role: 'tool',
+          content: toolResultText(b),
+          tool_name: names.get(b.toolUseId) ?? '',
+        });
+      }
+    }
+  }
+  return out;
 }
 
 export function mapStopReason(reason: string | undefined): StopReason {

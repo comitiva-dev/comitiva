@@ -100,6 +100,56 @@ const wire: Wire = {
     { id: 'claude-haiku-4-5', name: 'Claude Haiku 4.5', contextWindow: 200000 },
     { id: 'claude-old', name: 'Old' },
   ],
+  toolCallFrames: (call, usage) => [
+    sse('message_start', {
+      type: 'message_start',
+      message: {
+        id: 'msg_t',
+        type: 'message',
+        role: 'assistant',
+        model: 'test-model',
+        content: [],
+        stop_reason: null,
+        stop_sequence: null,
+        usage: { input_tokens: usage.input, output_tokens: 1 },
+      },
+    }),
+    sse('content_block_start', {
+      type: 'content_block_start',
+      index: 0,
+      content_block: { type: 'tool_use', id: call.id, name: call.name, input: {} },
+    }),
+    ...JSON.stringify(call.input)
+      .match(/.{1,5}/g)!
+      .map((partial_json) =>
+        sse('content_block_delta', {
+          type: 'content_block_delta',
+          index: 0,
+          delta: { type: 'input_json_delta', partial_json },
+        }),
+      ),
+    sse('content_block_stop', { type: 'content_block_stop', index: 0 }),
+    sse('message_delta', {
+      type: 'message_delta',
+      delta: { stop_reason: 'tool_use' },
+      usage: { output_tokens: usage.output },
+    }),
+    sse('message_stop', { type: 'message_stop' }),
+  ],
+  toolNamesIn: (body) =>
+    ((body as { tools?: Array<{ name: string }> }).tools ?? []).map((t) => t.name),
+  toolResultIn: (body, call) => {
+    const messages = (body as { messages: Array<{ role: string; content: unknown }> }).messages;
+    for (const m of messages) {
+      if (!Array.isArray(m.content)) continue;
+      for (const b of m.content as Array<Record<string, unknown>>) {
+        if (b.type === 'tool_result' && b.tool_use_id === call.id) {
+          return (b.content as Array<{ text: string }>).map((c) => c.text).join('');
+        }
+      }
+    }
+    return undefined;
+  },
   testRoute: '/v1/models',
   testBody: { data: [], has_more: false, first_id: null, last_id: null },
 };

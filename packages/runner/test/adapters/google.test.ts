@@ -1,7 +1,7 @@
 import { http, HttpResponse } from 'msw';
 import { describe, expect, it } from 'vitest';
-import { GoogleAdapter } from '../../src/providers/api/GoogleAdapter.js';
-import { googleConnection } from '../../src/testing/index.js';
+import { GoogleAdapter, toProviderContents } from '../../src/providers/api/GoogleAdapter.js';
+import { googleConnection, userText } from '../../src/testing/index.js';
 import {
   ctx,
   describeAdapterConformance,
@@ -61,12 +61,91 @@ const wire: Wire = {
   expectedModels: [{ id: 'gemini-2.5-flash', name: 'Gemini 2.5 Flash', contextWindow: 1048576 }],
   testRoute: '/v1beta/models',
   testBody: { models: [] },
+  toolCallFrames: (call, usage) => [
+    data({
+      candidates: [
+        {
+          content: {
+            role: 'model',
+            parts: [
+              { functionCall: { name: call.name, args: call.input }, thoughtSignature: 'sig-1' },
+            ],
+          },
+          finishReason: 'STOP',
+          index: 0,
+        },
+      ],
+      usageMetadata: { promptTokenCount: usage.input, candidatesTokenCount: usage.output },
+    }),
+  ],
+  toolNamesIn: (body) =>
+    (
+      (body as { tools?: Array<{ functionDeclarations: Array<{ name: string }> }> }).tools ?? []
+    ).flatMap((t) => t.functionDeclarations.map((d) => d.name)),
+  toolResultIn: (body, call) => {
+    const contents = (body as { contents: Array<{ parts: Array<Record<string, unknown>> }> })
+      .contents;
+    for (const c of contents) {
+      for (const p of c.parts) {
+        const r = p.functionResponse as { name: string; response: { output?: string } } | undefined;
+        if (r?.name === call.name) return r.response.output;
+      }
+    }
+    return undefined;
+  },
 };
 
 describeAdapterConformance(wire);
 
 describe('GoogleAdapter specifics', () => {
   useMsw();
+
+  it('replays function calls with their thought signature and answers them by name', () => {
+    const base = userText('c1', 'x');
+    const contents = toProviderContents([
+      base,
+      {
+        ...base,
+        role: 'assistant',
+        content: [
+          { type: 'text', text: 'Looking.' },
+          {
+            type: 'tool_use',
+            id: 'gemini_0_x',
+            toolServerId: 'filesystem',
+            name: 'fs__list_dir',
+            input: {},
+            signature: 'sig-1',
+          },
+        ],
+      },
+      {
+        ...base,
+        role: 'tool',
+        content: [
+          {
+            type: 'tool_result',
+            toolUseId: 'gemini_0_x',
+            content: [{ type: 'text', text: 'outside_roots: no' }],
+            isError: true,
+          },
+        ],
+      },
+    ]);
+    expect(contents[1]).toEqual({
+      role: 'model',
+      parts: [
+        { text: 'Looking.' },
+        { functionCall: { name: 'fs__list_dir', args: {} }, thoughtSignature: 'sig-1' },
+      ],
+    });
+    expect(contents[2]).toEqual({
+      role: 'user',
+      parts: [
+        { functionResponse: { name: 'fs__list_dir', response: { error: 'outside_roots: no' } } },
+      ],
+    });
+  });
 
   it('sends contents, system instruction and generation config', async () => {
     let body: Record<string, unknown> = {};

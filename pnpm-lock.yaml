@@ -164,6 +164,9 @@ importers:
       '@google/genai':
         specifier: ^2.23.0
         version: 2.23.0(@modelcontextprotocol/sdk@1.30.0(zod@4.6.5))
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.30.0
+        version: 1.30.0(zod@4.6.5)
       openai:
         specifier: ^7.19.0
         version: 7.19.0(undici@7.29.1)(ws@8.21.3)(zod@4.6.5)
@@ -174,6 +177,9 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
+      '@comitiva/mcp-servers':
+        specifier: workspace:*
+        version: link:../mcp-servers
       msw:
         specifier: ^2.15.0
         version: 2.15.0(@types/node@24.13.5)(typescript@6.0.3)

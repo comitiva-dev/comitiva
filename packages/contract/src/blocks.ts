@@ -31,6 +31,11 @@ export const ToolUseBlock = z.object({
   toolServerId: z.string(),
   name: z.string(),
   input: z.unknown(),
+  /**
+   * Opaque provider data that must be sent back with the call in later turns
+   * (Gemini's thought signature). Only the adapter that set it reads it.
+   */
+  signature: z.string().optional(),
 });
 export type ToolUseBlock = z.infer<typeof ToolUseBlock>;
 

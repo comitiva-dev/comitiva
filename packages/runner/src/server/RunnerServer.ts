@@ -1,5 +1,7 @@
 import { AppError, RunnerRequest } from '@comitiva/contract';
 import { createDefaultRegistry, type ProviderRegistry } from '../providers/ProviderRegistry.js';
+import { McpClientManager } from '../mcp/McpClientManager.js';
+import type { OpenConnection } from '../mcp/McpConnection.js';
 import { RunManager } from '../runs/RunManager.js';
 import { createLogger, type Logger } from '../util/logger.js';
 import { RequestRouter } from './RequestRouter.js';
@@ -10,6 +12,8 @@ export interface RunnerServerOptions {
   output: NodeJS.WritableStream;
   logger?: Logger;
   registry?: ProviderRegistry;
+  /** How MCP connections are opened (tests inject in-memory servers). */
+  openMcp?: OpenConnection;
   /** Called after `shutdown` or when input closes, once runs are cancelled. */
   onExit?: () => void;
 }
@@ -18,6 +22,7 @@ export class RunnerServer {
   private readonly transport: JsonLinesTransport;
   private readonly logger: Logger;
   private readonly runs: RunManager;
+  private readonly mcp: McpClientManager;
   private readonly router: RequestRouter;
   private stopping: Promise<void> | null = null;
 
@@ -25,10 +30,17 @@ export class RunnerServer {
     this.logger = opts.logger ?? createLogger();
     this.transport = new JsonLinesTransport(opts.input, opts.output);
     const registry = opts.registry ?? createDefaultRegistry();
-    this.runs = new RunManager(registry, (e) => this.transport.send(e), this.logger);
+    this.mcp = new McpClientManager(this.logger, opts.openMcp ? { open: opts.openMcp } : {});
+    this.runs = new RunManager({
+      registry,
+      emit: (e) => this.transport.send(e),
+      logger: this.logger,
+      mcp: this.mcp,
+    });
     this.router = new RequestRouter({
       registry,
       runs: this.runs,
+      mcp: this.mcp,
       // Respond first, then stop on the next tick.
       shutdown: () => setImmediate(() => void this.stop()),
     });
@@ -47,9 +59,12 @@ export class RunnerServer {
     this.transport.onClose(() => void this.stop());
   }
 
-  /** Cancels runs and calls onExit. Idempotent. */
+  /** Cancels runs, closes MCP clients and calls onExit. Idempotent. */
   stop(): Promise<void> {
-    this.stopping ??= this.runs.cancelAll().then(() => this.opts.onExit?.());
+    this.stopping ??= this.runs
+      .cancelAll()
+      .then(() => this.mcp.stopAll())
+      .then(() => this.opts.onExit?.());
     return this.stopping;
   }
 

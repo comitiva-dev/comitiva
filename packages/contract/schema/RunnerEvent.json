@@ -313,7 +313,10 @@
                     "name": {
                       "type": "string"
                     },
-                    "input": {}
+                    "input": {},
+                    "signature": {
+                      "type": "string"
+                    }
                   },
                   "required": [
                     "type",

@@ -50,6 +50,33 @@ const wire: Wire = {
   expectedModels: [{ id: 'llama3.2:latest' }, { id: 'qwen3:8b' }],
   testRoute: '/api/version',
   testBody: { version: '0.12.0' },
+  toolCallFrames: (call, usage) => [
+    line({
+      model: 'm',
+      message: {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ function: { name: call.name, arguments: call.input } }],
+      },
+      done: false,
+    }),
+    line({
+      model: 'm',
+      message: { role: 'assistant', content: '' },
+      done: true,
+      done_reason: 'stop',
+      prompt_eval_count: usage.input,
+      eval_count: usage.output,
+    }),
+  ],
+  toolNamesIn: (body) =>
+    ((body as { tools?: Array<{ function: { name: string } }> }).tools ?? []).map(
+      (t) => t.function.name,
+    ),
+  toolResultIn: (body, call) =>
+    (
+      body as { messages: Array<{ role: string; tool_name?: string; content: string }> }
+    ).messages.find((m) => m.role === 'tool' && m.tool_name === call.name)?.content,
 };
 
 describeAdapterConformance(wire);

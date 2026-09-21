@@ -106,10 +106,12 @@ describe('RunnerServer', () => {
     });
   });
 
-  it('answers not_implemented for later-phase requests', async () => {
+  it('stops an unknown tool server and ignores an approval for an unknown run', async () => {
     const h = harness();
     h.send({ id: '3', type: 'toolServer.stop', toolServerId: 'fs' });
-    expect(await h.response('3')).toMatchObject({ ok: false, error: { code: 'not_implemented' } });
+    expect(await h.response('3')).toMatchObject({ ok: true, result: {} });
+    h.send({ id: '4', type: 'run.approval', runId: 'gone', toolUseId: 't', decision: 'allow' });
+    expect(await h.response('4')).toMatchObject({ ok: true, result: {} });
   });
 
   it('runs two streams concurrently and cancels one without affecting the other', async () => {

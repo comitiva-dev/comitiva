@@ -43,12 +43,22 @@ export interface Wire {
   /** Route `testConnection` calls (answered with `testBody`). */
   testRoute: string;
   testBody: unknown;
+  /** Wire frames for an answer that calls one tool (and reports `usage`). */
+  toolCallFrames(
+    call: { id: string; name: string; input: unknown },
+    usage: { input: number; output: number },
+  ): string[];
+  /** Tool names a request body offers the model. */
+  toolNamesIn(body: unknown): string[];
+  /** The text a request body sends back as the result of tool call `id` (name for Gemini). */
+  toolResultIn(body: unknown, call: { id: string; name: string }): string | undefined;
 }
 
 export const server = setupServer();
 
 export const ctx: RunContext = {
   tools: [],
+  toolServerId: () => '',
   callTool: () => Promise.reject(new Error('no tools')),
   log: () => {},
 };
@@ -280,6 +290,73 @@ export function describeAdapterConformance(w: Wire): void {
         code: 'provider_unavailable',
         retryable: true,
       });
+    });
+
+    it('runs the tool loop: tool call → ctx.callTool → result sent back → answer', async () => {
+      const bodies: unknown[] = [];
+      server.use(
+        http.post(route(w.streamRoute), async ({ request }) => {
+          bodies.push(await request.json());
+          const frames =
+            bodies.length === 1
+              ? w.toolCallFrames(
+                  { id: 'call_1', name: 'fs__read_file', input: { path: 'a.txt' } },
+                  { input: 11, output: 7 },
+                )
+              : w.frames(['Done'], { usage: { input: 13, output: 2 }, stop: 'end' });
+          return streamed(frames, w.contentType);
+        }),
+      );
+      const calls: Array<{ id: string; name: string; input: unknown }> = [];
+      const toolCtx: RunContext = {
+        ...ctx,
+        tools: [
+          {
+            name: 'fs__read_file',
+            description: 'Reads a file',
+            inputSchema: { type: 'object', properties: { path: { type: 'string' } } },
+          },
+        ],
+        toolServerId: (name) => (name === 'fs__read_file' ? 'filesystem' : ''),
+        callTool: (id, name, input) => {
+          calls.push({ id, name, input });
+          return Promise.resolve({
+            content: [{ type: 'text', text: 'file body' }],
+            isError: false,
+          });
+        },
+      };
+      const events = await drain(
+        w.adapter.run(runInput(conn(), w.secret), toolCtx, new AbortController().signal),
+      );
+      expect(calls).toEqual([
+        { id: expect.any(String), name: 'fs__read_file', input: { path: 'a.txt' } },
+      ]);
+      const block = events.find((e) => e.type === 'run.block');
+      expect(block).toMatchObject({
+        block: {
+          type: 'tool_use',
+          id: calls[0]!.id,
+          toolServerId: 'filesystem',
+          name: 'fs__read_file',
+          input: { path: 'a.txt' },
+        },
+      });
+      expect(bodies).toHaveLength(2);
+      expect(w.toolNamesIn(bodies[0])).toEqual(['fs__read_file']);
+      expect(w.toolResultIn(bodies[1], { id: calls[0]!.id, name: 'fs__read_file' })).toBe(
+        'file body',
+      );
+      expect(events.filter((e) => e.type === 'run.text_delta').map((e) => e.text)).toEqual([
+        'Done',
+      ]);
+      expect(events.at(-2)).toMatchObject({
+        type: 'run.usage',
+        inputTokens: 24,
+        outputTokens: 9,
+        estimated: false,
+      });
+      expect(events.at(-1)).toEqual({ type: 'run.done', stopReason: 'end_turn' });
     });
 
     it('lists models', async () => {

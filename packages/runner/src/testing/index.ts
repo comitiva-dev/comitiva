@@ -1,3 +1,4 @@
+export { createFakeMcp, type FakeMcp } from './fakeMcpServer.js';
 export { startFakeProviders } from './fakeProviders.js';
 export type {
   FakeProviderId,

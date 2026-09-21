@@ -29,6 +29,7 @@ describe('Database', () => {
         'agent_roots',
         'agent_tool_servers',
         'agents',
+        'app_settings',
         'connections',
         'conversations',
         'messages',

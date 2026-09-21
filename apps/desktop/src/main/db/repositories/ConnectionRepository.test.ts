@@ -121,7 +121,7 @@ describe('ConnectionRepository', () => {
       .values({
         id: 'ag',
         name: 'A',
-        avatar: '🙂',
+        avatar: { color: 'indigo' },
         connectionId: connection.id,
         createdAt: now,
         updatedAt: now,
@@ -129,8 +129,12 @@ describe('ConnectionRepository', () => {
       .run();
     expect(repo.hasAgents(connection.id)).toBe(true);
     expect(() => repo.delete(connection.id)).toThrow(
-      expect.objectContaining({ code: 'connection_in_use' }),
+      expect.objectContaining({
+        code: 'connection_in_use',
+        message: 'Connection Groq is used by: A',
+      }),
     );
+    expect(repo.agentsUsing(connection.id)).toEqual([{ id: 'ag', name: 'A' }]);
     db.raw.prepare('DELETE FROM agents').run();
     repo.delete(connection.id);
     expect(repo.get(connection.id)).toBeNull();

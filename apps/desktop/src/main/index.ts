@@ -1,11 +1,14 @@
 import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
 import { Database } from './db/Database';
+import { AgentRepository } from './db/repositories/AgentRepository';
 import { ConnectionRepository } from './db/repositories/ConnectionRepository';
+import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { IpcRouter } from './ipc/IpcRouter';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
+import { AgentService } from './services/AgentService';
 import { ConnectionService } from './services/ConnectionService';
 
 // One data directory named after the product, in dev and packaged builds.
@@ -84,6 +87,9 @@ async function bootstrap(): Promise<void> {
     runner: supervisor.client,
   });
 
+  const agents = new AgentService(new AgentRepository(db));
+  const settings = new SettingsRepository(db);
+
   const router = new IpcRouter(
     {
       'app.getVersion': () => app.getVersion(),
@@ -96,6 +102,13 @@ async function bootstrap(): Promise<void> {
       'connections.test': (target) => connections.test(target),
       'connections.listModels': (target) => connections.listModels(target),
       'connections.detectBinary': (input) => connections.detectBinary(input),
+      'agents.list': () => agents.list(),
+      'agents.create': (draft) => agents.create(draft),
+      'agents.update': ({ id, patch }) => agents.update(id, patch),
+      'agents.delete': ({ id }) => agents.delete(id),
+      'agents.duplicate': ({ id, name }) => agents.duplicate(id, name),
+      'settings.get': () => settings.get(),
+      'settings.update': (patch) => settings.update(patch),
       'dialogs.pickFolder': () => pickFolder(),
     },
     isTrustedUrl,

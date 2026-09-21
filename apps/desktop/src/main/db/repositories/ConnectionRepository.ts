@@ -117,24 +117,31 @@ export class ConnectionRepository {
     });
   }
 
-  /** Deletes the row; `connection_in_use` while agents still use it (FK RESTRICT). */
+  /** Deletes the row; `connection_in_use`, naming the agents, while agents still use it (FK RESTRICT). */
   delete(id: string): void {
-    this.require(id);
-    if (this.hasAgents(id)) {
-      throw new AppError('connection_in_use', `Connection ${id} is used by agents`);
+    const { connection } = this.require(id);
+    const users = this.agentsUsing(id);
+    if (users.length > 0) {
+      throw new AppError(
+        'connection_in_use',
+        `Connection ${connection.name} is used by: ${users.map((a) => a.name).join(', ')}`,
+      );
     }
     this.db.orm.delete(connections).where(eq(connections.id, id)).run();
   }
 
   hasAgents(id: string): boolean {
-    return (
-      this.db.orm
-        .select({ id: agents.id })
-        .from(agents)
-        .where(eq(agents.connectionId, id))
-        .limit(1)
-        .get() !== undefined
-    );
+    return this.agentsUsing(id).length > 0;
+  }
+
+  /** Agents that use the connection, by name. */
+  agentsUsing(id: string): Array<{ id: string; name: string }> {
+    return this.db.orm
+      .select({ id: agents.id, name: agents.name })
+      .from(agents)
+      .where(eq(agents.connectionId, id))
+      .orderBy(asc(agents.name))
+      .all();
   }
 
   recordTest(id: string, result: TestResult, at = new Date()): ConnectionTestRecord {

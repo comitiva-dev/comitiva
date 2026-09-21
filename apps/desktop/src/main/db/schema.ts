@@ -65,7 +65,8 @@ export const agents = sqliteTable(
   {
     id: text('id').primaryKey(),
     name: text('name').notNull(),
-    avatar: text('avatar').notNull(),
+    // JSON AgentAvatar ({ color, emoji? }); same TEXT column as before.
+    avatar: text('avatar', { mode: 'json' }).notNull(),
     connectionId: text('connection_id')
       .notNull()
       .references(() => connections.id, { onDelete: 'restrict' }),
@@ -89,6 +90,8 @@ export const agentRoots = sqliteTable(
       .references(() => agents.id, { onDelete: 'cascade' }),
     path: text('path').notNull(),
     mode: text('mode', { enum: ['read', 'readwrite'] }).notNull(),
+    // Order as the user listed them: the first readwrite root is a harness's working directory.
+    position: integer('position').notNull().default(0),
   },
   (t) => [
     primaryKey({ columns: [t.agentId, t.path] }),
@@ -193,3 +196,9 @@ export const usageRecords = sqliteTable(
     index('idx_usage_agent_time').on(t.agentId, t.createdAt),
   ],
 );
+
+/** App-wide preferences (AppSettings in the contract), one row per key. */
+export const appSettings = sqliteTable('app_settings', {
+  key: text('key').primaryKey(),
+  value: text('value', { mode: 'json' }).notNull(),
+});

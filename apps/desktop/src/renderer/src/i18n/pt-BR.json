@@ -25,7 +25,9 @@
     "settings": "Configurações"
   },
   "sidebar": {
-    "noAgents": "Nenhum agente ainda."
+    "noAgents": "Nenhum agente ainda.",
+    "unread_one": "{{count}} resposta não lida",
+    "unread_other": "{{count}} respostas não lidas"
   },
   "placeholder": {
     "tools": "Ferramentas (pastas locais, Google Drive, qualquer servidor MCP) chegam em uma fase posterior.",
@@ -140,7 +142,9 @@
     "not_found": "Esse item não existe mais.",
     "sandbox_unavailable": "O sandbox do harness não consegue iniciar neste sistema.",
     "connection_disabled": "Essa conexão está desativada. Ative-a ou escolha outra.",
-    "model_required": "Esta conexão não tem modelo padrão. Escolha um modelo para o agente."
+    "model_required": "Esta conexão não tem modelo padrão. Escolha um modelo para o agente.",
+    "conversation_busy": "Esta conversa ainda está respondendo. Aguarde ou pare antes.",
+    "interrupted": "A resposta foi interrompida quando o app fechou. Você pode tentar de novo."
   },
   "agents": {
     "create": "Criar agente",
@@ -152,11 +156,13 @@
     "connectionDisabled": "A conexão dele está desativada: ative-a ou escolha outra para conversar.",
     "connectionMissing": "A conexão dele não existe mais: escolha outra.",
     "status": {
-      "idle": "Ocioso"
+      "idle": "Ocioso",
+      "running": "Respondendo",
+      "awaiting-approval": "Aguardando aprovação",
+      "error": "A última resposta falhou"
     },
     "deleteTitle": "Excluir “{{name}}”?",
     "deleteBody": "As configurações dele serão removidas. Isso não pode ser desfeito.",
-    "conversationsSoon": "As conversas com este agente chegam na próxima atualização.",
     "emptyTitle": "Nenhum agente ainda",
     "emptyBody": "Um agente é uma persona com um papel, uma conexão e, em breve, ferramentas.",
     "needConnection": "Agentes conversam por meio de uma conexão. Adicione uma primeiro.",
@@ -246,6 +252,47 @@
         "name": "Organizador de arquivos",
         "role": "Você é um organizador de arquivos. Ajude a manter as pastas em ordem: veja o que existe, proponha uma estrutura clara e nomes consistentes e explique o plano antes de mover, renomear ou excluir qualquer coisa. Nunca remova arquivos sem dizer exatamente quais e por quê."
       }
+    },
+    "deleteBodyConversations_one": "As configurações e a conversa dele são removidas. Isso não pode ser desfeito.",
+    "deleteBodyConversations_other": "As configurações e as {{count}} conversas dele são removidas. Isso não pode ser desfeito."
+  },
+  "chat": {
+    "conversations": "Conversas",
+    "newConversation": "Nova conversa",
+    "noConversations": "Nenhuma conversa ainda.",
+    "untitled": "Sem título",
+    "rename": "Renomear",
+    "archive": "Arquivar",
+    "unarchive": "Desarquivar",
+    "archived": "Arquivadas",
+    "showArchived": "Mostrar arquivadas",
+    "hideArchived": "Ocultar arquivadas",
+    "noArchived": "Nada arquivado.",
+    "startHint": "Envie uma mensagem para começar uma conversa com {{name}}.",
+    "emptyConversation": "Nenhuma mensagem ainda.",
+    "placeholder": "Mensagem para {{name}}",
+    "keys": "Enter envia · Shift+Enter quebra a linha",
+    "send": "Enviar",
+    "stop": "Parar",
+    "retry": "Tentar de novo",
+    "stopped": "Interrompida",
+    "responding": "Respondendo",
+    "thinking": "Pensando…",
+    "loadingOlder": "Carregando mensagens anteriores…",
+    "you": "Você",
+    "youInitial": "V",
+    "copy": "Copiar",
+    "copied": "Copiado",
+    "imageUnavailable": "Imagem indisponível.",
+    "unsupportedBlock": "Conteúdo do tipo {{type}} ainda não pode ser exibido.",
+    "tool": {
+      "running": "Executando",
+      "done": "Concluída",
+      "error": "Falhou",
+      "none": "Sem resultado",
+      "duration": "{{ms}} ms",
+      "input": "Argumentos",
+      "output": "Resultado"
     }
   }
 }

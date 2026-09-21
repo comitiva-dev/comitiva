@@ -33,6 +33,8 @@ export interface ConversationsState {
   setVisible(id: string | null): void;
   rename(id: string, title: string): Promise<void>;
   archive(id: string, archived: boolean): Promise<void>;
+  /** After an agent is deleted: its conversations went with it (cascade), so drop them here too. */
+  forgetAgent(agentId: string): void;
   dismissNotice(): void;
   handleEvent(event: BackendEvent): void;
 }
@@ -152,6 +154,25 @@ export function createConversationsStore(backend: Backend) {
           if (archived && get().selectedByAgent[conversation.agentId] === id) {
             get().select(conversation.agentId, null);
           }
+        }),
+
+      forgetAgent: (agentId) =>
+        set((s) => {
+          const gone = new Set([
+            ...(s.idsByAgent[agentId] ?? []),
+            ...(s.archivedIdsByAgent[agentId] ?? []),
+          ]);
+          const keep = <T>(r: Record<string, T>) =>
+            Object.fromEntries(Object.entries(r).filter(([k]) => !gone.has(k) && k !== agentId));
+          return {
+            byId: keep(s.byId),
+            unread: keep(s.unread),
+            idsByAgent: keep(s.idsByAgent),
+            archivedIdsByAgent: keep(s.archivedIdsByAgent),
+            archivedLoad: keep(s.archivedLoad),
+            selectedByAgent: keep(s.selectedByAgent),
+            visibleId: s.visibleId && gone.has(s.visibleId) ? null : s.visibleId,
+          };
         }),
 
       dismissNotice: () => set({ notice: null }),

@@ -1,16 +1,27 @@
+import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { AgentAvatar } from '../components/AgentAvatar';
 import { AgentPanel } from '../components/AgentPanel';
+import { ChatView } from '../components/Chat/ChatView';
+import { ConversationList } from '../components/Chat/ConversationList';
 import { ConfirmDialog } from '../components/ConfirmDialog';
 import { AgentForm } from '../components/Forms/AgentForm';
 import { ui } from '../components/ui';
-import { providerLabel } from '../lib/connectionForm';
+import { openConversation } from '../lib/chat';
 import { sampleTemplate } from '../lib/roleTemplates';
-import { useAgents, useApp, useConnections } from '../store/context';
+import {
+  useAgents,
+  useApp,
+  useConnections,
+  useConversations,
+  useStoreApis,
+} from '../store/context';
+import type { ErrorCode } from '@comitiva/contract';
 
-/** Agents: the selected agent (conversations arrive in Phase 4) and its details panel. */
+/** Agents: the selected agent's conversations and chat, and its details panel. */
 export function AgentsScreen() {
   const { t } = useTranslation();
+  const stores = useStoreApis();
   const agents = useAgents((s) => s.items);
   const selectedId = useAgents((s) => s.selectedId);
   const editor = useAgents((s) => s.editor);
@@ -19,26 +30,34 @@ export function AgentsScreen() {
   const dismissNotice = useAgents((s) => s.dismissNotice);
   const cancelDelete = useAgents((s) => s.cancelDelete);
   const confirmDeletion = useAgents((s) => s.confirmDeletion);
+  const chatNotice = useConversations((s) => s.notice);
+  const dismissChatNotice = useConversations((s) => s.dismissNotice);
+  const loadArchived = useConversations((s) => s.loadArchived);
+  const forgetConversations = useConversations((s) => s.forgetAgent);
+  const conversationCount = useConversations((s) =>
+    confirmDelete
+      ? (s.idsByAgent[confirmDelete]?.length ?? 0) +
+        (s.archivedIdsByAgent[confirmDelete]?.length ?? 0)
+      : 0,
+  );
 
   const selected = agents.find((a) => a.id === selectedId) ?? null;
   const editing = editor.mode === 'edit' ? (agents.find((a) => a.id === editor.id) ?? null) : null;
   const deleting = agents.find((a) => a.id === confirmDelete);
 
+  // The delete confirmation counts archived conversations too.
+  useEffect(() => {
+    if (confirmDelete) void loadArchived(confirmDelete);
+  }, [confirmDelete, loadArchived]);
+
   return (
     <div className="flex min-w-0 flex-1" data-testid="agents-screen">
-      <section className="flex min-w-0 flex-1 flex-col gap-4 overflow-y-auto p-6">
-        {notice && (
-          <div
-            role="alert"
-            data-testid="agents-notice"
-            data-code={notice}
-            className="flex items-center justify-between rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
-          >
-            <span>{t(`errors.${notice}`)}</span>
-            <button className={ui.ghost} onClick={dismissNotice} aria-label={t('common.dismiss')}>
-              ✕
-            </button>
-          </div>
+      <section
+        className={`flex min-w-0 flex-1 flex-col ${selected ? '' : 'gap-4 overflow-y-auto p-6'}`}
+      >
+        {notice && <Notice testId="agents-notice" code={notice} onDismiss={dismissNotice} />}
+        {chatNotice && (
+          <Notice testId="chat-notice" code={chatNotice} onDismiss={dismissChatNotice} />
         )}
         {selected ? <SelectedAgent /> : <NoSelection />}
       </section>
@@ -56,9 +75,19 @@ export function AgentsScreen() {
       {deleting && (
         <ConfirmDialog
           title={t('agents.deleteTitle', { name: deleting.name })}
-          body={t('agents.deleteBody')}
+          body={
+            conversationCount > 0
+              ? t('agents.deleteBodyConversations', { count: conversationCount })
+              : t('agents.deleteBody')
+          }
           confirmLabel={t('agents.delete')}
-          onConfirm={() => void confirmDeletion()}
+          onConfirm={() => {
+            const id = deleting.id;
+            void confirmDeletion().then(() => {
+              // Gone from the agents store means main deleted it, and its conversations by cascade.
+              if (!stores.agents.getState().items.some((a) => a.id === id)) forgetConversations(id);
+            });
+          }}
           onCancel={cancelDelete}
         />
       )}
@@ -66,32 +95,42 @@ export function AgentsScreen() {
   );
 }
 
-function SelectedAgent() {
+function Notice({
+  testId,
+  code,
+  onDismiss,
+}: {
+  testId: string;
+  code: ErrorCode;
+  onDismiss: () => void;
+}) {
   const { t } = useTranslation();
+  return (
+    <div
+      role="alert"
+      data-testid={testId}
+      data-code={code}
+      className="m-3 flex items-center justify-between rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-900 dark:border-red-800 dark:bg-red-950 dark:text-red-200"
+    >
+      <span>{t(`errors.${code}`)}</span>
+      <button className={ui.ghost} onClick={onDismiss} aria-label={t('common.dismiss')}>
+        ✕
+      </button>
+    </div>
+  );
+}
+
+/** The selected agent: its conversations on the left, the open one on the right. */
+function SelectedAgent() {
   const agent = useAgents((s) => s.items.find((a) => a.id === s.selectedId))!;
-  const connection = useConnections(
-    (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
+  const openId = useConversations((s) =>
+    openConversation(s.selectedByAgent[agent.id], s.idsByAgent[agent.id] ?? []),
   );
   return (
-    <>
-      <header className="flex items-center gap-3">
-        <AgentAvatar avatar={agent.avatar} name={agent.name} />
-        <div className="min-w-0">
-          <h1 data-testid="agent-title" className="truncate text-xl font-semibold">
-            {agent.name}
-          </h1>
-          {connection && (
-            <p className={`truncate text-sm ${ui.muted}`}>
-              {providerLabel(connection.provider)}
-              {agent.model && ` · ${agent.model}`}
-            </p>
-          )}
-        </div>
-      </header>
-      <div className={`${ui.card} p-8 text-center`}>
-        <p className={`text-sm ${ui.muted}`}>{t('agents.conversationsSoon')}</p>
-      </div>
-    </>
+    <div className="flex min-h-0 flex-1">
+      <ConversationList agentId={agent.id} openId={openId} />
+      <ChatView agent={agent} conversationId={openId} />
+    </div>
   );
 }
 

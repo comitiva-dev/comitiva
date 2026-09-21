@@ -122,6 +122,25 @@ describe('conversations store', () => {
     expect(store.getState().archivedIdsByAgent.a1).toEqual(['old']);
   });
 
+  it('forgets a deleted agent and its conversations', async () => {
+    const backend = fakeBackend();
+    backend.conversations.list.mockResolvedValue([
+      summary('k1', {}, 2),
+      summary('k2', { agentId: 'a2' }, 1),
+    ]);
+    const store = createConversationsStore(backend);
+    await store.getState().load();
+    store.getState().select('a1', 'k1');
+    store.getState().setVisible('k1');
+    store.getState().forgetAgent('a1');
+    const s = store.getState();
+    expect(Object.keys(s.byId)).toEqual(['k2']);
+    expect(s.idsByAgent).toEqual({ a2: ['k2'] });
+    expect(s.selectedByAgent).toEqual({});
+    expect(s.visibleId).toBeNull();
+    expect(agentUnread(s, 'a2')).toBe(1);
+  });
+
   it('shows failures as a notice by code', async () => {
     const backend = fakeBackend();
     backend.conversations.create.mockRejectedValueOnce(new BackendError('not_found', 'x', false));

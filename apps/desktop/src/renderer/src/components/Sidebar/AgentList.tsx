@@ -1,8 +1,10 @@
 import { useTranslation } from 'react-i18next';
 import type { Agent } from '@comitiva/contract';
 import { connectionState } from '../../lib/agentForm';
-import { useAgents, useApp, useConnections } from '../../store/context';
+import { agentStatus, agentUnread } from '../../store/conversations';
+import { useAgents, useApp, useConnections, useConversations } from '../../store/context';
 import { AgentAvatar } from '../AgentAvatar';
+import { StatusDot } from '../Chat/StatusDot';
 import { ui } from '../ui';
 
 /** The sidebar's agents: avatar, name and status; an empty state points to the next step. */
@@ -64,6 +66,8 @@ function AgentItem({ agent }: { agent: Agent }) {
   );
   const state = connectionState(connection);
   const active = selected && section === 'agents';
+  const status = useConversations((s) => agentStatus(s, agent.id));
+  const unread = useConversations((s) => agentUnread(s, agent.id));
 
   return (
     <li>
@@ -95,13 +99,16 @@ function AgentItem({ agent }: { agent: Agent }) {
             ⚠
           </span>
         )}
-        {/* Status arrives with chat (Phase 4): idle, responding, awaiting approval, error. */}
-        <span
-          data-testid="agent-status"
-          data-status="idle"
-          title={t('agents.status.idle')}
-          className="h-2 w-2 shrink-0 rounded-full bg-neutral-300 dark:bg-neutral-600"
-        />
+        {unread > 0 && (
+          <span
+            data-testid="agent-unread"
+            aria-label={t('sidebar.unread', { count: unread })}
+            className="rounded-full bg-indigo-600 px-1.5 text-xs font-medium text-white"
+          >
+            {unread}
+          </span>
+        )}
+        <StatusDot status={status} testId="agent-status" />
       </button>
     </li>
   );

@@ -25,7 +25,9 @@
     "settings": "Settings"
   },
   "sidebar": {
-    "noAgents": "No agents yet."
+    "noAgents": "No agents yet.",
+    "unread_one": "{{count}} unread reply",
+    "unread_other": "{{count}} unread replies"
   },
   "placeholder": {
     "tools": "Tools (local folders, Google Drive, any MCP server) arrive in a later phase.",
@@ -140,7 +142,9 @@
     "not_found": "That item no longer exists.",
     "sandbox_unavailable": "The harness's sandbox cannot start on this system.",
     "connection_disabled": "That connection is disabled. Enable it or pick another one.",
-    "model_required": "This connection has no default model. Pick a model for the agent."
+    "model_required": "This connection has no default model. Pick a model for the agent.",
+    "conversation_busy": "This conversation is still answering. Wait for it or stop it first.",
+    "interrupted": "The reply was interrupted when the app closed. You can retry."
   },
   "agents": {
     "create": "Create agent",
@@ -152,11 +156,13 @@
     "connectionDisabled": "Its connection is disabled: enable it or pick another one to chat.",
     "connectionMissing": "Its connection no longer exists: pick another one.",
     "status": {
-      "idle": "Idle"
+      "idle": "Idle",
+      "running": "Responding",
+      "awaiting-approval": "Awaiting approval",
+      "error": "Last reply failed"
     },
     "deleteTitle": "Delete “{{name}}”?",
     "deleteBody": "Its settings are removed. This cannot be undone.",
-    "conversationsSoon": "Conversations with this agent arrive in the next update.",
     "emptyTitle": "No agents yet",
     "emptyBody": "An agent is a persona with a role, a connection and, soon, tools.",
     "needConnection": "Agents talk through a connection. Add one first.",
@@ -246,6 +252,47 @@
         "name": "File Organizer",
         "role": "You are a file organizer. Help keep folders tidy: look at what is there, propose a clear structure and consistent names, and explain the plan before moving, renaming or deleting anything. Never remove files without saying exactly which ones and why."
       }
+    },
+    "deleteBodyConversations_one": "Its settings and its conversation are removed. This cannot be undone.",
+    "deleteBodyConversations_other": "Its settings and its {{count}} conversations are removed. This cannot be undone."
+  },
+  "chat": {
+    "conversations": "Conversations",
+    "newConversation": "New conversation",
+    "noConversations": "No conversations yet.",
+    "untitled": "Untitled",
+    "rename": "Rename",
+    "archive": "Archive",
+    "unarchive": "Unarchive",
+    "archived": "Archived",
+    "showArchived": "Show archived",
+    "hideArchived": "Hide archived",
+    "noArchived": "Nothing archived.",
+    "startHint": "Send a message to start a conversation with {{name}}.",
+    "emptyConversation": "No messages yet.",
+    "placeholder": "Message {{name}}",
+    "keys": "Enter sends · Shift+Enter adds a line",
+    "send": "Send",
+    "stop": "Stop",
+    "retry": "Retry",
+    "stopped": "Stopped",
+    "responding": "Responding",
+    "thinking": "Thinking…",
+    "loadingOlder": "Loading older messages…",
+    "you": "You",
+    "youInitial": "Y",
+    "copy": "Copy",
+    "copied": "Copied",
+    "imageUnavailable": "Image not available.",
+    "unsupportedBlock": "Content of type {{type}} cannot be shown yet.",
+    "tool": {
+      "running": "Running",
+      "done": "Done",
+      "error": "Failed",
+      "none": "No result",
+      "duration": "{{ms}} ms",
+      "input": "Arguments",
+      "output": "Result"
     }
   }
 }

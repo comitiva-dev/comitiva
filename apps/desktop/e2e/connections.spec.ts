@@ -66,7 +66,8 @@ test('boots into the app shell with a ready runner', async () => {
   await expect(page.getByTestId('secret-banner')).toHaveCount(0);
 
   await page.getByTestId('nav-tools').click();
-  await expect(page.getByTestId('placeholder-tools')).toBeVisible();
+  await expect(page.getByTestId('tools-screen')).toBeVisible();
+  await expect(page.getByTestId('builtin-badge')).toBeVisible();
   await page.getByTestId('nav-agents').click();
   // No connection yet: the Agents screen points to Connections.
   await expect(page.getByTestId('agents-need-connection')).toBeVisible();

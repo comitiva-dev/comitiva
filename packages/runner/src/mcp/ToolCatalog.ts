@@ -46,6 +46,11 @@ export class ToolCatalog {
     return [...this.byName.values()].map((e) => ({ ...e.tool, name: e.name }));
   }
 
+  /** True when a built-in server (e.g. the filesystem) contributes tools. */
+  hasBuiltin(builtin: 'filesystem'): boolean {
+    return [...this.byName.values()].some((e) => e.handle.builtin === builtin);
+  }
+
   resolve(name: string): CatalogEntry | undefined {
     return this.byName.get(name);
   }

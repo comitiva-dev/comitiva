@@ -1,5 +1,6 @@
 import { AppError, type CodexConfig, type Connection } from '@comitiva/contract';
 import { CliHarnessAdapter, type TurnSpec } from './CliHarnessAdapter.js';
+import { MCP_CALL_TIMEOUT_MS } from './ClaudeCodeAdapter.js';
 import { CodexParser } from './parsers/codex.js';
 import { stderrSummary, type HarnessParser, type ParserOptions } from './parsers/types.js';
 import { runCommand } from './process.js';
@@ -19,11 +20,29 @@ export class CodexAdapter extends CliHarnessAdapter {
     const args = ['exec'];
     if (t.resume) args.push('resume');
     args.push('--json', '--skip-git-repo-check', '--ignore-user-config');
-    args.push('-c', `sandbox_mode=${tomlString(config.sandbox ?? 'workspace-write')}`);
+    // apply_patch cannot be turned off, so with the filesystem server Codex's own
+    // sandbox is read-only: its native writes fail and it writes through the
+    // built-in server, which asks first (ADR 0009).
+    const sandbox = t.mcp?.hasFilesystem ? 'read-only' : (config.sandbox ?? 'workspace-write');
+    args.push('-c', `sandbox_mode=${tomlString(sandbox)}`);
     if (t.model) args.push('-m', t.model);
     if (t.system) args.push('-c', `developer_instructions=${tomlString(t.system)}`);
     if (t.probe) args.push('--ephemeral');
-    // MCP passthrough (Phase 5): `-c mcp_servers.<name>.…`; t.mcpConfigPath is unused until then.
+    if (t.mcp) {
+      const key = `mcp_servers.${t.mcp.serverName}`;
+      args.push('-c', `${key}.command=${tomlString(t.mcp.command)}`);
+      args.push('-c', `${key}.args=[${t.mcp.args.map(tomlString).join(', ')}]`);
+      const env = Object.entries(t.mcp.env);
+      if (env.length > 0) {
+        const table = env.map(([k, v]) => `${k} = ${tomlString(v)}`).join(', ');
+        args.push('-c', `${key}.env={ ${table} }`);
+      }
+      // An approval can take a while.
+      args.push('-c', `${key}.tool_timeout_sec=${MCP_CALL_TIMEOUT_MS / 1000}`);
+      // Codex would decline tools without readOnlyHint itself (exec cannot ask);
+      // the runner gates every call and asks the user, so Codex lets them through.
+      args.push('-c', `${key}.default_tools_approval_mode="approve"`);
+    }
     args.push(...t.config.extraArgs);
     if (t.resume) args.push(t.resume);
     args.push('-'); // prompt on stdin

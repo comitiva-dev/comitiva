@@ -13,7 +13,8 @@ export default defineConfig([
   // Self-contained runner binary: every dependency bundled so shells can run
   // it with any Node 22+ (including Electron with ELECTRON_RUN_AS_NODE=1).
   {
-    entry: { bin: 'src/bin.ts' },
+    // The MCP proxy CLI harnesses launch (ADR 0009) ships next to the binary.
+    entry: { bin: 'src/bin.ts', 'mcp-proxy': 'src/proxy/bin.ts' },
     format: ['cjs'],
     outExtension: () => ({ js: '.cjs' }),
     target: 'node22',

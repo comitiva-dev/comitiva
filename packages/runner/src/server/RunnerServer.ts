@@ -2,6 +2,7 @@ import { AppError, RunnerRequest } from '@comitiva/contract';
 import { createDefaultRegistry, type ProviderRegistry } from '../providers/ProviderRegistry.js';
 import { McpClientManager } from '../mcp/McpClientManager.js';
 import type { OpenConnection } from '../mcp/McpConnection.js';
+import { ToolBridge } from '../mcp/ToolBridge.js';
 import { RunManager } from '../runs/RunManager.js';
 import { createLogger, type Logger } from '../util/logger.js';
 import { RequestRouter } from './RequestRouter.js';
@@ -14,6 +15,11 @@ export interface RunnerServerOptions {
   registry?: ProviderRegistry;
   /** How MCP connections are opened (tests inject in-memory servers). */
   openMcp?: OpenConnection;
+  /**
+   * Path of `mcp-proxy.cjs`, which CLI harnesses launch to reach the run's
+   * tools (ADR 0009). Without it, harness turns get no tools.
+   */
+  proxyPath?: string;
   /** Called after `shutdown` or when input closes, once runs are cancelled. */
   onExit?: () => void;
 }
@@ -23,6 +29,7 @@ export class RunnerServer {
   private readonly logger: Logger;
   private readonly runs: RunManager;
   private readonly mcp: McpClientManager;
+  private readonly bridge: ToolBridge | undefined;
   private readonly router: RequestRouter;
   private stopping: Promise<void> | null = null;
 
@@ -31,11 +38,15 @@ export class RunnerServer {
     this.transport = new JsonLinesTransport(opts.input, opts.output);
     const registry = opts.registry ?? createDefaultRegistry();
     this.mcp = new McpClientManager(this.logger, opts.openMcp ? { open: opts.openMcp } : {});
+    this.bridge = opts.proxyPath
+      ? new ToolBridge({ proxyPath: opts.proxyPath, logger: this.logger })
+      : undefined;
     this.runs = new RunManager({
       registry,
       emit: (e) => this.transport.send(e),
       logger: this.logger,
       mcp: this.mcp,
+      bridge: this.bridge,
     });
     this.router = new RequestRouter({
       registry,
@@ -63,7 +74,7 @@ export class RunnerServer {
   stop(): Promise<void> {
     this.stopping ??= this.runs
       .cancelAll()
-      .then(() => this.mcp.stopAll())
+      .then(() => Promise.all([this.mcp.stopAll(), this.bridge?.close()]))
       .then(() => this.opts.onExit?.());
     return this.stopping;
   }

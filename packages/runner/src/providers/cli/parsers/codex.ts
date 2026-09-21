@@ -1,6 +1,7 @@
 import { AppError, type StopReason } from '@comitiva/contract';
 import type { AdapterEvent } from '../../ProviderAdapter.js';
 import { httpError } from '../../api/shared.js';
+import { BRIDGE_SERVER_NAME } from '../../../mcp/names.js';
 import type { HarnessExit } from '../process.js';
 import {
   isObject,
@@ -75,7 +76,7 @@ export class CodexParser implements HarnessParser {
   }
 
   private itemStarted(item: Record<string, unknown>): AdapterEvent[] {
-    return isTool(item) ? this.toolUse(item) : [];
+    return isTool(item) && !isBridgeCall(item) ? this.toolUse(item) : [];
   }
 
   private itemCompleted(item: Record<string, unknown>): AdapterEvent[] {
@@ -91,6 +92,7 @@ export class CodexParser implements HarnessParser {
       return [];
     }
     if (!isTool(item)) return []; // reasoning, todo lists, …
+    if (isBridgeCall(item)) return []; // the run reports calls to its own proxy
     // A tool can complete without a start line; emit its use first.
     return [
       ...this.toolUse(item),
@@ -136,6 +138,11 @@ export class CodexParser implements HarnessParser {
 
 const TOOL_TYPES = new Set(['command_execution', 'file_change', 'mcp_tool_call', 'web_search']);
 const isTool = (item: Record<string, unknown>) => TOOL_TYPES.has(str(item.type) ?? '');
+
+/** A call to the runner's proxy: the run reports it itself (ToolBridge). */
+function isBridgeCall(item: Record<string, unknown>): boolean {
+  return item.type === 'mcp_tool_call' && item.server === BRIDGE_SERVER_NAME;
+}
 
 function describeTool(item: Record<string, unknown>): [string, unknown] {
   switch (item.type) {

@@ -4,6 +4,10 @@ import { ClaudeCodeParser } from './parsers/claudeCode.js';
 import type { HarnessParser, ParserOptions } from './parsers/types.js';
 import { runCommand } from './process.js';
 
+/** Built-in tools kept when the agent has the filesystem server: nothing that touches files. */
+export const NATIVE_TOOLS_WITH_FILESYSTEM = 'WebSearch,WebFetch';
+export const MCP_CALL_TIMEOUT_MS = 30 * 60_000;
+
 /**
  * Claude Code in print mode with streaming JSON. Auto-accept
  * (`bypassPermissions`) and isolated from the user's settings and MCP servers;
@@ -29,9 +33,19 @@ export class ClaudeCodeAdapter extends CliHarnessAdapter {
     if (t.model) args.push('--model', t.model);
     if (t.system) args.push('--append-system-prompt', t.system);
     if (t.resume) args.push('--resume', t.resume);
-    if (t.mcpConfigPath) args.push('--mcp-config', t.mcpConfigPath);
+    if (t.mcp) {
+      args.push('--mcp-config', t.mcp.path);
+      // Every file access goes through the built-in server and its approvals:
+      // no Read/Write/Edit, and no Bash (it can write files too).
+      if (t.mcp.hasFilesystem) args.push('--tools', NATIVE_TOOLS_WITH_FILESYSTEM);
+    }
     if (t.probe) args.push('--no-session-persistence', '--tools', '');
     return [...args, ...t.config.extraArgs];
+  }
+
+  /** An approval can take a while: MCP calls wait up to 30 min (the default is much shorter). */
+  protected override turnEnv(t: TurnSpec): Record<string, string> {
+    return t.mcp ? { MCP_TOOL_TIMEOUT: String(MCP_CALL_TIMEOUT_MS) } : {};
   }
 
   protected createParser(opts: ParserOptions): HarnessParser {

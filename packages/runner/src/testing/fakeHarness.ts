@@ -11,6 +11,10 @@
  * `[stderr:TEXT]` writes to stderr, `[exit:N]` exits with N after the
  * session line, `[hang]` never finishes, `[grandchild]` starts a child that
  * outlives nothing (its pid goes to the trace), `[not-logged-in]` fails auth.
+ * `[mcp:TOOL {json}]` (repeatable) connects to the MCP server named
+ * `comitiva` in `--mcp-config` (Claude) or `-c mcp_servers.comitiva.*`
+ * (Codex), the runner's proxy, calls TOOL with the input and reports it like
+ * the real harness; the reply then starts with `Result: <last result>`.
  *
  * Env: FAKE_HARNESS_LOGGED_OUT=1 (auth status and turns fail),
  * FAKE_HARNESS_SANDBOX_BROKEN=1 (codex sandbox probe fails),
@@ -19,8 +23,14 @@
  */
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { appendFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 import { basename } from 'node:path';
+import { Client } from '@modelcontextprotocol/sdk/client/index.js';
+import {
+  getDefaultEnvironment,
+  StdioClientTransport,
+} from '@modelcontextprotocol/sdk/client/stdio.js';
+import { parseToolScript } from './fakeProviders.js';
 
 type Kind = 'claude' | 'codex';
 
@@ -123,7 +133,10 @@ async function main(): Promise<number> {
   const chunks = Number(control(prompt, 'chunks') ?? 3);
   const interval = Number(control(prompt, 'interval') ?? 0);
   const lastLine = prompt.trim().split('\n').at(-1) ?? '';
-  const reply = `${resume ? `(resumed ${resume}) ` : ''}Echo: ${lastLine.replace(/\[[^\]]*\]/g, '').trim()}`;
+  const mcpCalls = await runMcpScript(prompt.replace(/\[mcp:/g, '[tool:'));
+  const echo = `${resume ? `(resumed ${resume}) ` : ''}Echo: ${lastLine.replace(/\[[^\]]*\]/g, '').trim()}`;
+  const last = mcpCalls.at(-1);
+  const reply = last ? `Result: ${last.text} ${echo}` : echo;
 
   if (control(prompt, 'grandchild') !== undefined) {
     const child = spawn(process.execPath, ['-e', 'setInterval(() => {}, 1000)'], {
@@ -133,8 +146,16 @@ async function main(): Promise<number> {
   }
 
   return kind === 'claude'
-    ? claudeTurn({ prompt, session, notLoggedIn, chunks, interval, reply })
-    : codexTurn({ prompt, session, notLoggedIn, chunks, interval, reply });
+    ? claudeTurn({ prompt, session, notLoggedIn, chunks, interval, reply, mcpCalls })
+    : codexTurn({ prompt, session, notLoggedIn, chunks, interval, reply, mcpCalls });
+}
+
+interface McpCall {
+  id: string;
+  name: string;
+  input: unknown;
+  text: string;
+  isError: boolean;
 }
 
 interface Turn {
@@ -144,6 +165,80 @@ interface Turn {
   chunks: number;
   interval: number;
   reply: string;
+  mcpCalls: McpCall[];
+}
+
+/** The `comitiva` server from the harness's MCP configuration, if any. */
+function proxySpec(): { command: string; args: string[]; env: Record<string, string> } | undefined {
+  if (kind === 'claude') {
+    const file = flagValue('--mcp-config');
+    if (!file) return undefined;
+    const config = JSON.parse(readFileSync(file, 'utf8')) as {
+      mcpServers: Record<string, { command: string; args: string[]; env?: Record<string, string> }>;
+    };
+    const s = config.mcpServers.comitiva;
+    return s ? { command: s.command, args: s.args, env: s.env ?? {} } : undefined;
+  }
+  const values = new Map<string, string>();
+  argv.forEach((a, i) => {
+    const m = /^mcp_servers\.comitiva\.(\w+)=(.*)$/s.exec(a);
+    if (argv[i - 1] === '-c' && m) values.set(m[1]!, m[2]!);
+  });
+  const command = values.get('command');
+  if (!command) return undefined;
+  const env: Record<string, string> = {};
+  for (const m of (values.get('env') ?? '').matchAll(/(\w+) = ("(?:[^"\\]|\\.)*")/g)) {
+    env[m[1]!] = JSON.parse(m[2]!) as string;
+  }
+  return {
+    command: JSON.parse(command) as string,
+    args: JSON.parse(values.get('args') ?? '[]') as string[],
+    env,
+  };
+}
+
+/** Calls the scripted tools through the proxy, like the real harness would. */
+async function runMcpScript(prompt: string): Promise<McpCall[]> {
+  const script = parseToolScript(prompt);
+  if (script.length === 0) return [];
+  const spec = proxySpec();
+  if (!spec) throw new Error('[mcp:…] without a comitiva MCP server in the arguments');
+  const client = new Client({ name: 'fake-harness', version: '0' });
+  await client.connect(
+    new StdioClientTransport({
+      command: spec.command,
+      args: spec.args,
+      env: { ...getDefaultEnvironment(), ...spec.env },
+      stderr: 'inherit',
+    }),
+  );
+  const { tools } = await client.listTools();
+  trace({ mcpTools: tools.map((t) => t.name) });
+  const calls: McpCall[] = [];
+  try {
+    for (const [i, step] of script.entries()) {
+      const id = `toolu_mcp_${i}`;
+      const r = (await client.callTool(
+        {
+          name: step.name,
+          arguments: step.input as Record<string, unknown>,
+          _meta: { 'claudecode/toolUseId': id },
+        },
+        undefined,
+        { timeout: 600_000 },
+      )) as { content: Array<{ type: string; text?: string }>; isError?: boolean };
+      calls.push({
+        id,
+        name: step.name,
+        input: step.input,
+        text: r.content.map((c) => c.text ?? '').join(''),
+        isError: r.isError === true,
+      });
+    }
+  } finally {
+    await client.close();
+  }
+  return calls;
 }
 
 async function hangOrExit(t: Turn): Promise<number | undefined> {
@@ -188,6 +283,29 @@ async function claudeTurn(t: Turn): Promise<number> {
   const early = await hangOrExit(t);
   if (early !== undefined) return early;
 
+  for (const call of t.mcpCalls) {
+    out({
+      type: 'assistant',
+      ...base,
+      message: {
+        id: `msg_${call.id}`,
+        role: 'assistant',
+        content: [
+          { type: 'tool_use', id: call.id, name: `mcp__comitiva__${call.name}`, input: call.input },
+        ],
+      },
+    });
+    out({
+      type: 'user',
+      ...base,
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: call.id, content: call.text, is_error: call.isError },
+        ],
+      },
+    });
+  }
   if (control(t.prompt, 'tool') !== undefined) {
     const id = 'toolu_fake_1';
     out({
@@ -274,6 +392,25 @@ async function codexTurn(t: Turn): Promise<number> {
   if (early !== undefined) return early;
 
   let item = 0;
+  for (const call of t.mcpCalls) {
+    const mcp = {
+      id: `item_${item++}`,
+      type: 'mcp_tool_call',
+      server: 'comitiva',
+      tool: call.name,
+      arguments: call.input,
+      status: 'in_progress',
+    };
+    out({ type: 'item.started', item: mcp });
+    out({
+      type: 'item.completed',
+      item: {
+        ...mcp,
+        status: call.isError ? 'failed' : 'completed',
+        result: { content: [{ type: 'text', text: call.text }] },
+      },
+    });
+  }
   if (control(t.prompt, 'tool') !== undefined) {
     const cmd = {
       id: `item_${item++}`,

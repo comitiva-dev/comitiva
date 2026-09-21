@@ -224,3 +224,31 @@ describe('McpClientManager', () => {
     expect(fake.opens()).toBe(2);
   });
 });
+
+describe('ToolBridge', () => {
+  it('refuses a connection without a registered token', async () => {
+    const { ToolBridge } = await import('../../src/mcp/ToolBridge.js');
+    const { connect } = await import('node:net');
+    const bridge = new ToolBridge({ proxyPath: '/unused', logger: createLogger('silent') });
+    const run = {
+      runId: 'r1',
+      tools: new ToolCatalog([]),
+      callFromHarness: () => Promise.reject(new Error('unexpected')),
+    };
+    const config = await bridge.register(run as never);
+    const { socket } = JSON.parse(
+      (await import('node:fs')).readFileSync(config.args[1]!, 'utf8'),
+    ) as { socket: string };
+    const lines: string[] = [];
+    const s = connect(socket);
+    s.on('data', (d: Buffer) => lines.push(d.toString()));
+    s.write(`${JSON.stringify({ id: 1, type: 'hello', token: 'wrong' })}\n`);
+    s.write(`${JSON.stringify({ id: 2, type: 'list' })}\n`);
+    await new Promise((r) => s.on('close', r));
+    expect(lines.join('')).toContain('"ok":false');
+    expect(lines.join('')).not.toContain('"id":2');
+    await config.cleanup();
+    expect((await import('node:fs')).existsSync(config.path)).toBe(false);
+    await bridge.close();
+  });
+});

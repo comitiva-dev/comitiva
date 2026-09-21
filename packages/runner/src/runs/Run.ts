@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import {
   AppError,
   type ApprovalDecision,
@@ -165,6 +166,27 @@ export class Run {
     return this.toolResult(toolUseId, result, performance.now() - started);
   }
 
+  /**
+   * A call from a CLI harness through the ToolBridge. The harness's own
+   * report of the call is dropped by its parser, so the run reports it here:
+   * the tool_use block, then the usual tool_call / tool_result. The id is the
+   * harness's tool-use id when the proxy got one, else a new one.
+   */
+  callFromHarness(name: string, input: unknown, toolUseId?: string): Promise<ToolResult> {
+    const id = toolUseId ?? `mcp_${randomUUID()}`;
+    this.emit({
+      type: 'run.block',
+      block: {
+        type: 'tool_use',
+        id,
+        toolServerId: this.catalog.resolve(name)?.serverId ?? '',
+        name,
+        input: input ?? {},
+      },
+    });
+    return this.callTool(id, name, input);
+  }
+
   private toolResult(toolUseId: string, result: ToolResult, durationMs: number): ToolResult {
     this.emit({
       type: 'run.tool_result',
@@ -242,7 +264,9 @@ export class Run {
       // API providers need strict tool_use → tool_result pairs; harnesses get a transcript.
       messages: connection.kind === 'api' ? normalizeHistory(this.req.messages) : this.req.messages,
       harnessSessionId: this.req.harnessSessionId,
-      workingDirectory: this.req.workingDirectory,
+      // CLI harnesses work in the agent's first read-write root, else where the shell says.
+      workingDirectory:
+        agent.roots.find((r) => r.mode === 'readwrite')?.path ?? this.req.workingDirectory,
     };
   }
 

@@ -1,5 +1,6 @@
 import { AppError, StopReason, type ToolResultContentBlock } from '@comitiva/contract';
 import type { AdapterEvent } from '../../ProviderAdapter.js';
+import { BRIDGE_SERVER_NAME } from '../../../mcp/names.js';
 import type { HarnessExit } from '../process.js';
 import {
   isObject,
@@ -12,6 +13,8 @@ import {
 } from './types.js';
 
 export const CLAUDE_CODE_TOOL_SERVER = 'harness:claude-code';
+/** Calls to the runner's proxy: the run reports those itself (ToolBridge). */
+const BRIDGE_TOOL_PREFIX = `mcp__${BRIDGE_SERVER_NAME}__`;
 const LOGIN = 'run `claude auth login` in a terminal';
 
 /**
@@ -26,6 +29,7 @@ export class ClaudeCodeParser implements HarnessParser {
   private separatorPending = false;
   private result: Record<string, unknown> | undefined;
   private error: AppError | undefined;
+  private readonly bridgeCalls = new Set<string>();
 
   constructor(private readonly opts: ParserOptions) {}
 
@@ -101,7 +105,9 @@ export class ClaudeCodeParser implements HarnessParser {
     const events: AdapterEvent[] = [];
     for (const block of content) {
       if (!isObject(block)) continue;
-      if (block.type === 'tool_use') {
+      if (block.type === 'tool_use' && str(block.name)?.startsWith(BRIDGE_TOOL_PREFIX)) {
+        this.bridgeCalls.add(str(block.id) ?? '');
+      } else if (block.type === 'tool_use') {
         events.push({
           type: 'run.block',
           block: {
@@ -131,6 +137,7 @@ export class ClaudeCodeParser implements HarnessParser {
     const events: AdapterEvent[] = [];
     for (const block of content) {
       if (!isObject(block) || block.type !== 'tool_result') continue;
+      if (this.bridgeCalls.has(str(block.tool_use_id) ?? '')) continue;
       events.push({
         type: 'run.block',
         block: {

@@ -11,7 +11,13 @@ import {
   type StopReason,
   type TestResult,
 } from '@comitiva/contract';
-import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import type {
+  AdapterEvent,
+  CliMcpConfig,
+  ProviderAdapter,
+  RunContext,
+  RunInput,
+} from '../ProviderAdapter.js';
 import { streamTurn, UsageTracker } from '../api/shared.js';
 import { locateBinary } from './locateBinary.js';
 import type { HarnessParser, ParserOptions } from './parsers/types.js';
@@ -27,8 +33,8 @@ export interface TurnSpec {
   system: string;
   /** Session to resume, when the harness keeps the history. */
   resume: string | undefined;
-  /** Temporary MCP config (Phase 5); undefined until then. */
-  mcpConfigPath: string | undefined;
+  /** The run's tools through the runner's proxy (ADR 0009); undefined without tools. */
+  mcp: CliMcpConfig | undefined;
   /** A connection test: no session persistence, no tools. */
   probe: boolean;
 }
@@ -81,6 +87,11 @@ export abstract class CliHarnessAdapter implements ProviderAdapter {
 
   protected env(): NodeJS.ProcessEnv {
     return harnessEnv(this.options.env ?? process.env);
+  }
+
+  /** Extra env for a turn (Claude Code: how long an MCP call may take). */
+  protected turnEnv(_turn: TurnSpec): Record<string, string> {
+    return {};
   }
 
   protected locate(binaryPath: string | undefined): Promise<string> {
@@ -145,7 +156,7 @@ export abstract class CliHarnessAdapter implements ProviderAdapter {
         model: config.defaultModel ?? '',
         system: '',
         resume: undefined,
-        mcpConfigPath: undefined,
+        mcp: undefined,
         probe: true,
       }),
       { cwd, env: this.env(), stdin: 'Reply with the single word OK.', signal },
@@ -183,31 +194,28 @@ export abstract class CliHarnessAdapter implements ProviderAdapter {
     }
     const bin = await this.locate(config.binaryPath);
     await mkdir(cwd, { recursive: true });
-    const mcp = await ctx.mcpConfigForCli?.(); // Phase 5 fills this in
+    const mcp = await ctx.mcpConfigForCli?.();
     const idPrefix = `${Date.now().toString(36)}_`;
 
     try {
       let resume = input.harnessSessionId;
       for (let attempt = 0; ; attempt++) {
         const parser = this.createParser({ usage, log: ctx.log, idPrefix });
-        const proc = spawnHarness(
-          bin,
-          this.buildArgs({
-            config,
-            model: input.model,
-            system: input.system,
-            resume,
-            mcpConfigPath: mcp?.path,
-            probe: false,
-          }),
-          {
-            cwd,
-            env: this.env(),
-            stdin: buildPrompt(input.messages, resume !== undefined),
-            signal,
-            idleTimeoutMs: this.options.idleTimeoutMs ?? 10 * 60_000,
-          },
-        );
+        const spec: TurnSpec = {
+          config,
+          model: input.model,
+          system: input.system,
+          resume,
+          mcp,
+          probe: false,
+        };
+        const proc = spawnHarness(bin, this.buildArgs(spec), {
+          cwd,
+          env: { ...this.env(), ...this.turnEnv(spec) },
+          stdin: buildPrompt(input.messages, resume !== undefined),
+          signal,
+          idleTimeoutMs: this.options.idleTimeoutMs ?? 10 * 60_000,
+        });
         let yielded = false;
         try {
           for await (const line of proc.lines) {
@@ -231,7 +239,7 @@ export abstract class CliHarnessAdapter implements ProviderAdapter {
         }
       }
     } finally {
-      mcp?.cleanup();
+      await mcp?.cleanup().catch(() => {});
     }
   }
 }

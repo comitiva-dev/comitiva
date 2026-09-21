@@ -182,19 +182,20 @@ packages/mcp-servers/src/            index.ts (scaffold)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
-├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3)
+├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
-    │   │                            0002_agent_settings (P3), meta/)
-    │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3; others P4+)
+    │   │                            0002_agent_settings (P3), 0003_chat (P4), meta/)
+    │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
+    │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4; others P5+)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
-    │   │                            ConversationService.ts ToolServerService.ts
-    │   │                            ApprovalService.ts UsageService.ts TitleService.ts (P4+)
+    │   │                            ConversationService.ts TitleService.ts (P4)
+    │   │                            ToolServerService.ts ApprovalService.ts UsageService.ts (P5+)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
@@ -202,15 +203,17 @@ apps/desktop/
         ├── index.html               CSP
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
-            ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4+)
+            ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
-            │                        agentForm.ts roleTemplates.ts async.ts (P3)
+            │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
             │                        Forms/CliConnectionForm.tsx Forms/FormShell.tsx (P2)
             │                        AgentAvatar.tsx AgentPanel.tsx Sidebar/AgentList.tsx Forms/AgentForm.tsx (P3)
-            │                        Chat/ Composer/ ToolBlock/ ApprovalCard/ Settings/ (P4+)
+            │                        Chat/ (ChatView ConversationList MessageList MessageBubble Markdown StatusDot)
+            │                        Composer/Composer.tsx ToolBlock/ToolCallBlock.tsx (P4)
+            │                        ApprovalCard/ Settings/ (P5+)
             ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)
-            │                        ChatScreen ToolsScreen UsageScreen SettingsScreen (P4+)
+            │                        ToolsScreen UsageScreen SettingsScreen (P5+; chat lives in AgentsScreen)
             └── i18n/                index.ts en.json pt-BR.json
 ```
 
@@ -308,6 +311,12 @@ CREATE TABLE messages (
   seq INTEGER NOT NULL, created_at TEXT NOT NULL
 );
 CREATE UNIQUE INDEX idx_messages_conv_seq ON messages(conversation_id, seq);
+-- 0003_chat (Phase 4): why a reply failed (AppErrorShape JSON); which connection the harness
+-- session belongs to (a session is resumed only on that connection); unread replies are those
+-- with seq > last_read_seq.
+ALTER TABLE messages ADD error TEXT;
+ALTER TABLE conversations ADD harness_connection_id TEXT;
+ALTER TABLE conversations ADD last_read_seq INTEGER NOT NULL DEFAULT 0;
 
 CREATE TABLE tool_approvals (
   id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -686,9 +695,23 @@ class AgentRepository {
 }
 class SettingsRepository { get(): AppSettings /* defaults for missing or invalid keys */; update(patch) }
 // ConnectionRepository.agentsUsing(id) → [{ id, name }]; delete's connection_in_use message names them.
-class ConversationRepository { /* + listByAgent(agentId, {archived}); setStatus; setHarnessSession; touch */ }
-class MessageRepository { /* + listByConversation(id, {limit, before}); appendText(id, text); setContent; setStatus; nextSeq */ }
-class ToolServerRepository, ToolApprovalRepository, UsageRepository { /* summary(range, groupBy); timeseries */ }
+class ConversationRepository {   // (P4)
+  list({ agentId?, archived }): ConversationSummary[];   // newest activity first, with unread (seq > last_read_seq)
+  get(id); require(id) /* not_found */; create(agentId, at?); rename(id, title | null); setArchived(id, archived);
+  setStatus(id, status); touch(id, at?) /* lastActivityAt */; markRead(id);
+  harnessSession(id, connectionId): string | undefined;   // only when the session belongs to that connection
+  setHarnessSession(id, sessionId, connectionId);
+  recoverInterrupted(): string[];   // at boot: running → error
+}
+class MessageRepository {        // (P4)
+  page(conversationId, { beforeSeq?, limit }): { messages, hasMore };   // oldest first
+  all(conversationId); last(conversationId); get(id); require(id);
+  insert(conversationId, role, content, status, at);   // next seq in the same statement
+  setContent(id, blocks) /* 250 ms checkpoints */; finish(id, status, blocks, error); reset(id) /* retry */;
+  recoverInterrupted();   // at boot: streaming → error { interrupted }
+}
+class UsageRepository { insert(NewUsageRecord); listByConversation(id) }   // (P4; summary/timeseries in P6)
+class ToolServerRepository, ToolApprovalRepository { /* P5 */ }
 
 // main/secrets/SecretStore.ts
 interface SecretStore {
@@ -719,7 +742,7 @@ class ConnectionService {
   listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
   detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;   // CLI harnesses (P2); CLI connections never read or store a key
 }
-// main/services/AgentService.ts (P3) — thin over AgentRepository; conversations join in Phase 4
+// main/services/AgentService.ts (P3) — thin over AgentRepository; agents.delete calls ConversationService.forgetAgent first
 class AgentService {
   list(); create(draft: ValidAgentDraft); update(id, patch: ValidAgentPatch); delete(id);
   duplicate(id, name?);   // name comes localized from the UI; fallback "<name> (copy)"
@@ -728,18 +751,33 @@ class AgentService {
 function resolveWorkingDirectory(connection, conversationId, workspacesDir): string | undefined;
 // services/workingDirectory.ts (P2): config.workingDirectory, else <userData>/workspaces/<conversationId>; used by ConversationService (P4)
 
-// main/services/ConversationService.ts
-class ConversationService extends EventEmitter {
-  constructor(deps: { db; conversations; messages; agents; connections; approvals; usage; secrets; runner: RunnerClient; title: TitleService });
-  create(agentId: string): Conversation;
-  sendMessage(conversationId: string, content: Block[]): Promise<void>;
-  cancel(conversationId: string): void;
-  retryLast(conversationId: string): Promise<void>;
-  approve(conversationId: string, toolUseId: string, decision: ApprovalDecision): void;
-  private buildRunRequest(conv: Conversation): RunStartPayload;      // agent + connection + secret + history + alwaysAllowed
-  private handleRunnerEvent(e: RunnerEvent): void;                   // dispatches by type; keeps a runId → conversationId map
-  private flushText(conversationId: string): void;                   // batching for SQLite
-  // events emitted to IpcRouter: 'conversation.updated', 'message.delta', 'message.block', 'message.completed', 'approval.requested'
+// main/services/ConversationService.ts (P4)
+class ConversationService extends EventEmitter<ConversationEvents> {
+  constructor(deps: { db; conversations; messages; usage; agents; connections; secretFor(connection); runner: RunnerPort;
+                      title: TitleService; workspacesDir; timing?: { uiFlushMs?; dbFlushMs?; cancelGraceMs? } });
+  list(filter); create(agentId); rename(id, title); archive(id, archived); markRead(id);
+  listMessages({ conversationId, beforeSeq?, limit }): MessagePage;   // flushes pending text; live reply at page.rev (ADR 0008)
+  sendMessage(conversationId, content: UserContent): Promise<void>;
+  // refuses before writing anything: conversation_busy, connection_disabled, model_required, secret_missing;
+  // then user message + empty streaming reply + placeholder title + status running, in one transaction
+  retryLast(conversationId): Promise<void>;   // last message must be a failed reply; reset in place
+  cancel(conversationId): void;               // runner cancel; finalized locally as cancelled after a grace period
+  forgetAgent(agentId): void;                 // before deleting an agent: stop its runs, write nothing
+  recover(): void;                            // at boot (interrupted); shutdown(): cancels and finalizes every run
+  // Runs: one per conversation at a time, no global queue. History = stored messages before the reply.
+  // CLI: harnessSession(conversationId, connectionId) + resolveWorkingDirectory. run.session is persisted at once.
+  // Text: coalesced to the UI every 16 ms, checkpointed to SQLite every ~250 ms. Terminal event: final message,
+  // one usage record per run, status idle | error, touch, all in one transaction; after the first complete reply,
+  // TitleService replaces the placeholder unless the user renamed it.
+  // Events → IpcRouter.broadcast: conversation.updated, message.updated, message.delta, message.block (rev per conversation)
+}
+
+// main/services/TitleService.ts (P4)
+placeholderTitle(content): string | null;   // first non-blank line, ≤ 60 chars; set on the first send
+class TitleService {
+  generate({ conversationId, agent, connection, user, reply }): Promise<string | null>;
+  // a separate runner run with titleModelFor(provider, preset, model); API connections only; its usage is recorded
+  // with messageId null; never throws (null → the placeholder stays)
 }
 
 // main/ipc/invoke.ts
@@ -766,12 +804,13 @@ connections.detectBinary                                            (P2)
 toolServers.list | create | update | delete | test | connectGoogle (5b)
 agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
-conversations.listByAgent | create | rename | archive | setStatus
-messages.list | send | cancel | retry
-approvals.decide
+conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
+messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
+approvals.decide                                                    (P5)
 usage.summary | timeseries | export
 dialogs.pickFolder                                                  (P2)
-events: runner.status (P0); conversation.updated, message.delta, message.block, message.completed, approval.requested (P4+)
+events: runner.status (P0); conversation.updated, message.updated, message.delta, message.block (P4, ADR 0008);
+        approval.requested (P5)
 ```
 
 ---
@@ -790,14 +829,15 @@ interface Backend {
   toolServers: { list(); create(d); update(id, d); delete(id); test(id) };
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
   settings: { get(); update(patch) };                                               // (P3)
-  conversations: { listByAgent(agentId); create(agentId); rename(id, t); archive(id) };
-  messages: { list(convId, opts?); send(convId, blocks); cancel(convId); retry(convId) };
+  conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id) };   // (P4)
+  messages: { list(convId, { beforeSeq?, limit? }?); send(convId, UserContent); cancel(convId); retry(convId) };   // (P4)
   approvals: { decide(convId, toolUseId, decision) };
   usage: { summary(range, groupBy); timeseries(range) };
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
-// Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings.
+// Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings;
+// Phase 4 conversations, messages and their events.
 
 // renderer/src/store/*.ts (Zustand vanilla stores created with the Backend injected; StoresProvider + useApp/useConnections)
 appStore:               version, runnerStatus (pushed status wins over init), secretStatus, section (sidebar navigation)
@@ -805,11 +845,14 @@ connectionsStore:       items: ConnectionSummary[], testing, editor (closed | cr
 agentsStore (P3):       items, selectedId, editor (closed | create with prefill | edit id), confirmDelete, notice,
                         models per connection (fetched once per session; retry forces), settings;
                         createSample (model_required → opens the prefilled form), dismissSample.
-                        Phase 4 adds statusByAgent (derived from conversations) and unreadByAgent.
-useConversationsStore:  byAgent: Record<agentId, Conversation[]>, selectedByAgent
-useMessagesStore:       byConversation: Record<convId, Message[]>, streamingText: Record<convId, string>,
-                        applyDelta(convId, text), applyBlock(convId, block), complete(convId, message)
-useUiStore:             rightPanelOpen, theme, quickSwitcherOpen, pendingApprovals: Record<convId, ToolCallEvent>
+conversationsStore (P4): byId, idsByAgent / archivedIdsByAgent (newest activity first), selectedByAgent (undefined =
+                        the most recent, null = "new conversation"), visibleId (on screen: its replies are read),
+                        unread, notice; load, loadArchived, create, select, setVisible, rename, archive, forgetAgent.
+                        Selectors: agentStatus (running > error > idle), agentUnread, isRunning — from main's status.
+messagesStore (P4):     byConversation: { items, status, hasMore, loadingOlder, rev, buffered }, drafts, sending,
+                        actionError; load (buffers events until the page is in), loadOlder, send, cancel, retry.
+                        Events apply by rev (ADR 0008): stale dropped, next applied, a gap reloads the page.
+uiStore (later):        rightPanelOpen, theme, quickSwitcherOpen, pendingApprovals (P5)
 ```
 
 Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.
@@ -817,9 +860,9 @@ Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usa
 Phase 2: `Forms/ConnectionForm` picks the API form or `Forms/CliConnectionForm` by provider. Both use `Forms/FormShell` (side panel, shared `ProviderSelect` with API and CLI groups, `TestOutcome`). The CLI form (pure logic in `lib/cliConnectionForm.ts`, built from `cliProviderDescriptors`) has binary path + Detect, working directory + Choose…, Codex sandbox, default model, extra args (one per line), an always-visible auto-accept notice, and the Codex native-tools warning. Test failures add a hint by code (login command, sandbox, binary).
 
 Phase 3:
-- `Sidebar/AgentList`: avatar, name, a grey status dot (`data-status="idle"` until Phase 4), and a warning when the connection is disabled or missing. The empty state says "Create agent", or "Add a connection first".
+- `Sidebar/AgentList`: avatar, name, a status dot, and a warning when the connection is disabled or missing. The empty state says "Create agent", or "Add a connection first".
 - `screens/AgentsScreen`:
-  - center: the selected agent (conversations are a placeholder until Phase 4), the first-run sample offer, or an empty state
+  - center: the selected agent's chat (Phase 4), the first-run sample offer, or an empty state
   - right: `AgentPanel`, with the connection, model, params and tags, the role editable in place (Ctrl/Cmd+Enter saves, Esc cancels), and Edit / Duplicate / Delete
 - `Forms/AgentForm` (pure logic in `lib/agentForm.ts`) has these fields:
   - avatar: color swatches, an emoji grid or a typed emoji, or initials
@@ -833,7 +876,16 @@ Phase 3:
 - `ConfirmDialog` takes `blocked`: deleting a connection in use lists its agents and disables Delete.
 - The app lands on Agents once at least one connection exists, unless the user already navigated.
 
-Later components: `Sidebar/AgentItem` badges (status + unread), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ToolServerForm`, the roots and tools sections of `Forms/AgentForm` (P5), `Settings/*`, `Usage/*`.
+Phase 4 (pure logic in `lib/chat.ts`):
+- `AgentsScreen` center: `Chat/ConversationList` (new, rename in place, archive, show archived, status and unread per row) and `Chat/ChatView` (header, messages, composer). With no conversation open, the first send creates one and sends into it.
+- `Chat/MessageList`: react-virtuoso. It follows the bottom while the user is there, including while a reply grows, and pages back at the top (`firstItemIndex` keeps the position).
+- `Chat/MessageBubble`: Slack-style rows. User text is plain; replies are `Chat/Markdown` (react-markdown + remark-gfm, no raw HTML, code blocks with Copy, links opened by main in the system browser). It also shows the streaming cursor, "Stopped", and the error by code with Retry on the last failed reply.
+- `ToolBlock/ToolCallBlock`: a collapsible tool call (name, state, arguments, result, duration), used today for harness tool calls.
+- `Composer/Composer`: Enter sends, Shift+Enter adds a line (never while an IME composes), Stop while running, and the draft is kept per conversation. It is blocked with a reason when the agent's connection is disabled or missing.
+- `Chat/StatusDot` for agents (sidebar) and conversations. The sidebar also shows an unread badge per agent.
+- Deleting an agent says how many conversations go with it (archived ones included).
+
+Later components: `ApprovalCard`, `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Forms/ToolServerForm`, the roots and tools sections of `Forms/AgentForm` (P5), `Settings/*`, `Usage/*`.
 
 ---
 
@@ -867,10 +919,10 @@ Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA
 
 ## 9. Conventions
 
-- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`, `connection_in_use`, `connection_disabled`, `model_required`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`, `connection_in_use`, `connection_disabled`, `model_required`, `conversation_busy`, `interrupted` (P4); protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
-- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Later phases add a fake in-memory MCP server. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four).
+- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Later phases add a fake in-memory MCP server. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four; Phase 4: chat, with setup through `window.api` and everything under test through the UI).
 - **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
 - **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 

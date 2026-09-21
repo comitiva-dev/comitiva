@@ -101,12 +101,12 @@ Try it by hand: `pnpm --filter @comitiva/runner build && echo '{"id":"1","type":
 
 ```
 provider stream → adapter (Anthropic / OpenAI-compatible / Gemini / Ollama) → Run (stamps ts) → stdout
-  → RunnerClient (parse + validate) → ConversationService (Phase 4)
-  → coalesce text per conversation, flush every 16 ms → webContents.send
-  → preload → LocalBackend → Zustand store → React paint
+  → RunnerClient (parse + validate) → ConversationService
+  → coalesce text per conversation, flush every 16 ms → message.delta / message.block (rev) → webContents.send
+  → preload → LocalBackend → messages store (applies by rev) → React paint
 ```
 
-Main forwards deltas to the renderer at most once per frame (16 ms) per conversation, instead of once per token (measured in Phase 0; applies again when chat lands in Phase 4). SQLite writes (from Phase 4) are batched separately, about every 250 ms. Measured latencies are in `docs/STATUS.md`.
+Main forwards deltas to the renderer at most once per frame (16 ms) per conversation, instead of once per token (measured in Phase 0). SQLite gets a checkpoint of the streaming reply about every 250 ms. The final state, the usage record and the conversation status are written in one transaction when the run ends. Every message event carries the conversation's `rev`, and `messages.list` returns the `rev` of its page, so a conversation opened mid-stream lines up with the stream (ADR 0008). Each conversation runs on its own, with no global queue, and at most one reply runs per conversation at a time (`conversation_busy`). Measured latencies are in `docs/STATUS.md`.
 
 ## Boundaries (non-negotiable)
 

@@ -11,5 +11,6 @@ One file per decision that affects more than one package. Format: context, decis
 | [0005](0005-contract-json-schema.md) | zod v4 in `contract`, JSON Schema via `z.toJSONSchema` | Accepted |
 | [0006](0006-toolchain-pins.md) | Toolchain pins: pnpm 10, TypeScript 6.0, Vite 7, Node 24 | Accepted |
 | [0007](0007-cli-harness-execution.md) | CLI harnesses: one process per turn, auto-accept, isolated, harness-kept history | Accepted |
+| [0008](0008-live-message-events.md) | Live message events: snapshots plus deltas, one revision counter per conversation | Accepted |
 
 Still open (see `docs/STATUS.md`): implementation of the `google-drive` MCP server (own vs community), decided in Phase 5b.

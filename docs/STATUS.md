@@ -2,11 +2,99 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 3 — Agents: CRUD, role, model, avatar (done)
+## Current phase: 4 — Full chat with parallelism, persistence, retry, auto-title (done)
+
+Done when two agents respond at the same time: yes. Two agents stream at once and the sidebar shows both responding (e2e `chat.spec.ts`, first test).
+
+### Done
+
+- **Contract**:
+  - New channels:
+    - `conversations.list | create | rename | archive | markRead`: `list` takes `{ agentId?, archived }` and returns `ConversationSummary { conversation, unread }`
+    - `messages.list | send | cancel | retry`: `list` returns `MessagePage { messages, hasMore, rev }`
+  - `UserContent`: text, image and document blocks, not empty. Tool blocks come only from runs.
+  - Events: `conversation.updated`, `message.updated` (snapshot), `message.delta` and `message.block`, all numbered by one `rev` per conversation (ADR 0008).
+  - `Message.error` (an `AppErrorShape` or null), and the error codes `conversation_busy` and `interrupted`.
+  - `appendText(content, text)` is the one rule for applying deltas, shared by main and the renderer.
+  - `titleModelFor(provider, preset, model)` picks the cheap title model for each API provider and preset.
+- **Desktop main**:
+  - Migration `0003_chat` adds `messages.error`, `conversations.harness_connection_id` and `conversations.last_read_seq`.
+  - `ConversationRepository`, `MessageRepository` (pages by `seq`), and `UsageRepository` (insert and list, for now).
+  - `ConnectionService.secretFor` reads the key for a run.
+  - `ConversationService`:
+    - Each conversation runs on its own, with no global queue, and at most one reply at a time (`conversation_busy`). A send is refused before anything is written when the connection is disabled, the model is missing or the key is missing.
+    - Text is coalesced to the UI every 16 ms and checkpointed to SQLite about every 250 ms. On the terminal event, the final message, one usage record per run and the status go in one transaction.
+    - Cancel keeps the partial reply and finalizes locally if the runner never answers. Retry resets the failed reply in place. A runner crash gives a retryable error.
+    - A harness session is saved as soon as it arrives and resumed only on the same connection. CLI turns get `resolveWorkingDirectory`.
+    - At boot, replies left streaming become `error { interrupted }`. On quit, running replies are finalized as cancelled.
+    - `forgetAgent` stops an agent's runs before it is deleted.
+  - `TitleService`: the first line of the first message is the placeholder title. After the first complete reply, a separate cheap-model run replaces it, unless the user renamed the conversation meanwhile. API connections only; the title run's usage is recorded without a message.
+- **Renderer**:
+  - `Backend.conversations` / `Backend.messages` and their events.
+  - `conversations` store: lists per agent (newest activity first), archived on demand, selection per agent, what is on screen, unread, and `forgetAgent`. Its selectors give the agent status (running > error > idle) and unread count.
+  - `messages` store: pages, older pages, drafts per conversation, send / cancel / retry. Events are applied by `rev`; events that arrive during a load are buffered, and a gap reloads the page.
+  - Agents screen center: `ConversationList` and `ChatView`.
+    - The list has New conversation, rename in place (✎ or double-click), archive and unarchive, Show archived, and a status dot and unread count per row.
+    - The chat has a header, a virtualized `MessageList` (react-virtuoso) and the `Composer`.
+    - Opening an agent opens its most recent conversation. "New conversation" shows an empty composer, and the first send creates the conversation.
+  - `MessageBubble`:
+    - User text is shown plain; replies are Markdown (react-markdown + remark-gfm, no raw HTML) with code blocks you can copy.
+    - It shows a streaming cursor at the end of the text, "Stopped", and a failed reply's error by code, with Retry on the last message.
+    - `ToolCallBlock` shows harness tool calls as collapsible blocks.
+  - `Composer`: Enter sends, Shift+Enter adds a line, Stop while running. It is blocked with the reason when the connection is disabled or missing.
+  - Sidebar: the agent status dot (idle, responding, error) and an unread badge. Opening the conversation marks it read.
+  - Deleting an agent says how many conversations go with it, archived ones included (closes a Phase 3 open item).
+  - Strings in en and pt-BR. A new test checks that every `ErrorCode` has a translation; `conversation_busy` and `interrupted` were missing.
+- **Docs**: ADR 0008 (live message events and revisions). `design.md` and `architecture.md` are synced.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 395 tests: contract 43, runner 188, desktop 163, mcp-servers 1 (Phase 3: 329). |
+| `pnpm contract:schema` / `pnpm --filter desktop db:generate` | `Message.json`, `AppError.json` and the runner protocol schemas regenerated and committed. `0003_chat.sql` holds only the three new columns. |
+| Main (in-memory SQLite + migrations, fake runner) | `ConversationRepository` (9 tests). `ConversationService` (25 tests): history and the persisted reply; 16 ms and 250 ms batching; text around blocks; one usage row; two conversations streaming at once; double send; nothing persisted on refusal; cancel with and without a runner answer; error then retry in place; crash; late events; harness session per connection; history filtering; a page mid-stream lining up with later deltas; rev order per conversation; shutdown; crash recovery; forgetAgent; titles (placeholder, generated, rename wins, CLI and failures get none). Also `ConnectionService.secretFor`. |
+| Renderer logic | `store/conversations` (8), `store/messages` (8: rev, gaps, buffering, stale snapshots, drafts), `lib/chat` (9), and the i18n error-code check. |
+| `pnpm --filter desktop test:e2e` | 28/28 green (20 earlier + 8 new `chat.spec.ts`). Covered: two agents stream at once, both "responding" in the sidebar, and the one off screen ends with an unread badge; opening it clears the badge, and the placeholder title gives way to the generated one; the second turn sends the history; Stop keeps the partial reply; `auth_failed` shows by code, then Retry after fixing the key streams into the same message; rename and archive; everything survives a restart; deleting an agent. |
+| UI | Screenshots of the parallel stream, the error card and the restored conversation (`apps/desktop/test-results/`), in pt-BR (the machine locale). |
+| `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
+
+### Deviations from the plan and design (all reflected in docs/design.md)
+
+1. The channel set changed from the Phase 0 sketch. `conversations.listByAgent` became `conversations.list({ agentId?, archived })`, so one call at boot loads every agent's status and unread count. `setStatus` is not a channel, because status belongs to main. `markRead` is new.
+2. `message.completed` became `message.updated`, a full snapshot sent on create, on reset for retry and at the end. Each message event carries a per-conversation `rev`; it started per reply and was changed in `495ca1e`. See ADR 0008.
+3. `ConversationService` does not take the approvals repository yet (Phase 5), and it gets the key through `secretFor` instead of the `SecretStore`.
+4. There is no `ChatScreen`: the chat lives in the Agents screen's center column, as SPEC §5 describes.
+5. The harness session is stored with the connection it belongs to (`harness_connection_id`). Moving an agent to another connection therefore replays the history instead of resuming a foreign session.
+
+### Decisions
+
+- **Selection**: opening an agent shows its most recent conversation. "New conversation" is an explicit empty state, and the conversation is created on the first send.
+- **Unread**: a finished reply counts as unread unless its conversation is on screen. The count is persisted as `last_read_seq`, so it survives a restart.
+- **Titles**: a placeholder (the first line) right away, then one cheap-model call after the first reply. A rename by the user always wins.
+- **Markdown**: GFM with no raw HTML and no syntax highlighting (fewer dependencies; highlighting can come in Phase 7).
+
+### Open
+
+- If the first send from "New conversation" is refused (for example `model_required`), the conversation that was just created stays, empty, with the draft kept in it.
+- Replies are marked read while their conversation is on screen, even when the app window is in the background.
+- Virtuoso keeps rows hidden for one frame while it measures a conversation that was just opened.
+- Right-panel conversation usage waits for Phase 6. The Cmd/Ctrl+K quick switcher and attachments wait for Phase 7.
+- Carried over: the real-provider check (Phase 1), the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
+
+## Next: Phase 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals
+
+1. Contract: `ToolServer` IPC, `run.tool_call` approval flow (`run.approval`, `approval.requested`), `ToolApproval`.
+2. Runner: `McpClientManager`, the tool loop for API adapters, `PermissionGate`, and MCP passthrough to harnesses (`--mcp-config`, `-c mcp_servers.…`).
+3. mcp-servers: `filesystem` with `RootGuard` (symlink escapes included) and approval on writes.
+4. Main and renderer: `ToolServerService`, `ApprovalService`, the roots and tools sections of the agent form, `ApprovalCard`, and `awaiting-approval` in the sidebar.
+5. Done when an agent reads and creates a file in an allowed directory, a write asks for approval, and a path outside the root is denied.
+
+## Phase 3 — Agents: CRUD, role, model, avatar (done)
 
 Done when an agent shows up in the sidebar: yes, created from the sample offer or the form (e2e).
 
-### Done
+#### Done
 
 - **Contract**:
   - `AgentAvatar = { color, emoji? }`: `color` is one of 10 palette names (`AvatarColor`); without an emoji the UI shows the name's initials. `Agent.avatar` uses it.
@@ -58,7 +146,7 @@ Done when an agent shows up in the sidebar: yes, created from the sample offer o
   - `FormShell` takes `icon` and `title`; `Async` moved to `lib/async.ts`; `ConfirmDialog` takes `blocked`.
   - Strings are in en and pt-BR, and a new test keeps both files' keys in sync.
 
-### Verification
+#### Verification
 
 | Check | Result |
 |---|---|
@@ -70,7 +158,7 @@ Done when an agent shows up in the sidebar: yes, created from the sample offer o
 | UI | Screenshots of the sample offer, form and panel (`apps/desktop/test-results/`), checked in light, in dark (`emulateMedia`) and in pt-BR. |
 | `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
 
-### Deviations from the plan and design (all reflected in docs/design.md)
+#### Deviations from the plan and design (all reflected in docs/design.md)
 
 1. Migration 0002 also adds `agent_roots.position`: SQLite returned roots in path order, and SPEC §4.2 makes the *first* readwrite root a harness's working directory, so the order the user gives must be kept.
 2. The list of agents using a connection is `ConnectionRepository.agentsUsing`, not `AgentRepository.namesUsingConnection`: the delete that needs it lives there.
@@ -79,26 +167,19 @@ Done when an agent shows up in the sidebar: yes, created from the sample offer o
 5. Duplicating an agent whose connection is disabled fails with `connection_disabled` (a duplicate is a create).
 6. The sample offer shipped in the same commit as the rest of the renderer.
 
-### Decisions
+#### Decisions
 
 - **Avatar**: always a palette color plus an optional emoji; initials otherwise. Palette names, not hex, so each shell picks light and dark shades.
 - **Sample agent**: one click, with a persisted flag (`app_settings.sampleAgentOffer`). It falls back to the prefilled form when the connection needs a model.
 - **Deleting a connection in use**: checked up front in the dialog, which lists the agents; main refuses as well. `AppErrorShape` did not grow a details field.
 
-### Open
+#### Open
 
 - The model list is cached per connection for the session. After a connection's key or URL changes, the agent form shows the old list until the app restarts (Retry only shows on a failure).
 - Agents are ordered by creation; there is no manual reordering, and tags are not used for filtering yet.
 - Deleting an agent will cascade its conversations from Phase 4: the confirmation should then say how many.
 - Roots, tool servers and the permission policy are stored but have no UI (Phase 5).
 - Carried over: the real-provider check (Phase 1), the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
-
-## Next: Phase 4 — Full chat with parallelism, persistence, retry, auto-title
-
-1. Contract: conversation and message IPC (`conversations.*`, `messages.*`) and the streaming events (`conversation.updated`, `message.delta`, `message.block`, `message.completed`).
-2. Main: `ConversationRepository`, `MessageRepository`, and a `ConversationService` that builds `run.start` from the agent + connection + secret + history (`resolveWorkingDirectory` for CLI), batches deltas (SQLite ~250 ms, UI 16 ms), and handles harness session ids, cancel, retry and auto-title.
-3. Renderer: the conversation list and the chat in the Agents center column, the composer, streaming, cancel and retry, and the agent status in the sidebar (replacing the placeholder).
-4. Done when two agents respond at the same time.
 
 ## Phase 2 — CLI harnesses (Claude Code, Codex), session resume (done)
 

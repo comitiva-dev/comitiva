@@ -84,8 +84,9 @@ interface LiveRun extends RunContext {
  * (16 ms) and checkpointed to SQLite about every 250 ms; the final state,
  * the usage record and the conversation status are written in one
  * transaction on the run's terminal event. Events go out as
- * `message.updated` snapshots plus `message.delta` / `message.block` with a
- * per-reply `rev`, so a list fetched mid-stream lines up with the stream.
+ * `message.updated` snapshots plus `message.delta` / `message.block`, all
+ * numbered by one `rev` per conversation, so a list fetched mid-stream lines
+ * up with the stream (ADR 0008).
  */
 export class ConversationService extends EventEmitter<ConversationEvents> {
   /** Conversations with a run starting or streaming: the double-send guard. */

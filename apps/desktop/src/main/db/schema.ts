@@ -122,6 +122,10 @@ export const conversations = sqliteTable(
     title: text('title'),
     status: text('status').notNull().default('idle'),
     harnessSessionId: text('harness_session_id'),
+    // The connection the harness session belongs to: reused only on that connection.
+    harnessConnectionId: text('harness_connection_id'),
+    // Replies with a higher seq are unread (local to this desktop).
+    lastReadSeq: integer('last_read_seq').notNull().default(0),
     archived: integer('archived', { mode: 'boolean' }).notNull().default(false),
     lastActivityAt: text('last_activity_at').notNull(),
     createdAt: text('created_at').notNull(),
@@ -143,6 +147,8 @@ export const messages = sqliteTable(
     status: text('status').notNull().default('complete'),
     seq: integer('seq').notNull(),
     createdAt: text('created_at').notNull(),
+    // JSON AppErrorShape when status is 'error'.
+    error: text('error', { mode: 'json' }),
   },
   (t) => [
     uniqueIndex('idx_messages_conv_seq').on(t.conversationId, t.seq),

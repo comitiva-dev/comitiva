@@ -215,6 +215,21 @@ describe('ConnectionService', () => {
     await expect(service.test({ id: 'missing' })).rejects.toMatchObject({ code: 'not_found' });
   });
 
+  it('reads the key a run needs, or refuses with secret_missing when it is required', async () => {
+    const created = await service.create(anthropic);
+    expect(await service.secretFor(created.connection)).toBe('sk-ant-secret');
+    const keyless = await service.create({ ...anthropic, apiKey: undefined });
+    await expect(service.secretFor(keyless.connection)).rejects.toMatchObject({
+      code: 'secret_missing',
+    });
+    const ollama = await service.create({
+      name: 'Ollama',
+      provider: 'ollama',
+      config: { baseUrl: 'http://localhost:11434' },
+    });
+    expect(await service.secretFor(ollama.connection)).toBeUndefined();
+  });
+
   it('lists models for saved and unsaved settings', async () => {
     const { connection } = await service.create({
       name: 'Local',

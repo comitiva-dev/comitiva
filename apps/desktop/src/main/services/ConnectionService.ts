@@ -2,6 +2,7 @@ import { ulid } from 'ulid';
 import {
   AppError,
   providerKind,
+  secretRequirement,
   type CliDetectResult,
   type Connection,
   type ConnectionDraft,
@@ -126,6 +127,24 @@ export class ConnectionService {
       connection,
       ...(secret !== undefined ? { secret } : {}),
     });
+  }
+
+  /**
+   * The key a run needs, read per request and never kept. CLI harnesses use
+   * their own login. Throws `secret_missing` when the provider requires a key
+   * and none is stored.
+   */
+  async secretFor(connection: Connection): Promise<string | undefined> {
+    if (connection.kind === 'cli') return undefined;
+    const secret = connection.secretRef
+      ? ((await this.deps.secrets.get(connection.secretRef)) ?? undefined)
+      : undefined;
+    const preset =
+      connection.provider === 'openai-compatible' ? connection.config.preset : undefined;
+    if (!secret && secretRequirement(connection.provider, preset) === 'required') {
+      throw new AppError('secret_missing', `Connection ${connection.name} has no API key`);
+    }
+    return secret;
   }
 
   /** Finds a harness binary (the typed path, or PATH) and reads its version. */

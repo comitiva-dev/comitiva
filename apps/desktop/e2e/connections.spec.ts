@@ -68,7 +68,8 @@ test('boots into the app shell with a ready runner', async () => {
   await page.getByTestId('nav-tools').click();
   await expect(page.getByTestId('placeholder-tools')).toBeVisible();
   await page.getByTestId('nav-agents').click();
-  await expect(page.getByTestId('placeholder-agents')).toBeVisible();
+  // No connection yet: the Agents screen points to Connections.
+  await expect(page.getByTestId('agents-need-connection')).toBeVisible();
   await page.getByTestId('nav-connections').click();
 });
 
@@ -190,6 +191,9 @@ test('the enabled toggle persists across a reload', async () => {
   await toggle.click();
   await expect(toggle).toHaveAttribute('aria-checked', 'false');
   await page.reload();
+  // With connections saved, the app now opens on Agents.
+  await expect(page.getByTestId('agents-screen')).toBeVisible();
+  await page.getByTestId('nav-connections').click();
   await expect(row('Gemini').getByTestId('toggle-enabled')).toHaveAttribute(
     'aria-checked',
     'false',

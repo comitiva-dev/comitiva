@@ -29,13 +29,11 @@ describe('conversations store', () => {
   it('derives agent status: running wins over error, error over idle', () => {
     const store = createConversationsStore(fakeBackend());
     const update = (id: string, status: 'idle' | 'running' | 'error') =>
-      store
-        .getState()
-        .handleEvent({
-          type: 'conversation.updated',
-          pendingApproval: null,
-          conversation: conversation(id, { status }),
-        });
+      store.getState().handleEvent({
+        type: 'conversation.updated',
+        pendingApproval: null,
+        conversation: conversation(id, { status }),
+      });
     update('k1', 'idle');
     expect(agentStatus(store.getState(), 'a1')).toBe('idle');
     update('k2', 'error');
@@ -45,6 +43,55 @@ describe('conversations store', () => {
     expect(isRunning(store.getState(), 'k1')).toBe(true);
     expect(isRunning(store.getState(), 'k2')).toBe(false);
     expect(agentStatus(store.getState(), 'nobody')).toBe('idle');
+  });
+
+  it('tracks the pending approval, puts awaiting approval first, and sends decisions', async () => {
+    const backend = fakeBackend();
+    const pending = {
+      toolUseId: 't1',
+      toolServerId: 'filesystem',
+      toolName: 'write_file',
+      input: {},
+    };
+    backend.conversations.list.mockResolvedValue([
+      {
+        conversation: conversation('k1', { status: 'awaiting-approval' }),
+        unread: 0,
+        pendingApproval: pending,
+      },
+      { conversation: conversation('k2', { status: 'running' }), unread: 0, pendingApproval: null },
+    ]);
+    const store = createConversationsStore(backend);
+    await store.getState().load();
+    expect(store.getState().pending.k1).toEqual(pending);
+    expect(agentStatus(store.getState(), 'a1')).toBe('awaiting-approval');
+    expect(isRunning(store.getState(), 'k1')).toBe(true);
+
+    let resolve!: () => void;
+    backend.approvals.decide.mockImplementation(() => new Promise<void>((r) => (resolve = r)));
+    const deciding = store.getState().decide('k1', 't1', 'allow-always');
+    expect(store.getState().deciding.k1).toBe(true);
+    // A second click while the first is on its way does nothing.
+    await store.getState().decide('k1', 't1', 'deny');
+    expect(backend.approvals.decide).toHaveBeenCalledTimes(1);
+    expect(backend.approvals.decide).toHaveBeenCalledWith('k1', 't1', 'allow-always');
+    resolve();
+    await deciding;
+    expect(store.getState().deciding.k1).toBe(false);
+
+    store.getState().handleEvent({
+      type: 'conversation.updated',
+      pendingApproval: null,
+      conversation: conversation('k1', { status: 'running' }),
+    });
+    expect(store.getState().pending.k1).toBeNull();
+    expect(agentStatus(store.getState(), 'a1')).toBe('running');
+
+    backend.approvals.decide.mockRejectedValue(
+      Object.assign(new Error('x'), { code: 'invalid_request' }),
+    );
+    await store.getState().decide('k1', 't9', 'allow');
+    expect(store.getState().notice).toBe('invalid_request');
   });
 
   it('reorders when activity changes and keeps list identity for other agents', () => {
@@ -73,20 +120,16 @@ describe('conversations store', () => {
         message: message('m', { conversationId, status }),
         rev,
       });
-    store
-      .getState()
-      .handleEvent({
-        type: 'conversation.updated',
-        pendingApproval: null,
-        conversation: conversation('k1'),
-      });
-    store
-      .getState()
-      .handleEvent({
-        type: 'conversation.updated',
-        pendingApproval: null,
-        conversation: conversation('k2'),
-      });
+    store.getState().handleEvent({
+      type: 'conversation.updated',
+      pendingApproval: null,
+      conversation: conversation('k1'),
+    });
+    store.getState().handleEvent({
+      type: 'conversation.updated',
+      pendingApproval: null,
+      conversation: conversation('k2'),
+    });
     store.getState().setVisible('k1');
     reply('k1', 'streaming');
     reply('k1', 'complete');

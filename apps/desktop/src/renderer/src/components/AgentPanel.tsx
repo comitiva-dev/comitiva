@@ -4,7 +4,8 @@ import type { Agent } from '@comitiva/contract';
 import { errorCode } from '../backend/Backend';
 import { connectionState, defaultModelOf } from '../lib/agentForm';
 import { providerLabel } from '../lib/connectionForm';
-import { useAgents, useConnections } from '../store/context';
+import { serverDisplayName } from '../lib/toolServerForm';
+import { useAgents, useConnections, useToolServers } from '../store/context';
 import { AgentAvatar } from './AgentAvatar';
 import { ui } from './ui';
 
@@ -18,6 +19,11 @@ export function AgentPanel({ agent }: { agent: Agent }) {
     (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
   );
   const state = connectionState(connection);
+  const servers = useToolServers((s) => s.items);
+  const tools = agent.toolServerIds.flatMap((id) => {
+    const server = servers.find((s) => s.id === id);
+    return server ? [{ id, name: serverDisplayName(server, t), enabled: server.enabled }] : [];
+  });
   const fallbackModel =
     connection?.kind === 'cli'
       ? t('agents.panel.harnessDefault')
@@ -108,6 +114,40 @@ export function AgentPanel({ agent }: { agent: Agent }) {
             </dd>
           </>
         )}
+        <dt className={ui.muted}>{t('agents.form.tools')}</dt>
+        <dd data-testid="panel-tools" className="min-w-0">
+          {tools.length === 0 ? (
+            <span className={ui.muted}>{t('agents.panel.noTools')}</span>
+          ) : (
+            tools.map((tool) => (
+              <span
+                key={tool.id}
+                className={`mr-1 inline-block ${tool.enabled ? '' : `line-through ${ui.muted}`}`}
+              >
+                {tool.name}
+              </span>
+            ))
+          )}
+        </dd>
+        <dt className={ui.muted}>{t('agents.form.roots')}</dt>
+        <dd data-testid="panel-roots" className="min-w-0">
+          {agent.roots.length === 0 ? (
+            <span className={ui.muted}>{t('agents.panel.noRoots')}</span>
+          ) : (
+            <ul>
+              {agent.roots.map((r) => (
+                <li key={r.path} className="truncate font-mono text-xs" title={r.path}>
+                  {r.path}{' '}
+                  <span className={ui.muted}>· {t(`agents.form.rootModes.${r.mode}`)}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </dd>
+        <dt className={ui.muted}>{t('agents.form.policy')}</dt>
+        <dd data-testid="panel-policy">
+          {t(`agents.form.policies.${agent.permissionPolicy}.label`)}
+        </dd>
       </dl>
 
       {/* Keyed by agent: selecting another agent drops an unsaved draft. */}

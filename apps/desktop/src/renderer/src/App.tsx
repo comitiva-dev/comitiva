@@ -2,6 +2,7 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { PlaceholderScreen } from './screens/PlaceholderScreen';
+import { ToolsScreen } from './screens/ToolsScreen';
 import { useApp } from './store/context';
 
 export function App() {
@@ -14,6 +15,8 @@ export function App() {
           <ConnectionsScreen />
         ) : section === 'agents' ? (
           <AgentsScreen />
+        ) : section === 'tools' ? (
+          <ToolsScreen />
         ) : (
           <PlaceholderScreen section={section} />
         )}

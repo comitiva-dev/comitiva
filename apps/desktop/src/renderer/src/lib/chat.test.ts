@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { message } from '../store/testBackend';
 import {
   FIRST_INDEX_BASE,
+  approvalTargets,
   canRetry,
   composerKey,
   firstItemIndex,
@@ -10,6 +11,8 @@ import {
   openConversation,
   renderParts,
   resultText,
+  toolLabel,
+  toolState,
 } from './chat';
 
 describe('openConversation', () => {
@@ -108,5 +111,52 @@ describe('firstItemIndex', () => {
 
   it('does not move when replies are appended', () => {
     expect(firstItemIndex([...page, message('m5', { seq: 5 })], 3)).toBe(FIRST_INDEX_BASE);
+  });
+});
+
+describe('tool blocks', () => {
+  const use = (name: string, toolServerId = 'filesystem') => ({
+    type: 'tool_use' as const,
+    id: 't',
+    toolServerId,
+    name,
+    input: {},
+  });
+  const result = (text: string, isError: boolean) => ({
+    type: 'tool_result' as const,
+    toolUseId: 't',
+    content: [{ type: 'text' as const, text }],
+    isError,
+  });
+
+  it('labels MCP tools by server and tool, harness tools by their name', () => {
+    expect(toolLabel(use('fs__write_file'))).toEqual({ tool: 'write_file', server: 'fs' });
+    expect(toolLabel(use('github_work__create__issue'))).toEqual({
+      tool: 'create__issue',
+      server: 'github_work',
+    });
+    expect(toolLabel(use('Read', 'harness:claude-code'))).toEqual({ tool: 'Read', server: null });
+  });
+
+  it('derives the state: awaiting, running, done, denied, failed, or stopped without a result', () => {
+    expect(toolState(null, { streaming: true, awaiting: true })).toBe('awaiting');
+    expect(toolState(null, { streaming: true, awaiting: false })).toBe('running');
+    expect(toolState(null, { streaming: false, awaiting: false })).toBe('none');
+    expect(toolState(result('ok', false), { streaming: true, awaiting: false })).toBe('done');
+    expect(
+      toolState(result('approval_denied: The user denied this action', true), {
+        streaming: false,
+        awaiting: false,
+      }),
+    ).toBe('denied');
+    expect(
+      toolState(result('outside_roots: /etc', true), { streaming: false, awaiting: false }),
+    ).toBe('error');
+  });
+
+  it('lists the paths a call touches', () => {
+    expect(approvalTargets({ path: '/w/a.txt', content: 'x' })).toEqual(['/w/a.txt']);
+    expect(approvalTargets({ from: '/w/a', to: '/w/b' })).toEqual(['/w/a', '/w/b']);
+    expect(approvalTargets('x')).toEqual([]);
   });
 });

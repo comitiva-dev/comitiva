@@ -8,6 +8,9 @@ import type {
   ConversationSummary,
   Message,
   MessagePage,
+  ToolDef,
+  ToolServer,
+  ToolServerDraft,
 } from '@comitiva/contract';
 import type { Backend } from '../backend/Backend';
 
@@ -63,6 +66,24 @@ export const conversation = (id: string, overrides: Partial<Conversation> = {}):
   ...overrides,
 });
 
+export const toolServer = (id: string, overrides: Partial<ToolServer> = {}): ToolServer => ({
+  id,
+  name: `Server ${id}`,
+  transport: 'stdio',
+  command: 'npx',
+  args: [],
+  env: {},
+  url: null,
+  headers: {},
+  builtin: false,
+  enabled: true,
+  createdAt: at,
+  ...overrides,
+});
+
+export const filesystemServer = (overrides: Partial<ToolServer> = {}) =>
+  toolServer('filesystem', { name: 'Files', command: null, builtin: true, ...overrides });
+
 export const message = (id: string, overrides: Partial<Message> = {}): Message => ({
   id,
   conversationId: 'k1',
@@ -117,6 +138,14 @@ export function fakeBackend() {
       retry: vi.fn(async () => {}),
     },
     dialogs: { pickFolder: vi.fn(async (): Promise<string | null> => '/home/me/work') },
+    toolServers: {
+      list: vi.fn(async (): Promise<ToolServer[]> => [filesystemServer()]),
+      create: vi.fn(async (draft: ToolServerDraft) => toolServer('new', { name: draft.name })),
+      update: vi.fn(async (id: string) => toolServer(id)),
+      delete: vi.fn(async () => {}),
+      test: vi.fn(async (): Promise<ToolDef[]> => [{ name: 'read_file', inputSchema: {} }]),
+    },
+    approvals: { decide: vi.fn(async () => {}) },
     onEvent: vi.fn(() => () => {}),
   } satisfies Backend;
   return backend;

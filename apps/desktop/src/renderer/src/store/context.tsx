@@ -5,6 +5,7 @@ import type { AppState, AppStore } from './app';
 import type { ConnectionsState, ConnectionsStore } from './connections';
 import type { ConversationsState, ConversationsStore } from './conversations';
 import type { MessagesState, MessagesStore } from './messages';
+import type { ToolServersState, ToolServersStore } from './toolServers';
 
 export interface Stores {
   app: AppStore;
@@ -12,6 +13,7 @@ export interface Stores {
   agents: AgentsStore;
   conversations: ConversationsStore;
   messages: MessagesStore;
+  toolServers: ToolServersStore;
 }
 
 const StoresContext = createContext<Stores | null>(null);
@@ -44,6 +46,10 @@ export function useConversations<T>(selector: (state: ConversationsState) => T):
 
 export function useMessages<T>(selector: (state: MessagesState) => T): T {
   return useStore(useStores().messages, selector);
+}
+
+export function useToolServers<T>(selector: (state: ToolServersState) => T): T {
+  return useStore(useStores().toolServers, selector);
 }
 
 /** For effects and handlers that need the current state without subscribing. */

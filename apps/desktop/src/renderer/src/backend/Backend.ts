@@ -2,6 +2,7 @@ import type {
   Agent,
   AgentDraft,
   AgentPatch,
+  ApprovalDecision,
   AppSettings,
   AppSettingsPatch,
   CliDetectResult,
@@ -20,6 +21,10 @@ import type {
   RunnerStatus,
   SecretStorageStatus,
   TestResult,
+  ToolDef,
+  ToolServer,
+  ToolServerDraft,
+  ToolServerPatch,
   UserContent,
 } from '@comitiva/contract';
 
@@ -89,6 +94,20 @@ export interface Backend {
   dialogs: {
     /** A native folder picker; null when cancelled (or when the backend has none). */
     pickFolder(): Promise<string | null>;
+  };
+  toolServers: {
+    /** Built-ins first. Secret values never come back, only refs. */
+    list(): Promise<ToolServer[]>;
+    create(draft: ToolServerDraft): Promise<ToolServer>;
+    /** Built-ins accept only `enabled`. */
+    update(id: string, patch: ToolServerPatch): Promise<ToolServer>;
+    delete(id: string): Promise<void>;
+    /** Starts the server and lists its tools; rejects with tool_server_failed or secret_missing. */
+    test(id: string): Promise<ToolDef[]>;
+  };
+  approvals: {
+    /** Answers the conversation's pending tool call. */
+    decide(conversationId: string, toolUseId: string, decision: ApprovalDecision): Promise<void>;
   };
   onEvent(handler: (event: BackendEvent) => void): () => void;
 }

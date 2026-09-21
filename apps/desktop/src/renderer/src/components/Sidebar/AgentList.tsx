@@ -99,6 +99,15 @@ function AgentItem({ agent }: { agent: Agent }) {
             ⚠
           </span>
         )}
+        {status === 'awaiting-approval' && (
+          <span
+            data-testid="agent-awaiting"
+            title={t('agents.status.awaiting-approval')}
+            className="rounded bg-amber-100 px-1 text-xs font-medium text-amber-800 dark:bg-amber-900/60 dark:text-amber-200"
+          >
+            {t('sidebar.awaiting')}
+          </span>
+        )}
         {unread > 0 && (
           <span
             data-testid="agent-unread"

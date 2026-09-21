@@ -1,10 +1,15 @@
 import { createStore } from 'zustand/vanilla';
-import type { Conversation, ErrorCode } from '@comitiva/contract';
+import type {
+  ApprovalDecision,
+  Conversation,
+  ErrorCode,
+  PendingApproval,
+} from '@comitiva/contract';
 import { errorCode, type Backend, type BackendEvent } from '../backend/Backend';
 import type { Async } from '../lib/async';
 
-/** What the sidebar shows for an agent. Awaiting approval (Phase 5) counts as running. */
-export type AgentStatus = 'idle' | 'running' | 'error';
+/** What the sidebar shows for an agent: awaiting approval wins, then running, then error. */
+export type AgentStatus = 'idle' | 'running' | 'awaiting-approval' | 'error';
 
 export interface ConversationsState {
   byId: Record<string, Conversation>;
@@ -19,6 +24,10 @@ export interface ConversationsState {
   visibleId: string | null;
   /** Unread replies per conversation. */
   unread: Record<string, number>;
+  /** The tool call each conversation waits on, if any (from main, with the status). */
+  pending: Record<string, PendingApproval | null>;
+  /** Conversations whose decision is on its way to main. */
+  deciding: Record<string, boolean>;
   loaded: boolean;
   /** Error from the last list/create/rename/archive, shown as a notice. */
   notice: ErrorCode | null;
@@ -35,6 +44,8 @@ export interface ConversationsState {
   archive(id: string, archived: boolean): Promise<void>;
   /** After an agent is deleted: its conversations went with it (cascade), so drop them here too. */
   forgetAgent(agentId: string): void;
+  /** Answers the pending tool call; errors show as a notice. */
+  decide(conversationId: string, toolUseId: string, decision: ApprovalDecision): Promise<void>;
   dismissNotice(): void;
   handleEvent(event: BackendEvent): void;
 }
@@ -91,6 +102,8 @@ export function createConversationsStore(backend: Backend) {
       selectedByAgent: {},
       visibleId: null,
       unread: {},
+      pending: {},
+      deciding: {},
       loaded: false,
       notice: null,
 
@@ -103,6 +116,10 @@ export function createConversationsStore(backend: Backend) {
             unread: {
               ...s.unread,
               ...Object.fromEntries(summaries.map((x) => [x.conversation.id, x.unread])),
+            },
+            pending: {
+              ...s.pending,
+              ...Object.fromEntries(summaries.map((x) => [x.conversation.id, x.pendingApproval])),
             },
           }));
         }),
@@ -167,6 +184,7 @@ export function createConversationsStore(backend: Backend) {
           return {
             byId: keep(s.byId),
             unread: keep(s.unread),
+            pending: keep(s.pending),
             idsByAgent: keep(s.idsByAgent),
             archivedIdsByAgent: keep(s.archivedIdsByAgent),
             archivedLoad: keep(s.archivedLoad),
@@ -175,11 +193,26 @@ export function createConversationsStore(backend: Backend) {
           };
         }),
 
+      async decide(conversationId, toolUseId, decision) {
+        if (get().deciding[conversationId]) return;
+        set((s) => ({ deciding: { ...s.deciding, [conversationId]: true } }));
+        try {
+          await backend.approvals.decide(conversationId, toolUseId, decision);
+        } catch (err) {
+          set({ notice: errorCode(err) });
+        } finally {
+          set((s) => ({ deciding: { ...s.deciding, [conversationId]: false } }));
+        }
+      },
+
       dismissNotice: () => set({ notice: null }),
 
       handleEvent(event) {
         if (event.type === 'conversation.updated') {
           put([event.conversation]);
+          set((s) => ({
+            pending: { ...s.pending, [event.conversation.id]: event.pendingApproval },
+          }));
           return;
         }
         if (event.type !== 'message.updated') return;
@@ -204,13 +237,15 @@ export function createConversationsStore(backend: Backend) {
 // Primitives only, so components can select them without memoization.
 
 export function agentStatus(s: ConversationsState, agentId: string): AgentStatus {
+  let running = false;
   let error = false;
   for (const id of s.idsByAgent[agentId] ?? []) {
     const status = s.byId[id]?.status;
-    if (status === 'running' || status === 'awaiting-approval') return 'running';
+    if (status === 'awaiting-approval') return 'awaiting-approval';
+    if (status === 'running') running = true;
     if (status === 'error') error = true;
   }
-  return error ? 'error' : 'idle';
+  return running ? 'running' : error ? 'error' : 'idle';
 }
 
 export function agentUnread(s: ConversationsState, agentId: string): number {

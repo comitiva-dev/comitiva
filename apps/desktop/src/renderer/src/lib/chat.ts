@@ -93,3 +93,43 @@ export function firstItemIndex(items: readonly Message[], anchorSeq: number | nu
   const before = items.findIndex((m) => m.seq >= anchorSeq);
   return FIRST_INDEX_BASE - (before < 0 ? items.length : before);
 }
+
+/**
+ * How a tool call is labelled: MCP tools reach the model as `<server>__<tool>`
+ * (`fs__write_file`), harness tools keep their own name (`Read`, `shell`).
+ */
+export function toolLabel(use: ToolUseBlock): { tool: string; server: string | null } {
+  if (use.toolServerId.startsWith('harness:')) return { tool: use.name, server: null };
+  const at = use.name.indexOf('__');
+  return at < 0
+    ? { tool: use.name, server: null }
+    : { tool: use.name.slice(at + 2), server: use.name.slice(0, at) };
+}
+
+export type ToolState = 'awaiting' | 'running' | 'done' | 'error' | 'denied' | 'none';
+
+/**
+ * A tool call's state as the block shows it: waiting for the user, running,
+ * finished, failed, denied (by the user or the agent's policy), or without a
+ * result because the reply stopped.
+ */
+export function toolState(
+  result: ToolResultBlock | null,
+  opts: { streaming: boolean; awaiting: boolean },
+): ToolState {
+  if (result) {
+    if (!result.isError) return 'done';
+    return resultText(result).startsWith('approval_denied') ? 'denied' : 'error';
+  }
+  if (opts.awaiting) return 'awaiting';
+  return opts.streaming ? 'running' : 'none';
+}
+
+/** The paths a tool call touches (`path`, `from`, `to`), shown on the approval card. */
+export function approvalTargets(input: unknown): string[] {
+  if (typeof input !== 'object' || input === null) return [];
+  const record = input as Record<string, unknown>;
+  return ['path', 'from', 'to'].flatMap((k) =>
+    typeof record[k] === 'string' && record[k] !== '' ? [record[k]] : [],
+  );
+}

@@ -1,18 +1,25 @@
 import { describe, expect, it } from 'vitest';
 import type { ConnectionSummary } from '@comitiva/contract';
-import { agent, summary } from '../store/testBackend';
+import { agent, filesystemServer, summary, toolServer } from '../store/testBackend';
 import {
+  addRoot,
   addTags,
   agentFormFor,
   connectionGroups,
   initials,
+  MAX_TAGS,
+  moveRoot,
   newAgentForm,
+  offeredToolServers,
   paramsApply,
   problems,
+  removeRoot,
+  rootsWithoutFiles,
+  setRootMode,
   supportsModelList,
   toAgentDraft,
   toAgentPatch,
-  MAX_TAGS,
+  toggleToolServer,
 } from './agentForm';
 
 const api = (id: string, defaultModel?: string, enabled = true): ConnectionSummary => {
@@ -78,6 +85,9 @@ describe('agent form', () => {
       role: 'Write.',
       params: { maxTokens: 1000, topP: 0.9 },
       tags: ['docs'],
+      roots: [],
+      toolServerIds: [],
+      permissionPolicy: 'ask',
     });
   });
 
@@ -91,6 +101,9 @@ describe('agent form', () => {
       role: '',
       params: {},
       tags: [],
+      roots: [],
+      toolServerIds: [],
+      permissionPolicy: 'ask',
     });
   });
 
@@ -148,5 +161,63 @@ describe('agent form', () => {
     expect(initials('research assistant bot')).toBe('RA');
     expect(initials(' Écrivain ')).toBe('É');
     expect(initials('')).toBe('?');
+  });
+});
+
+describe('agent form: folders and tools', () => {
+  const base = () => ({ ...newAgentForm([api('c1', 'm')]), name: 'A' });
+
+  it('adds folders read-write, turning Files on with the first one', () => {
+    let form = addRoot(base(), '/home/me/work');
+    expect(form.roots).toEqual([{ path: '/home/me/work', mode: 'readwrite' }]);
+    expect(form.toolServerIds).toEqual(['filesystem']);
+    form = addRoot(form, '/home/me/docs');
+    form = addRoot(form, '/home/me/docs');
+    expect(form.roots.map((r) => r.path)).toEqual(['/home/me/work', '/home/me/docs']);
+    expect(form.toolServerIds).toEqual(['filesystem']);
+    // Turning Files off after that is the user's call, flagged by a hint.
+    form = toggleToolServer(form, 'filesystem', false);
+    expect(rootsWithoutFiles(form)).toBe(true);
+    expect(addRoot(form, '/x').toolServerIds).toEqual([]);
+  });
+
+  it('changes modes, reorders and removes folders', () => {
+    let form = addRoot(addRoot(base(), '/a'), '/b');
+    form = setRootMode(form, 1, 'read');
+    form = moveRoot(form, 1, -1);
+    expect(form.roots).toEqual([
+      { path: '/b', mode: 'read' },
+      { path: '/a', mode: 'readwrite' },
+    ]);
+    expect(moveRoot(form, 0, -1)).toBe(form);
+    expect(removeRoot(form, 0).roots).toEqual([{ path: '/a', mode: 'readwrite' }]);
+  });
+
+  it('sends roots, tools and the policy in drafts and patches', () => {
+    const form = { ...addRoot(base(), '/w'), permissionPolicy: 'allow-writes' as const };
+    expect(toAgentDraft(form)).toMatchObject({
+      roots: [{ path: '/w', mode: 'readwrite' }],
+      toolServerIds: ['filesystem'],
+      permissionPolicy: 'allow-writes',
+    });
+    const a = agent('a1', { toolServerIds: ['gh'], roots: [{ path: '/r', mode: 'read' }] });
+    expect(agentFormFor(a)).toMatchObject({
+      toolServerIds: ['gh'],
+      roots: [{ path: '/r', mode: 'read' }],
+    });
+  });
+
+  it('offers enabled servers plus disabled ones the agent still uses', () => {
+    const servers = [
+      filesystemServer(),
+      toolServer('on'),
+      toolServer('off', { enabled: false }),
+      toolServer('used', { enabled: false }),
+    ];
+    expect(offeredToolServers(servers, ['used']).map((s) => s.id)).toEqual([
+      'filesystem',
+      'on',
+      'used',
+    ]);
   });
 });

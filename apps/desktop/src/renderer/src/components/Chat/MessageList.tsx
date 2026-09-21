@@ -1,11 +1,12 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
-import type { Agent } from '@comitiva/contract';
+import type { Agent, ApprovalDecision } from '@comitiva/contract';
 import { canRetry, firstItemIndex } from '../../lib/chat';
-import { useMessages } from '../../store/context';
+import { serverDisplayName } from '../../lib/toolServerForm';
+import { useConversations, useMessages, useToolServers } from '../../store/context';
 import { ui } from '../ui';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, type Approval } from './MessageBubble';
 
 /**
  * The open conversation's messages, virtualized (keyed by conversation, so
@@ -36,6 +37,27 @@ export function MessageList({
   if (ready && anchorSeq === null && items[0]) setAnchorSeq(items[0].seq);
 
   const onRetry = useCallback(() => void retry(conversationId), [retry, conversationId]);
+
+  const pending = useConversations((s) => s.pending[conversationId] ?? null);
+  const busy = useConversations((s) => s.deciding[conversationId] ?? false);
+  const decide = useConversations((s) => s.decide);
+  const toolUseId = pending?.toolUseId;
+  const approval = useMemo<Approval | undefined>(
+    () =>
+      toolUseId === undefined
+        ? undefined
+        : {
+            toolUseId,
+            busy,
+            onDecide: (d: ApprovalDecision) => void decide(conversationId, toolUseId, d),
+          },
+    [toolUseId, busy, decide, conversationId],
+  );
+  const servers = useToolServers((s) => s.items);
+  const serverNames = useMemo(
+    () => Object.fromEntries(servers.map((s) => [s.id, serverDisplayName(s, t)])),
+    [servers, t],
+  );
   const retryId = canRetry(items) ? items.at(-1)!.id : null;
 
   if (!state || (state.status === 'loading' && items.length === 0)) {
@@ -90,6 +112,8 @@ export function MessageList({
           message={message}
           agent={agent}
           retry={message.id === retryId ? onRetry : undefined}
+          approval={message.status === 'streaming' ? approval : undefined}
+          serverNames={serverNames}
         />
       )}
     />

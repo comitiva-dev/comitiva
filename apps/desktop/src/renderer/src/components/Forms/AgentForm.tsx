@@ -1,18 +1,25 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Agent } from '@comitiva/contract';
+import type { Agent, PermissionPolicy } from '@comitiva/contract';
 import { errorCode } from '../../backend/Backend';
 import {
+  addRoot,
   addTags,
   agentFormFor,
   avatarColors,
   avatarEmojis,
   connectionGroups,
   defaultModelOf,
+  moveRoot,
   newAgentForm,
+  offeredToolServers,
   paramsApply,
   problems,
+  removeRoot,
+  rootsWithoutFiles,
+  setRootMode,
   supportsModelList,
+  toggleToolServer,
   toAgentDraft,
   toAgentPatch,
   type AgentFormProblem,
@@ -20,12 +27,15 @@ import {
 } from '../../lib/agentForm';
 import type { Async } from '../../lib/async';
 import { roleTemplateIds, type RoleTemplateId } from '../../lib/roleTemplates';
-import { useAgents, useConnections } from '../../store/context';
+import { serverDisplayName } from '../../lib/toolServerForm';
+import { useAgents, useConnections, useToolServers } from '../../store/context';
 import { AgentAvatar, avatarSwatchClasses } from '../AgentAvatar';
 import { ui } from '../ui';
 import { FormShell } from './FormShell';
 
-/** Create/edit form for an agent. Tools and roots join in Phase 5. */
+const policies: PermissionPolicy[] = ['ask', 'allow-writes', 'read-only'];
+
+/** Create/edit form for an agent: persona, connection, model, folders, tools and permissions. */
 export function AgentForm({
   editing,
   prefill,
@@ -39,6 +49,8 @@ export function AgentForm({
   const save = useAgents((s) => s.save);
   const close = useAgents((s) => s.closeEditor);
   const fetchModels = useAgents((s) => s.fetchModels);
+  const pickFolder = useConnections((s) => s.pickFolder);
+  const toolServers = useToolServers((s) => s.items);
 
   const [form, setForm] = useState<AgentFormState>(() =>
     editing ? agentFormFor(editing) : newAgentForm(connections, prefill),
@@ -371,6 +383,115 @@ export function AgentForm({
           {t('agents.form.paramsCliNote')}
         </p>
       )}
+
+      <fieldset className="flex flex-col gap-2" data-testid="agent-roots">
+        <legend className={ui.label}>{t('agents.form.roots')}</legend>
+        <p className={ui.hint}>{t('agents.form.rootsHint')}</p>
+        {form.roots.map((root, i) => (
+          <div key={root.path} data-testid="agent-root" className="flex items-center gap-2">
+            <span className="min-w-0 flex-1 truncate font-mono text-xs" title={root.path}>
+              {root.path}
+            </span>
+            <select
+              aria-label={t('agents.form.rootMode')}
+              data-testid="agent-root-mode"
+              className={`${ui.input} w-auto`}
+              value={root.mode}
+              onChange={(e) =>
+                setForm(setRootMode(form, i, e.target.value as 'read' | 'readwrite'))
+              }
+            >
+              <option value="readwrite">{t('agents.form.rootModes.readwrite')}</option>
+              <option value="read">{t('agents.form.rootModes.read')}</option>
+            </select>
+            <button
+              type="button"
+              className={ui.ghost}
+              aria-label={t('agents.form.moveUp')}
+              disabled={i === 0}
+              onClick={() => setForm(moveRoot(form, i, -1))}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className={ui.ghost}
+              aria-label={t('agents.form.moveDown')}
+              disabled={i === form.roots.length - 1}
+              onClick={() => setForm(moveRoot(form, i, 1))}
+            >
+              ↓
+            </button>
+            <button
+              type="button"
+              className={ui.ghost}
+              aria-label={t('agents.form.removeRoot', { path: root.path })}
+              onClick={() => setForm(removeRoot(form, i))}
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+        <button
+          type="button"
+          data-testid="add-root"
+          className={`${ui.button} self-start`}
+          onClick={() =>
+            void pickFolder().then((path) => {
+              if (path) setForm((f) => addRoot(f, path));
+            })
+          }
+        >
+          {t('agents.form.addRoot')}
+        </button>
+        {connection?.kind === 'cli' && form.roots.some((r) => r.mode === 'readwrite') && (
+          <p className={ui.hint}>{t('agents.form.rootsCliNote')}</p>
+        )}
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-1.5" data-testid="agent-tools">
+        <legend className={ui.label}>{t('agents.form.tools')}</legend>
+        {offeredToolServers(toolServers, form.toolServerIds).map((server) => (
+          <label key={server.id} className="flex items-center gap-2 text-sm">
+            <input
+              type="checkbox"
+              data-testid="agent-tool"
+              data-id={server.id}
+              checked={form.toolServerIds.includes(server.id)}
+              onChange={(e) => setForm(toggleToolServer(form, server.id, e.target.checked))}
+            />
+            <span>{serverDisplayName(server, t)}</span>
+            {!server.enabled && (
+              <span className={`text-xs ${ui.muted}`}>{t('agents.form.toolDisabled')}</span>
+            )}
+          </label>
+        ))}
+        {rootsWithoutFiles(form) && (
+          <p data-testid="roots-without-files" className={`text-xs ${ui.bad}`}>
+            {t('agents.form.rootsWithoutFiles')}
+          </p>
+        )}
+      </fieldset>
+
+      <fieldset className="flex flex-col gap-1.5" data-testid="agent-policy">
+        <legend className={ui.label}>{t('agents.form.policy')}</legend>
+        {policies.map((policy) => (
+          <label key={policy} className="flex items-start gap-2 text-sm">
+            <input
+              type="radio"
+              name={`${ids}-policy`}
+              data-testid={`policy-${policy}`}
+              className="mt-1"
+              checked={form.permissionPolicy === policy}
+              onChange={() => setForm({ ...form, permissionPolicy: policy })}
+            />
+            <span>
+              {t(`agents.form.policies.${policy}.label`)}
+              <span className={`block ${ui.hint}`}>{t(`agents.form.policies.${policy}.hint`)}</span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
 
       <div className={ui.label}>
         <label htmlFor={`${ids}-tags`}>

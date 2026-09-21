@@ -27,10 +27,10 @@
   "sidebar": {
     "noAgents": "Nenhum agente ainda.",
     "unread_one": "{{count}} resposta não lida",
-    "unread_other": "{{count}} respostas não lidas"
+    "unread_other": "{{count}} respostas não lidas",
+    "awaiting": "Aprovar"
   },
   "placeholder": {
-    "tools": "Ferramentas (pastas locais, Google Drive, qualquer servidor MCP) chegam em uma fase posterior.",
     "usage": "Uso de tokens e custos por conexão e agente chegam em uma fase posterior.",
     "settings": "Idioma, tema e outras preferências chegam em uma fase posterior."
   },
@@ -84,8 +84,8 @@
     },
     "cli": {
       "autoAcceptTitle": "Roda sozinho, sem perguntar",
-      "autoAcceptBody": "O {{harness}} roda de forma não interativa e aceita toda ação que decidir tomar (editar arquivos, executar comandos) dentro do diretório de trabalho, sem perguntar antes. Use um diretório de trabalho que você aceite que ele altere.",
-      "nativeToolsWarning": "As edições de arquivo do próprio {{harness}} não passam pelas aprovações do Comitiva: acontecem direto, limitadas apenas pelo sandbox dele.",
+      "autoAcceptBody": "{{harness}} roda sem interação e aceita toda ação que decidir tomar dentro do diretório de trabalho, sem perguntar antes. Quando o agente tem a ferramenta Arquivos, as mudanças em arquivos passam pelas aprovações do Comitiva.",
+      "nativeToolsWarning": "As edições de arquivo próprias do {{harness}} não podem ser desligadas. Quando o agente tem a ferramenta Arquivos, o Comitiva o executa com sandbox somente leitura, e toda gravação passa pela sua aprovação; fora isso, as edições acontecem direto, limitadas só pelo sandbox.",
       "messageStreaming": "As respostas chegam uma mensagem por vez, não palavra por palavra.",
       "binaryPath": "Caminho do binário",
       "binaryPlaceholder": "Detectar `{{name}}` automaticamente",
@@ -167,7 +167,7 @@
     "deleteTitle": "Excluir “{{name}}”?",
     "deleteBody": "As configurações dele serão removidas. Isso não pode ser desfeito.",
     "emptyTitle": "Nenhum agente ainda",
-    "emptyBody": "Um agente é uma persona com um papel, uma conexão e, em breve, ferramentas.",
+    "emptyBody": "Um agente é uma persona com um papel, uma conexão e ferramentas, como as suas pastas.",
     "needConnection": "Agentes conversam por meio de uma conexão. Adicione uma primeiro.",
     "pickTitle": "Escolha um agente",
     "pickBody": "Selecione um na barra lateral ou crie um novo.",
@@ -184,7 +184,9 @@
       "connectionDefault": "Padrão da conexão ({{model}})",
       "clickToEdit": "Clique para editar",
       "noRole": "Sem papel ainda. Clique para escrever um.",
-      "roleKeys": "Ctrl+Enter salva · Esc cancela"
+      "roleKeys": "Ctrl+Enter salva · Esc cancela",
+      "noTools": "Nenhuma",
+      "noRoots": "Nenhuma"
     },
     "form": {
       "createTitle": "Novo agente",
@@ -220,7 +222,37 @@
       "paramsCliNote": "Harnesses de CLI usam os próprios limites de temperatura e tokens.",
       "tags": "Tags",
       "tagsPlaceholder": "Digite e pressione Enter",
-      "removeTag": "Remover {{tag}}"
+      "removeTag": "Remover {{tag}}",
+      "roots": "Pastas",
+      "rootsHint": "O que o agente enxerga pela ferramenta Arquivos. Ler é livre; mudanças pedem sua aprovação. Nada fora destas pastas.",
+      "rootMode": "Acesso",
+      "rootModes": {
+        "read": "Somente leitura",
+        "readwrite": "Leitura e escrita"
+      },
+      "moveUp": "Subir",
+      "moveDown": "Descer",
+      "removeRoot": "Remover {{path}}",
+      "addRoot": "Adicionar pasta…",
+      "rootsCliNote": "Harnesses de CLI trabalham na primeira pasta de leitura e escrita.",
+      "tools": "Ferramentas",
+      "toolDisabled": "(desativado)",
+      "rootsWithoutFiles": "Pastas não têm efeito sem a ferramenta Arquivos.",
+      "policy": "Permissões",
+      "policies": {
+        "ask": {
+          "label": "Perguntar antes de mudar",
+          "hint": "Ler é livre; gravar, mover e excluir aguardam sua aprovação."
+        },
+        "allow-writes": {
+          "label": "Permitir mudanças",
+          "hint": "Toda ferramenta roda sem perguntar. Só para agentes e pastas em que você confia."
+        },
+        "read-only": {
+          "label": "Somente leitura",
+          "hint": "Ferramentas que mudam algo nem são oferecidas."
+        }
+      }
     },
     "colors": {
       "indigo": "Índigo",
@@ -295,7 +327,77 @@
       "none": "Sem resultado",
       "duration": "{{ms}} ms",
       "input": "Argumentos",
-      "output": "Resultado"
+      "output": "Resultado",
+      "awaiting": "Aguardando você",
+      "denied": "Negada"
+    }
+  },
+  "approval": {
+    "label": "Aprovação necessária",
+    "question": "{{agent}} quer usar {{tool}} ({{server}}).",
+    "allow": "Permitir",
+    "deny": "Negar",
+    "always": "Sempre permitir para este agente",
+    "alwaysHint": "{{agent}} vai usar {{tool}} sem perguntar daqui em diante."
+  },
+  "tools": {
+    "title": "Ferramentas",
+    "subtitle": "Servidores MCP que seus agentes podem usar. Ler é livre; o que muda algo pergunta antes.",
+    "add": "Adicionar servidor",
+    "enabled": "Ativado",
+    "test": "Testar",
+    "testing": "Iniciando o servidor…",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "deleteTitle": "Excluir “{{name}}”?",
+    "deleteBody": "O servidor e os segredos guardados dele são removidos. Isso não pode ser desfeito.",
+    "deleteBodyUsed_one": "{{count}} agente usa este servidor e vai perdê-lo. Os segredos guardados também são removidos. Isso não pode ser desfeito.",
+    "deleteBodyUsed_other": "{{count}} agentes usam este servidor e vão perdê-lo. Os segredos guardados também são removidos. Isso não pode ser desfeito.",
+    "toolCount_one": "{{count}} ferramenta",
+    "toolCount_other": "{{count}} ferramentas",
+    "readOnly": "somente leitura",
+    "transport": {
+      "stdio": "Comando local",
+      "http": "Remoto (HTTP)"
+    },
+    "builtin": {
+      "badge": "Embutido",
+      "filesystem": {
+        "name": "Arquivos",
+        "description": "Lê, busca e altera arquivos nas pastas que você dá a cada agente. Nada fora delas."
+      }
+    },
+    "form": {
+      "createTitle": "Novo servidor MCP",
+      "editTitle": "Editar servidor MCP",
+      "name": "Nome",
+      "namePlaceholder": "ex.: GitHub",
+      "transport": "Como acessar",
+      "transportHint": {
+        "stdio": "O Comitiva inicia o comando e conversa com ele por stdin/stdout.",
+        "http": "O Comitiva se conecta a um servidor que já está rodando (Streamable HTTP)."
+      },
+      "command": "Comando",
+      "args": "Argumentos",
+      "argsHint": "Um argumento por linha.",
+      "url": "URL",
+      "env": "Variáveis de ambiente",
+      "headers": "Cabeçalhos",
+      "key": "Nome",
+      "value": "Valor",
+      "secret": "Segredo",
+      "secretHint": "Guardado no chaveiro do sistema, nunca mais exibido.",
+      "storedSecret": "Guardado · digite para trocar",
+      "removeRow": "Remover",
+      "addRow": "Adicionar",
+      "problems": {
+        "nameRequired": "Dê um nome ao servidor.",
+        "commandRequired": "Digite o comando a executar.",
+        "urlInvalid": "Use uma URL http:// ou https://.",
+        "keyInvalid": "Um nome tem caracteres não permitidos.",
+        "keyRepeated": "Um nome aparece duas vezes.",
+        "secretRequired": "Digite um valor para cada segredo novo."
+      }
     }
   }
 }

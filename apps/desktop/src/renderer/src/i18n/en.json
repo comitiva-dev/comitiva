@@ -27,10 +27,10 @@
   "sidebar": {
     "noAgents": "No agents yet.",
     "unread_one": "{{count}} unread reply",
-    "unread_other": "{{count}} unread replies"
+    "unread_other": "{{count}} unread replies",
+    "awaiting": "Approve"
   },
   "placeholder": {
-    "tools": "Tools (local folders, Google Drive, any MCP server) arrive in a later phase.",
     "usage": "Token usage and costs per connection and agent arrive in a later phase.",
     "settings": "Language, theme and other preferences arrive in a later phase."
   },
@@ -84,8 +84,8 @@
     },
     "cli": {
       "autoAcceptTitle": "Runs on its own, without asking",
-      "autoAcceptBody": "{{harness}} runs non-interactively and accepts every action it decides to take (editing files, running commands) inside the working directory, without asking you first. Use a working directory you are comfortable letting it change.",
-      "nativeToolsWarning": "{{harness}}'s own file edits cannot be routed through Comitiva's approvals: they happen directly, limited only by its sandbox.",
+      "autoAcceptBody": "{{harness}} runs non-interactively and accepts every action it decides to take inside the working directory, without asking you first. When the agent has the Files tool, its file changes go through Comitiva's approvals instead.",
+      "nativeToolsWarning": "{{harness}}'s own file edits cannot be turned off. When the agent has the Files tool, Comitiva runs it with a read-only sandbox so every write goes through your approval; otherwise its edits happen directly, limited only by its sandbox.",
       "messageStreaming": "Replies arrive one message at a time, not word by word.",
       "binaryPath": "Binary path",
       "binaryPlaceholder": "Auto-detect `{{name}}`",
@@ -167,7 +167,7 @@
     "deleteTitle": "Delete “{{name}}”?",
     "deleteBody": "Its settings are removed. This cannot be undone.",
     "emptyTitle": "No agents yet",
-    "emptyBody": "An agent is a persona with a role, a connection and, soon, tools.",
+    "emptyBody": "An agent is a persona with a role, a connection, and tools such as your folders.",
     "needConnection": "Agents talk through a connection. Add one first.",
     "pickTitle": "Pick an agent",
     "pickBody": "Choose one in the sidebar, or create a new one.",
@@ -184,7 +184,9 @@
       "connectionDefault": "Connection default ({{model}})",
       "clickToEdit": "Click to edit",
       "noRole": "No role yet. Click to write one.",
-      "roleKeys": "Ctrl+Enter saves · Esc cancels"
+      "roleKeys": "Ctrl+Enter saves · Esc cancels",
+      "noTools": "None",
+      "noRoots": "None"
     },
     "form": {
       "createTitle": "New agent",
@@ -220,7 +222,37 @@
       "paramsCliNote": "CLI harnesses use their own temperature and token limits.",
       "tags": "Tags",
       "tagsPlaceholder": "Type and press Enter",
-      "removeTag": "Remove {{tag}}"
+      "removeTag": "Remove {{tag}}",
+      "roots": "Folders",
+      "rootsHint": "What the agent can see through Files. Reading is free; changes ask you first. Nothing outside these folders.",
+      "rootMode": "Access",
+      "rootModes": {
+        "read": "Read only",
+        "readwrite": "Read and write"
+      },
+      "moveUp": "Move up",
+      "moveDown": "Move down",
+      "removeRoot": "Remove {{path}}",
+      "addRoot": "Add folder…",
+      "rootsCliNote": "CLI harnesses work in the first read-write folder.",
+      "tools": "Tools",
+      "toolDisabled": "(disabled)",
+      "rootsWithoutFiles": "Folders do nothing without the Files tool.",
+      "policy": "Permissions",
+      "policies": {
+        "ask": {
+          "label": "Ask before changes",
+          "hint": "Reading runs freely; writes, moves and deletes wait for your approval."
+        },
+        "allow-writes": {
+          "label": "Allow changes",
+          "hint": "Every tool runs without asking. Only for agents and folders you trust."
+        },
+        "read-only": {
+          "label": "Read only",
+          "hint": "Tools that change things are not offered at all."
+        }
+      }
     },
     "colors": {
       "indigo": "Indigo",
@@ -295,7 +327,77 @@
       "none": "No result",
       "duration": "{{ms}} ms",
       "input": "Arguments",
-      "output": "Result"
+      "output": "Result",
+      "awaiting": "Waiting for you",
+      "denied": "Denied"
+    }
+  },
+  "approval": {
+    "label": "Approval needed",
+    "question": "{{agent}} wants to use {{tool}} ({{server}}).",
+    "allow": "Allow",
+    "deny": "Deny",
+    "always": "Always allow for this agent",
+    "alwaysHint": "{{agent}} will use {{tool}} without asking from now on."
+  },
+  "tools": {
+    "title": "Tools",
+    "subtitle": "MCP servers your agents can use. Reading runs freely; anything that changes things asks first.",
+    "add": "Add server",
+    "enabled": "Enabled",
+    "test": "Test",
+    "testing": "Starting the server…",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteBody": "The server and its stored secrets are removed. This cannot be undone.",
+    "deleteBodyUsed_one": "{{count}} agent uses it and will lose it. Its stored secrets are removed too. This cannot be undone.",
+    "deleteBodyUsed_other": "{{count}} agents use it and will lose it. Its stored secrets are removed too. This cannot be undone.",
+    "toolCount_one": "{{count}} tool",
+    "toolCount_other": "{{count}} tools",
+    "readOnly": "read-only",
+    "transport": {
+      "stdio": "Local command",
+      "http": "Remote (HTTP)"
+    },
+    "builtin": {
+      "badge": "Built-in",
+      "filesystem": {
+        "name": "Files",
+        "description": "Reads, searches and changes files in the folders you give each agent. Nothing outside them."
+      }
+    },
+    "form": {
+      "createTitle": "New MCP server",
+      "editTitle": "Edit MCP server",
+      "name": "Name",
+      "namePlaceholder": "e.g. GitHub",
+      "transport": "How to reach it",
+      "transportHint": {
+        "stdio": "Comitiva starts the command and talks to it over stdin/stdout.",
+        "http": "Comitiva connects to a server that is already running (Streamable HTTP)."
+      },
+      "command": "Command",
+      "args": "Arguments",
+      "argsHint": "One argument per line.",
+      "url": "URL",
+      "env": "Environment variables",
+      "headers": "Headers",
+      "key": "Name",
+      "value": "Value",
+      "secret": "Secret",
+      "secretHint": "Stored in the system keyring, never shown again.",
+      "storedSecret": "Stored · type to replace",
+      "removeRow": "Remove",
+      "addRow": "Add",
+      "problems": {
+        "nameRequired": "Give the server a name.",
+        "commandRequired": "Type the command to run.",
+        "urlInvalid": "Use an http:// or https:// URL.",
+        "keyInvalid": "A name has characters that are not allowed.",
+        "keyRepeated": "A name is listed twice.",
+        "secretRequired": "Type a value for each new secret."
+      }
     }
   }
 }

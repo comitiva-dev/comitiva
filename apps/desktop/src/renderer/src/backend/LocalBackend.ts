@@ -2,6 +2,7 @@ import type {
   AgentDraft,
   AgentPatch,
   AppSettingsPatch,
+  ApprovalDecision,
   ConnectionDraft,
   ConnectionPatch,
   ConnectionTarget,
@@ -10,6 +11,8 @@ import type {
   IpcInput,
   IpcInvokeChannel,
   IpcOutput,
+  ToolServerDraft,
+  ToolServerPatch,
   UserContent,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
@@ -85,6 +88,20 @@ export class LocalBackend implements Backend {
 
   dialogs = {
     pickFolder: () => this.api.invoke('dialogs.pickFolder', undefined),
+  };
+
+  toolServers = {
+    list: () => this.api.invoke('toolServers.list', undefined),
+    create: (draft: ToolServerDraft) => this.api.invoke('toolServers.create', draft),
+    update: (id: string, patch: ToolServerPatch) =>
+      this.api.invoke('toolServers.update', { id, patch }),
+    delete: (id: string) => this.api.invoke('toolServers.delete', { id }),
+    test: (id: string) => this.api.invoke('toolServers.test', { id }),
+  };
+
+  approvals = {
+    decide: (conversationId: string, toolUseId: string, decision: ApprovalDecision) =>
+      this.api.invoke('approvals.decide', { conversationId, toolUseId, decision }),
   };
 
   onEvent(handler: (event: BackendEvent) => void): () => void {

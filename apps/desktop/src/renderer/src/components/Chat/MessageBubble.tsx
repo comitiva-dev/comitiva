@@ -1,7 +1,8 @@
 import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Agent, Message } from '@comitiva/contract';
-import { imageSrc, renderParts } from '../../lib/chat';
+import type { Agent, ApprovalDecision, Message } from '@comitiva/contract';
+import { imageSrc, renderParts, toolState } from '../../lib/chat';
+import { ApprovalCard } from '../ApprovalCard/ApprovalCard';
 import { AgentAvatar } from '../AgentAvatar';
 import { ToolCallBlock } from '../ToolBlock/ToolCallBlock';
 import { ui } from '../ui';
@@ -15,15 +16,27 @@ const time = (iso: string, locale: string) =>
  * store keeps unchanged messages as the same object, so only the streaming
  * one re-renders.
  */
+export interface Approval {
+  toolUseId: string;
+  busy: boolean;
+  onDecide(decision: ApprovalDecision): void;
+}
+
 export const MessageBubble = memo(function MessageBubble({
   message,
   agent,
   retry,
+  approval,
+  serverNames,
 }: {
   message: Message;
   agent: Pick<Agent, 'name' | 'avatar'>;
   /** Set on the last message when it is a failed reply. */
   retry?: (() => void) | undefined;
+  /** Set on the streaming reply while one of its tool calls waits for the user. */
+  approval?: Approval | undefined;
+  /** Display names of tool servers by id. */
+  serverNames: Record<string, string>;
 }) {
   const { t, i18n } = useTranslation();
   const parts = useMemo(() => renderParts(message.content), [message.content]);
@@ -79,10 +92,31 @@ export const MessageBubble = memo(function MessageBubble({
                 </p>
               );
             }
-            if (part.kind === 'tool')
+            if (part.kind === 'tool') {
+              const awaiting = approval?.toolUseId === part.use.id;
+              const serverName = part.use.toolServerId.startsWith('harness:')
+                ? null
+                : (serverNames[part.use.toolServerId] ?? part.use.toolServerId);
               return (
-                <ToolCallBlock key={i} use={part.use} result={part.result} running={streaming} />
+                <div key={i} className="flex flex-col gap-2">
+                  <ToolCallBlock
+                    use={part.use}
+                    result={part.result}
+                    state={toolState(part.result, { streaming, awaiting })}
+                    serverName={serverName}
+                  />
+                  {awaiting && (
+                    <ApprovalCard
+                      use={part.use}
+                      serverName={serverName ?? ''}
+                      agentName={agent.name}
+                      busy={approval.busy}
+                      onDecide={approval.onDecide}
+                    />
+                  )}
+                </div>
               );
+            }
             return (
               <p key={i} className={`text-xs ${ui.muted}`}>
                 {t('chat.unsupportedBlock', { type: part.type })}

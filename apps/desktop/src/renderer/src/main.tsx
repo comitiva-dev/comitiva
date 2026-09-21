@@ -10,6 +10,7 @@ import { createConnectionsStore } from './store/connections';
 import { StoresProvider } from './store/context';
 import { createConversationsStore } from './store/conversations';
 import { createMessagesStore } from './store/messages';
+import { createToolServersStore } from './store/toolServers';
 
 const backend = new LocalBackend();
 const stores = {
@@ -18,6 +19,7 @@ const stores = {
   agents: createAgentsStore(backend),
   conversations: createConversationsStore(backend),
   messages: createMessagesStore(backend),
+  toolServers: createToolServersStore(backend),
 };
 backend.onEvent((event) => {
   stores.app.getState().handleEvent(event);
@@ -27,6 +29,8 @@ backend.onEvent((event) => {
 void stores.app.getState().init();
 void stores.agents.getState().load();
 void stores.conversations.getState().load();
+// The agent form's Tools checklist and the Tools screen share this list.
+void stores.toolServers.getState().load();
 // First run lands on Connections (setup); once one exists, on Agents.
 void stores.connections
   .getState()

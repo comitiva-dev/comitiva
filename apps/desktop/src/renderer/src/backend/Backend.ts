@@ -9,18 +9,24 @@ import type {
   ConnectionPatch,
   ConnectionSummary,
   ConnectionTarget,
+  Conversation,
+  ConversationListInput,
+  ConversationSummary,
   DetectBinaryInput,
+  IpcEventPayload,
   ErrorCode,
+  MessagePage,
   ModelInfo,
   RunnerStatus,
   SecretStorageStatus,
   TestResult,
+  UserContent,
 } from '@comitiva/contract';
 
 /**
  * The only thing the UI knows about. LocalBackend implements it over IPC
  * today; RemoteBackend (Phase 8) will implement it over HTTP + WebSocket.
- * It grows phase by phase (docs/design.md §7).
+ * It grows phase by phase (docs/design.md §7; the seam: docs/architecture.md).
  */
 export interface Backend {
   app: {
@@ -56,6 +62,30 @@ export interface Backend {
     get(): Promise<AppSettings>;
     update(patch: AppSettingsPatch): Promise<AppSettings>;
   };
+  conversations: {
+    /** Non-archived by default, newest activity first, with unread replies. */
+    list(filter?: ConversationListInput): Promise<ConversationSummary[]>;
+    create(agentId: string): Promise<Conversation>;
+    rename(id: string, title: string): Promise<Conversation>;
+    archive(id: string, archived: boolean): Promise<Conversation>;
+    markRead(id: string): Promise<void>;
+  };
+  messages: {
+    /** The latest page (or the one before `beforeSeq`), oldest first, at the conversation's `rev`. */
+    list(
+      conversationId: string,
+      opts?: { beforeSeq?: number; limit?: number },
+    ): Promise<MessagePage>;
+    /**
+     * Resolves once the message is stored and the run started; the reply
+     * arrives as events. Rejects with conversation_busy, connection_disabled,
+     * model_required or secret_missing, having stored nothing.
+     */
+    send(conversationId: string, content: UserContent): Promise<void>;
+    cancel(conversationId: string): Promise<void>;
+    /** Runs the last errored reply again, in the same message. */
+    retry(conversationId: string): Promise<void>;
+  };
   dialogs: {
     /** A native folder picker; null when cancelled (or when the backend has none). */
     pickFolder(): Promise<string | null>;
@@ -63,7 +93,21 @@ export interface Backend {
   onEvent(handler: (event: BackendEvent) => void): () => void;
 }
 
-export type BackendEvent = { type: 'runner.status'; status: RunnerStatus };
+/**
+ * Pushed by the backend. Message events carry the conversation's `rev`
+ * (ADR 0008): drop those at or below the `rev` of the page already shown.
+ */
+export type BackendEvent =
+  | { type: 'runner.status'; status: RunnerStatus }
+  | ({ type: 'conversation.updated' } & IpcEventPayload<'conversation.updated'>)
+  | ({ type: 'message.updated' } & IpcEventPayload<'message.updated'>)
+  | ({ type: 'message.delta' } & IpcEventPayload<'message.delta'>)
+  | ({ type: 'message.block' } & IpcEventPayload<'message.block'>);
+
+export type MessageEvent = Extract<
+  BackendEvent,
+  { type: 'message.updated' | 'message.delta' | 'message.block' }
+>;
 
 /** Error thrown by Backend calls; the UI shows it by `code`, never by message. */
 export class BackendError extends Error {

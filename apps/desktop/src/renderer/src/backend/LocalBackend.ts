@@ -5,10 +5,12 @@ import type {
   ConnectionDraft,
   ConnectionPatch,
   ConnectionTarget,
+  ConversationListInput,
   DetectBinaryInput,
   IpcInput,
   IpcInvokeChannel,
   IpcOutput,
+  UserContent,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
 
@@ -63,11 +65,36 @@ export class LocalBackend implements Backend {
     update: (patch: AppSettingsPatch) => this.api.invoke('settings.update', patch),
   };
 
+  conversations = {
+    list: (filter?: ConversationListInput) => this.api.invoke('conversations.list', filter),
+    create: (agentId: string) => this.api.invoke('conversations.create', { agentId }),
+    rename: (id: string, title: string) => this.api.invoke('conversations.rename', { id, title }),
+    archive: (id: string, archived: boolean) =>
+      this.api.invoke('conversations.archive', { id, archived }),
+    markRead: (id: string) => this.api.invoke('conversations.markRead', { id }),
+  };
+
+  messages = {
+    list: (conversationId: string, opts: { beforeSeq?: number; limit?: number } = {}) =>
+      this.api.invoke('messages.list', { conversationId, ...opts }),
+    send: (conversationId: string, content: UserContent) =>
+      this.api.invoke('messages.send', { conversationId, content }),
+    cancel: (conversationId: string) => this.api.invoke('messages.cancel', { conversationId }),
+    retry: (conversationId: string) => this.api.invoke('messages.retry', { conversationId }),
+  };
+
   dialogs = {
     pickFolder: () => this.api.invoke('dialogs.pickFolder', undefined),
   };
 
   onEvent(handler: (event: BackendEvent) => void): () => void {
-    return this.api.on('runner.status', ({ status }) => handler({ type: 'runner.status', status }));
+    const offs = [
+      this.api.on('runner.status', ({ status }) => handler({ type: 'runner.status', status })),
+      this.api.on('conversation.updated', (p) => handler({ type: 'conversation.updated', ...p })),
+      this.api.on('message.updated', (p) => handler({ type: 'message.updated', ...p })),
+      this.api.on('message.delta', (p) => handler({ type: 'message.delta', ...p })),
+      this.api.on('message.block', (p) => handler({ type: 'message.block', ...p })),
+    ];
+    return () => offs.forEach((off) => off());
   }
 }

@@ -1,5 +1,14 @@
 import { vi } from 'vitest';
-import type { Agent, AgentDraft, AppSettings, ConnectionSummary } from '@comitiva/contract';
+import type {
+  Agent,
+  AgentDraft,
+  AppSettings,
+  ConnectionSummary,
+  Conversation,
+  ConversationSummary,
+  Message,
+  MessagePage,
+} from '@comitiva/contract';
 import type { Backend } from '../backend/Backend';
 
 export const summary = (
@@ -40,6 +49,32 @@ export const agent = (id: string, overrides: Partial<Agent> = {}): Agent => ({
   ...overrides,
 });
 
+const at = '2026-09-21T12:00:00.000Z';
+
+export const conversation = (id: string, overrides: Partial<Conversation> = {}): Conversation => ({
+  id,
+  agentId: 'a1',
+  title: null,
+  status: 'idle',
+  harnessSessionId: null,
+  archived: false,
+  lastActivityAt: at,
+  createdAt: at,
+  ...overrides,
+});
+
+export const message = (id: string, overrides: Partial<Message> = {}): Message => ({
+  id,
+  conversationId: 'k1',
+  role: 'assistant',
+  content: [{ type: 'text', text: id }],
+  status: 'complete',
+  seq: 0,
+  createdAt: at,
+  error: null,
+  ...overrides,
+});
+
 /** A Backend whose methods are vi.fn()s with sensible defaults. */
 export function fakeBackend() {
   const backend = {
@@ -67,6 +102,19 @@ export function fakeBackend() {
     settings: {
       get: vi.fn(async (): Promise<AppSettings> => ({ sampleAgentOffer: 'pending' })),
       update: vi.fn(async (): Promise<AppSettings> => ({ sampleAgentOffer: 'done' })),
+    },
+    conversations: {
+      list: vi.fn(async (): Promise<ConversationSummary[]> => []),
+      create: vi.fn(async (agentId: string) => conversation('new', { agentId })),
+      rename: vi.fn(async (id: string, title: string) => conversation(id, { title })),
+      archive: vi.fn(async (id: string, archived: boolean) => conversation(id, { archived })),
+      markRead: vi.fn(async () => {}),
+    },
+    messages: {
+      list: vi.fn(async (): Promise<MessagePage> => ({ messages: [], hasMore: false, rev: 0 })),
+      send: vi.fn(async () => {}),
+      cancel: vi.fn(async () => {}),
+      retry: vi.fn(async () => {}),
     },
     dialogs: { pickFolder: vi.fn(async (): Promise<string | null> => '/home/me/work') },
     onEvent: vi.fn(() => () => {}),

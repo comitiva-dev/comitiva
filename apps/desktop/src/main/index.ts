@@ -3,13 +3,18 @@ import { join } from 'node:path';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
 import { ConnectionRepository } from './db/repositories/ConnectionRepository';
+import { ConversationRepository } from './db/repositories/ConversationRepository';
+import { MessageRepository } from './db/repositories/MessageRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
+import { UsageRepository } from './db/repositories/UsageRepository';
 import { IpcRouter } from './ipc/IpcRouter';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
 import { AgentService } from './services/AgentService';
 import { ConnectionService } from './services/ConnectionService';
+import { ConversationService } from './services/ConversationService';
+import { TitleService } from './services/TitleService';
 
 // One data directory named after the product, in dev and packaged builds.
 // COMITIVA_USER_DATA isolates e2e runs.
@@ -81,14 +86,32 @@ async function bootstrap(): Promise<void> {
     logFile: paths.log('runner.log'),
   });
 
+  const connectionRepo = new ConnectionRepository(db);
   const connections = new ConnectionService({
-    repo: new ConnectionRepository(db),
+    repo: connectionRepo,
     secrets,
     runner: supervisor.client,
   });
 
-  const agents = new AgentService(new AgentRepository(db));
+  const agentRepo = new AgentRepository(db);
+  const agents = new AgentService(agentRepo);
   const settings = new SettingsRepository(db);
+
+  const usage = new UsageRepository(db);
+  const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
+  const chat = new ConversationService({
+    db,
+    conversations: new ConversationRepository(db),
+    messages: new MessageRepository(db),
+    usage,
+    agents: agentRepo,
+    connections: connectionRepo,
+    secretFor,
+    runner: supervisor.client,
+    title: new TitleService({ runner: supervisor.client, usage, secretFor }),
+    workspacesDir: paths.workspaces(),
+  });
+  chat.recover();
 
   const router = new IpcRouter(
     {
@@ -105,16 +128,32 @@ async function bootstrap(): Promise<void> {
       'agents.list': () => agents.list(),
       'agents.create': (draft) => agents.create(draft),
       'agents.update': ({ id, patch }) => agents.update(id, patch),
-      'agents.delete': ({ id }) => agents.delete(id),
+      'agents.delete': ({ id }) => {
+        chat.forgetAgent(id);
+        agents.delete(id);
+      },
       'agents.duplicate': ({ id, name }) => agents.duplicate(id, name),
       'settings.get': () => settings.get(),
       'settings.update': (patch) => settings.update(patch),
+      'conversations.list': (filter) => chat.list(filter),
+      'conversations.create': ({ agentId }) => chat.create(agentId),
+      'conversations.rename': ({ id, title }) => chat.rename(id, title),
+      'conversations.archive': ({ id, archived }) => chat.archive(id, archived),
+      'conversations.markRead': ({ id }) => chat.markRead(id),
+      'messages.list': (input) => chat.listMessages(input),
+      'messages.send': ({ conversationId, content }) => chat.sendMessage(conversationId, content),
+      'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
+      'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
       'dialogs.pickFolder': () => pickFolder(),
     },
     isTrustedUrl,
   );
   router.register();
   supervisor.on('status', (status) => router.broadcast('runner.status', { status }));
+  chat.on('conversation.updated', (p) => router.broadcast('conversation.updated', p));
+  chat.on('message.updated', (p) => router.broadcast('message.updated', p));
+  chat.on('message.delta', (p) => router.broadcast('message.delta', p));
+  chat.on('message.block', (p) => router.broadcast('message.block', p));
 
   createWindow();
   await supervisor.start();
@@ -124,6 +163,8 @@ async function bootstrap(): Promise<void> {
     if (quitting) return;
     quitting = true;
     event.preventDefault();
+    // Replies still streaming are saved as cancelled before the runner and the DB go away.
+    chat.shutdown();
     void supervisor.stop().finally(() => {
       db.close();
       app.quit();

@@ -35,7 +35,7 @@ Connection ──1:N──▶ Agent ──1:N──▶ Conversation ──1:N─
 `id`, `name`, `transport` (`stdio` | `http`), `command`, `args`, `env` (sensitive values via `secretRef`), `url`, `headers`, `builtin` (bool), `enabled`. Built-ins in v1: `filesystem` and `google-drive`. The user can register any other.
 
 **Agent** — a persistent persona.
-`id`, `name`, `avatar`, `connectionId`, `model` (optional), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Phase 10), `tags`.
+`id`, `name`, `avatar` (`{ color, emoji? }`: a palette color and an optional emoji, else initials), `connectionId`, `model` (optional; else the connection's default), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Phase 10), `tags`.
 
 **Conversation** — `id`, `agentId`, `title`, `status` (`idle` | `running` | `awaiting-approval` | `error`), `harnessSessionId`, `archived`, `lastActivityAt`.
 

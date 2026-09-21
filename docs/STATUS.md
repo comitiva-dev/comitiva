@@ -2,9 +2,107 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 2 — CLI harnesses (Claude Code, Codex), session resume (done)
+## Current phase: 3 — Agents: CRUD, role, model, avatar (done)
+
+Done when an agent shows up in the sidebar: yes, created from the sample offer or the form (e2e).
 
 ### Done
+
+- **Contract**:
+  - `AgentAvatar = { color, emoji? }`: `color` is one of 10 palette names (`AvatarColor`); without an emoji the UI shows the name's initials. `Agent.avatar` uses it.
+  - Tags are trimmed, at most 32 characters each and at most 20 per agent.
+  - `AgentDraft` applies defaults (role, params, tags, roots, tool servers, policy `ask`) and turns a blank model into `null`, meaning the connection's default. `AgentPatch` is the same shape with every field optional. `ValidAgentDraft` / `ValidAgentPatch` are the parsed types.
+  - `AppSettings` (`sampleAgentOffer: pending | done`) and `AppSettingsPatch`.
+  - New channels:
+    - `agents.list | create | update | delete | duplicate` (duplicate takes an optional localized name)
+    - `settings.get | update`
+  - New error codes `connection_disabled` and `model_required`.
+  - `IpcInput<C>` is now what callers send (`z.input`), and `IpcParsedInput<C>` is what handlers receive.
+- **Desktop main**:
+  - Migration `0002_agent_settings` adds `app_settings` (key → JSON) and `agent_roots.position`.
+  - `agents.avatar` is read as JSON. Only the TS type changed; the DDL did not.
+  - `AgentRepository`:
+    - Roots (ordered) and tool server ids are loaded and saved with the agent, in one transaction.
+    - Writes are validated by the `Agent` schema. A repeated root or an unknown tool server → `invalid_request`.
+    - Connection rule: on create, duplicate, and updates that change the connection or model, the connection must exist (`not_found`) and be enabled (`connection_disabled`). An API connection needs the agent's model or its own default (`model_required`), matching the runner's rule in `Run.ts`.
+    - An agent whose connection was disabled later can still be renamed and have its role edited.
+  - `ConnectionRepository.agentsUsing(id)`, so `connection_in_use` now names the agents.
+  - `SettingsRepository` falls back to defaults for missing or invalid values.
+  - `AgentService` is thin; `duplicate` falls back to "<name> (copy)". IPC handlers are wired in `index.ts`.
+- **Renderer**:
+  - `Backend.agents` / `Backend.settings`.
+  - The `agents` store:
+    - list, selection, and the editor (create with prefill, or edit)
+    - inline role update, duplicate, and delete with confirmation
+    - models per connection, fetched once per session, with a retry on failure
+    - `createSample` / `dismissSample`
+  - Sidebar `AgentList`:
+    - one row per agent: avatar, name, a grey status placeholder (`data-status="idle"`), and a ⚠ when the connection is disabled or missing
+    - "+" for a new agent
+    - empty state: "Create agent", or "Add a connection first"
+  - `AgentsScreen`:
+    - center: the selected agent, with a placeholder where conversations go in Phase 4. With nothing selected: the sample offer, "add a connection first", or "pick / create".
+    - right panel `AgentPanel`: connection, model (or "connection default (X)" / "the harness's default"), temperature, max tokens, tags, Edit / Duplicate / Delete, and the role **edited in place** (click or Edit; Ctrl/Cmd+Enter or Save; Esc cancels).
+  - `AgentForm`:
+    - name, and an avatar picker (10 swatches, 24 emojis, a typed emoji, or initials)
+    - connection: `<optgroup>` API / CLI, enabled only, plus the current one marked "(disabled)"
+    - model: a datalist fetched through `connections.listModels` when the provider lists models; free text for CLI (blank = the harness's default); required when an API connection has no default
+    - role, with the templates Generic Assistant, Researcher, Writer, Reviewer and File Organizer. Their text is in i18n, so pt-BR gets Portuguese prompts. Replacing text the user typed asks first.
+    - temperature (0–2) and max tokens (positive integer), hidden for CLI with a note; other params such as topP are kept on edit
+    - tags as chips (Enter or comma; Backspace removes the last)
+  - **Sample agent**: on first run, when there is at least one enabled connection and no agents, a card offers "Assistant" (🤖, the Generic Assistant role, the first enabled connection).
+    - One click creates it. If that connection has no default model, the prefilled form opens instead.
+    - "Not now" dismisses it. Either way `sampleAgentOffer` becomes `done` in SQLite, so the offer never comes back.
+  - **Deleting a connection in use**: the confirmation lists the agents that use it and disables Delete. Main refuses too (`connection_in_use`, with the names).
+  - The app opens on Agents once a connection exists (Connections on a fresh install), unless the user already navigated.
+  - `FormShell` takes `icon` and `title`; `Async` moved to `lib/async.ts`; `ConfirmDialog` takes `blocked`.
+  - Strings are in en and pt-BR, and a new test keeps both files' keys in sync.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 329 tests: contract 38, runner 188, desktop 102, mcp-servers 1 (Phase 2: 285). |
+| `pnpm contract:schema` / `pnpm --filter desktop db:generate` | `Agent.json`, `AppError.json` and the runner protocol schemas regenerated and committed. `0002_agent_settings.sql` holds only `app_settings` and `agent_roots.position`. |
+| Repository and validation (in-memory SQLite + migrations) | `AgentRepository` (12 tests): round trip of every field; roots and tool servers saved, reloaded in order, replaced, kept on other updates and cascaded on delete; an unknown tool server or a repeated root writes nothing; `not_found` / `connection_disabled` / `model_required` (API without a default vs. a connection default vs. CLI); re-checked when the connection or model change; rename on a since-disabled connection; duplicate copies everything; `connection_in_use` names the agents. Also `SettingsRepository` (defaults, persisted, invalid value → default) and `AgentService` (duplicate name). |
+| Renderer logic | `lib/agentForm` (8 tests: form ⇄ draft/patch with topP kept, problems, connection groups, model list and params support, tags, initials), `store/agents` (12), `store/app` (landing), i18n key parity. |
+| `pnpm --filter desktop test:e2e` | 20/20 green (13 earlier + 7 new `agents.spec.ts`): with no connection Agents points to Connections; the first Ollama connection brings the sample offer, and one click puts "Assistant" in the sidebar; an agent on an Anthropic connection with no default model (models fetched from the fake server, model required, Writer template then a confirmed replace, emerald + ✍️, temperature, max tokens, tags); the role edited in place survives a reload, and Esc discards; duplicate then delete; deleting a used connection lists the agent with Delete disabled; a disabled connection shows the warning, the role can still be edited, and the agent moves to another connection. `connections.spec.ts` now expects the Agents landing after a reload. |
+| UI | Screenshots of the sample offer, form and panel (`apps/desktop/test-results/`), checked in light, in dark (`emulateMedia`) and in pt-BR. |
+| `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
+
+### Deviations from the plan and design (all reflected in docs/design.md)
+
+1. Migration 0002 also adds `agent_roots.position`: SQLite returned roots in path order, and SPEC §4.2 makes the *first* readwrite root a harness's working directory, so the order the user gives must be kept.
+2. The list of agents using a connection is `ConnectionRepository.agentsUsing`, not `AgentRepository.namesUsingConnection`: the delete that needs it lives there.
+3. Validation lives in `AgentRepository` (inside the write transaction); `AgentService` stays thin until conversations arrive.
+4. `IpcInput` became the pre-default input type, so the renderer can omit defaulted fields. Handlers use the new `IpcParsedInput`.
+5. Duplicating an agent whose connection is disabled fails with `connection_disabled` (a duplicate is a create).
+6. The sample offer shipped in the same commit as the rest of the renderer.
+
+### Decisions
+
+- **Avatar**: always a palette color plus an optional emoji; initials otherwise. Palette names, not hex, so each shell picks light and dark shades.
+- **Sample agent**: one click, with a persisted flag (`app_settings.sampleAgentOffer`). It falls back to the prefilled form when the connection needs a model.
+- **Deleting a connection in use**: checked up front in the dialog, which lists the agents; main refuses as well. `AppErrorShape` did not grow a details field.
+
+### Open
+
+- The model list is cached per connection for the session. After a connection's key or URL changes, the agent form shows the old list until the app restarts (Retry only shows on a failure).
+- Agents are ordered by creation; there is no manual reordering, and tags are not used for filtering yet.
+- Deleting an agent will cascade its conversations from Phase 4: the confirmation should then say how many.
+- Roots, tool servers and the permission policy are stored but have no UI (Phase 5).
+- Carried over: the real-provider check (Phase 1), the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
+
+## Next: Phase 4 — Full chat with parallelism, persistence, retry, auto-title
+
+1. Contract: conversation and message IPC (`conversations.*`, `messages.*`) and the streaming events (`conversation.updated`, `message.delta`, `message.block`, `message.completed`).
+2. Main: `ConversationRepository`, `MessageRepository`, and a `ConversationService` that builds `run.start` from the agent + connection + secret + history (`resolveWorkingDirectory` for CLI), batches deltas (SQLite ~250 ms, UI 16 ms), and handles harness session ids, cancel, retry and auto-title.
+3. Renderer: the conversation list and the chat in the Agents center column, the composer, streaming, cancel and retry, and the agent status in the sidebar (replacing the placeholder).
+4. Done when two agents respond at the same time.
+
+## Phase 2 — CLI harnesses (Claude Code, Codex), session resume (done)
+
+#### Done
 
 - **Research**: both CLIs were checked with `--help` and real recordings on this machine (Claude Code 2.1.278, codex-cli 0.155.1). The flags, line formats, history policy and failure shapes are in `docs/providers.md` → CLI harnesses. Decisions are in ADR 0007.
 - **Contract**:
@@ -47,7 +145,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
   - A failed test shows the error by code plus a hint (the login command, the sandbox, the binary).
   - `FormShell` is shared with the API form. The list shows CLI rows with monograms (CC, Cx). Strings are in en and pt-BR.
 
-### History per harness
+#### History per harness
 
 | Harness | Kept by | How |
 |---|---|---|
@@ -55,7 +153,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 | Codex | the harness | `codex exec resume <thread_id> -` (from `thread.started`); only the new message is sent |
 | Either, without a session (first turn, moved conversation, lost session) | Comitiva | the earlier messages are replayed as a transcript prompt, and a new session starts |
 
-### Verification
+#### Verification
 
 | Check | Result |
 |---|---|
@@ -68,7 +166,7 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 | **Real CLIs**, by hand through `node packages/runner/dist/bin.cjs` | **Claude Code 2.1.278**: detect → `/home/…/.local/bin/claude`. Test ok (2.3 s). A turn streamed with exact usage and `end_turn`. The resumed turn remembered the first ("Mango" / "Mango"). Cancel after 2 deltas → `done(cancelled)`, estimated usage, no process left. **Codex 0.155.1**: detect ok. Test ok (3.8 s, full access). A turn, then a resumed turn that remembered it. Cancel mid-turn → `done(cancelled)` 0.3 s later, no process left. **Errors**: an empty `CLAUDE_CONFIG_DIR` / `CODEX_HOME` → `not_logged_in` with the login command; Codex `workspace-write` on this Ubuntu 24.04 → `sandbox_unavailable` ("bwrap: loopback: Failed RTM_NEWADDR"); a wrong path → `binary_not_found` "Claude Code not found at /opt/nope/claude". |
 | UI with the real CLIs | **Not done.** The UI path was verified with the fake binaries (e2e); the real binaries were verified through the runner. |
 
-### Deviations from the plan and design (all reflected in docs/design.md)
+#### Deviations from the plan and design (all reflected in docs/design.md)
 
 1. CLI descriptors live in a separate `cliProviderDescriptors` map, so the API `providerDescriptors` keeps its exact typed shape.
 2. `streamTurn`, `UsageTracker` and `httpError` stay in `providers/api/shared.ts`, and the CLI adapters import them from there. The plan had moved them to `providers/shared/`.
@@ -79,26 +177,19 @@ Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 7. CLI connections need no model: without one, the harness uses its default (`--model` / `-m` are omitted).
 8. A relative working directory or binary path is refused in the form; `~` is not expanded for working directories.
 
-### Decisions
+#### Decisions
 
 - **Codex streaming**: `exec --json`, one message at a time. The experimental `app-server` gets revisited when it is stable.
 - **Native tools until Phase 5**: kept, with auto-accept, and explained in the form.
 - **Codex sandbox**: per connection, `workspace-write` by default. testConnection detects a sandbox that cannot start.
 - **Isolation**: harnesses do not load the user's CLI settings or MCP servers; `extraArgs` can override that.
 
-### Open
+#### Open
 
 - **Windows**: spawning `.cmd` shims and `taskkill /T` are implemented but not run on Windows. The fake harness is a POSIX script, so the CLI e2e is skipped there. The Codex sandbox probe on macOS is not verified either.
 - **Codex native writes**: `apply_patch` cannot be turned off, so Codex writes will never go through Comitiva's approvals. Phase 5 decides whether Codex only ever gets `read-only` when the agent has a `filesystem` server.
 - A harness that ignores SIGTERM is killed 3 s later; a runner crash mid-turn can orphan a harness. Revisit with the Phase 4 chat.
 - Carried over: real API provider check (Phase 1), CI on GitHub (no remote), Google Drive server choice (5b), Linux sandbox/signing/icon (Phase 7).
-
-## Next: Phase 3 — Agents: CRUD, role, model, avatar
-
-1. Contract: agent IPC (`agents.list | create | update | delete | duplicate`), with model picking per connection (API: `listModels`; CLI: free text or the harness default).
-2. Main: `AgentRepository` (with roots and tool servers loaded together) and `AgentService`; `connection_in_use` already guards deletes.
-3. Renderer: an agent form (name, avatar, connection, model, role, params) and agents in the sidebar.
-4. Done when an agent shows up in the sidebar.
 
 ## Phase 1 — API connections, secure secrets, Connections screen (done)
 

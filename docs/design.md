@@ -182,18 +182,19 @@ packages/mcp-servers/src/            index.ts (scaffold)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
-├── e2e/connections.spec.ts cli-connections.spec.ts (P2)
+├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
-    │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test, meta/)
-    │   │                            repositories/ConnectionRepository.ts (P1; others P3+)
+    │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
+    │   │                            0002_agent_settings (P3), meta/)
+    │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3; others P4+)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
-    │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2)
-    │   │                            ConversationService.ts AgentService.ts ToolServerService.ts
-    │   │                            ApprovalService.ts UsageService.ts TitleService.ts (P3+)
+    │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
+    │   │                            ConversationService.ts ToolServerService.ts
+    │   │                            ApprovalService.ts UsageService.ts TitleService.ts (P4+)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
@@ -201,12 +202,15 @@ apps/desktop/
         ├── index.html               CSP
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
-            ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts conversations.ts messages.ts (P3+)
+            ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4+)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
+            │                        agentForm.ts roleTemplates.ts async.ts (P3)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
             │                        Forms/CliConnectionForm.tsx Forms/FormShell.tsx (P2)
-            │                        Chat/ Composer/ ToolBlock/ ApprovalCard/ Settings/ (P3+)
-            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   ChatScreen ToolsScreen UsageScreen SettingsScreen (P3+)
+            │                        AgentAvatar.tsx AgentPanel.tsx Sidebar/AgentList.tsx Forms/AgentForm.tsx (P3)
+            │                        Chat/ Composer/ ToolBlock/ ApprovalCard/ Settings/ (P4+)
+            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)
+            │                        ChatScreen ToolsScreen UsageScreen SettingsScreen (P4+)
             └── i18n/                index.ts en.json pt-BR.json
 ```
 
@@ -229,8 +233,9 @@ erDiagram
     CONNECTION ||--o| USAGE_POLICY : "limit (Phase 10)"
 
     CONNECTION { text id PK; text name; text kind; text provider; json config; text secret_ref; int enabled; text created_at; text updated_at; text last_test_at; int last_test_ok; int last_test_latency_ms; text last_test_error_code }
-    AGENT { text id PK; text name; text avatar; text connection_id FK; text model; text role; json params; text permission_policy; json fallback_connection_ids; json tags; text created_at; text updated_at }
-    AGENT_ROOT { text agent_id FK; text path; text mode }
+    AGENT { text id PK; text name; json avatar; text connection_id FK; text model; text role; json params; text permission_policy; json fallback_connection_ids; json tags; text created_at; text updated_at }
+    AGENT_ROOT { text agent_id FK; text path; text mode; int position }
+    APP_SETTINGS { text key PK; json value }
     TOOL_SERVER { text id PK; text name; text transport; text command; json args; json env; text url; json headers; int builtin; int enabled }
     CONVERSATION { text id PK; text agent_id FK; text title; text status; text harness_session_id; int archived; text last_activity_at; text created_at }
     MESSAGE { text id PK; text conversation_id FK; text role; json content; text status; int seq; text created_at }
@@ -277,6 +282,10 @@ CREATE TABLE agent_roots (
   path TEXT NOT NULL, mode TEXT NOT NULL CHECK (mode IN ('read','readwrite')),
   PRIMARY KEY (agent_id, path)
 );
+-- 0002_agent_settings (Phase 3): roots keep the user's order (the first readwrite root is a
+-- harness's working directory), and app-wide preferences (AppSettings) get a key/value table.
+ALTER TABLE agent_roots ADD position INTEGER NOT NULL DEFAULT 0;
+CREATE TABLE app_settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);   -- value is JSON
 
 CREATE TABLE agent_tool_servers (
   agent_id TEXT NOT NULL REFERENCES agents(id) ON DELETE CASCADE,
@@ -319,6 +328,8 @@ CREATE INDEX idx_usage_agent_time ON usage_records(agent_id, created_at);
 
 -- applied migrations are tracked by Drizzle in __drizzle_migrations
 ```
+
+`agents.avatar` holds JSON `AgentAvatar` (`{ color, emoji? }`: a palette color name, and an optional emoji; without one the UI shows the name's initials). The column stayed TEXT, so no DDL change was needed.
 
 Conventions: ids are ULIDs (sortable); dates are ISO 8601 UTC; JSON in TEXT columns is validated by zod on read and write; `seq` in `messages` is incremented per conversation and is used for ordering and for reconciliation with the hub.
 
@@ -663,7 +674,18 @@ class ConnectionRepository {
   delete(id) /* connection_in_use while agents use it */; hasAgents(id); recordTest(id, TestResult);
   // ConnectionRecord = { connection, lastTest }; config validated by zod on read and write; only secret_ref stored
 }
-class AgentRepository { /* + roots/toolServers loaded together; alwaysAllowed(agentId) */ }
+class AgentRepository {
+  list(): Agent[]; get(id); require(id) /* not_found */; create(NewAgent); update(id, AgentChanges);
+  duplicate(id, name); delete(id) /* roots, tool server links (and conversations) cascade */;
+  // roots (ordered by position) and toolServerIds are loaded and saved together, in one transaction;
+  // an unknown tool server or a repeated root → invalid_request. Every write is validated by the Agent schema.
+  // Connection rule (create, duplicate, and updates that change connectionId or model): the connection must
+  // exist (not_found) and be enabled (connection_disabled); an API connection needs agent.model or
+  // config.defaultModel (model_required). Renaming an agent on a since-disabled connection still works.
+  // alwaysAllowed(agentId) joins in Phase 5.
+}
+class SettingsRepository { get(): AppSettings /* defaults for missing or invalid keys */; update(patch) }
+// ConnectionRepository.agentsUsing(id) → [{ id, name }]; delete's connection_in_use message names them.
 class ConversationRepository { /* + listByAgent(agentId, {archived}); setStatus; setHarnessSession; touch */ }
 class MessageRepository { /* + listByConversation(id, {limit, before}); appendText(id, text); setContent; setStatus; nextSeq */ }
 class ToolServerRepository, ToolApprovalRepository, UsageRepository { /* summary(range, groupBy); timeseries */ }
@@ -697,6 +719,12 @@ class ConnectionService {
   listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
   detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;   // CLI harnesses (P2); CLI connections never read or store a key
 }
+// main/services/AgentService.ts (P3) — thin over AgentRepository; conversations join in Phase 4
+class AgentService {
+  list(); create(draft: ValidAgentDraft); update(id, patch: ValidAgentPatch); delete(id);
+  duplicate(id, name?);   // name comes localized from the UI; fallback "<name> (copy)"
+}
+
 function resolveWorkingDirectory(connection, conversationId, workspacesDir): string | undefined;
 // services/workingDirectory.ts (P2): config.workingDirectory, else <userData>/workspaces/<conversationId>; used by ConversationService (P4)
 
@@ -727,7 +755,7 @@ class IpcRouter {
 }
 ```
 
-IPC channels (defined in `contract/ipc.ts`, all with input and output schemas; names also listed in `contract/ipc-channels.ts`). `invoke` resolves to `{ ok: true, value } | { ok: false, error }`, which `LocalBackend` unwraps into a `BackendError` with a `code`.
+IPC channels (defined in `contract/ipc.ts`, all with input and output schemas; names also listed in `contract/ipc-channels.ts`). `invoke` resolves to `{ ok: true, value } | { ok: false, error }`, which `LocalBackend` unwraps into a `BackendError` with a `code`. `IpcInput<C>` is what the renderer sends (`z.input`: fields with defaults may be omitted); handlers receive `IpcParsedInput<C>` (`z.output`). `AgentDraft` applies defaults (role `''`, params `{}`, tags, roots, toolServerIds `[]`, policy `ask`) and turns a blank model into `null` (use the connection's default).
 
 ```
 app.getVersion
@@ -736,7 +764,8 @@ secrets.getStatus                                                    (P1)
 connections.list | create | update | delete | test | listModels     (P1)
 connections.detectBinary                                            (P2)
 toolServers.list | create | update | delete | test | connectGoogle (5b)
-agents.list | create | update | delete | duplicate
+agents.list | create | update | delete | duplicate                   (P3)
+settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
 conversations.listByAgent | create | rename | archive | setStatus
 messages.list | send | cancel | retry
 approvals.decide
@@ -759,7 +788,8 @@ interface Backend {
   connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target); detectBinary(input) };
   dialogs: { pickFolder() };                                   // (P2) null when cancelled
   toolServers: { list(); create(d); update(id, d); delete(id); test(id) };
-  agents: { list(); create(d); update(id, d); delete(id); duplicate(id) };
+  agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
+  settings: { get(); update(patch) };                                               // (P3)
   conversations: { listByAgent(agentId); create(agentId); rename(id, t); archive(id) };
   messages: { list(convId, opts?); send(convId, blocks); cancel(convId); retry(convId) };
   approvals: { decide(convId, toolUseId, decision) };
@@ -767,12 +797,15 @@ interface Backend {
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
-// Phase 1 implements app, runner, secrets, connections and onEvent (runner.status).
+// Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings.
 
 // renderer/src/store/*.ts (Zustand vanilla stores created with the Backend injected; StoresProvider + useApp/useConnections)
 appStore:               version, runnerStatus (pushed status wins over init), secretStatus, section (sidebar navigation)
 connectionsStore:       items: ConnectionSummary[], testing, editor (closed | create | edit id), confirmDelete, notice (error code)
-useAgentsStore:         agents[], selectedAgentId, statusByAgent (derived from conversations), unreadByAgent
+agentsStore (P3):       items, selectedId, editor (closed | create with prefill | edit id), confirmDelete, notice,
+                        models per connection (fetched once per session; retry forces), settings;
+                        createSample (model_required → opens the prefilled form), dismissSample.
+                        Phase 4 adds statusByAgent (derived from conversations) and unreadByAgent.
 useConversationsStore:  byAgent: Record<agentId, Conversation[]>, selectedByAgent
 useMessagesStore:       byConversation: Record<convId, Message[]>, streamingText: Record<convId, string>,
                         applyDelta(convId, text), applyBlock(convId, block), complete(convId, message)
@@ -783,7 +816,24 @@ Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usa
 
 Phase 2: `Forms/ConnectionForm` picks the API form or `Forms/CliConnectionForm` by provider. Both use `Forms/FormShell` (side panel, shared `ProviderSelect` with API and CLI groups, `TestOutcome`). The CLI form (pure logic in `lib/cliConnectionForm.ts`, built from `cliProviderDescriptors`) has binary path + Detect, working directory + Choose…, Codex sandbox, default model, extra args (one per line), an always-visible auto-accept notice, and the Codex native-tools warning. Test failures add a hint by code (login command, sandbox, binary).
 
-Later components: `Sidebar/AgentList`, `Sidebar/AgentItem` (status dot + badge), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ConnectionForm` (renders fields from `ProviderDescriptor`), `Forms/AgentForm`, `Forms/ToolServerForm`, `Settings/*`, `Usage/*`.
+Phase 3:
+- `Sidebar/AgentList`: avatar, name, a grey status dot (`data-status="idle"` until Phase 4), and a warning when the connection is disabled or missing. The empty state says "Create agent", or "Add a connection first".
+- `screens/AgentsScreen`:
+  - center: the selected agent (conversations are a placeholder until Phase 4), the first-run sample offer, or an empty state
+  - right: `AgentPanel`, with the connection, model, params and tags, the role editable in place (Ctrl/Cmd+Enter saves, Esc cancels), and Edit / Duplicate / Delete
+- `Forms/AgentForm` (pure logic in `lib/agentForm.ts`) has these fields:
+  - avatar: color swatches, an emoji grid or a typed emoji, or initials
+  - connection: `<optgroup>` API / CLI, enabled only, plus the current one
+  - model: a datalist filled from `connections.listModels` when the provider supports it; free text for CLI
+  - role, with starter templates from i18n (`lib/roleTemplates.ts`)
+  - temperature and max tokens, hidden for CLI
+  - tags as chips
+- `FormShell` now takes `icon` and `title`.
+- `AgentAvatar` maps palette names to light and dark classes.
+- `ConfirmDialog` takes `blocked`: deleting a connection in use lists its agents and disables Delete.
+- The app lands on Agents once at least one connection exists, unless the user already navigated.
+
+Later components: `Sidebar/AgentItem` badges (status + unread), `Chat/ConversationList`, `Chat/MessageList` (virtualized), `Chat/MessageBubble`, `ToolBlock/ToolCallBlock`, `ApprovalCard`, `Composer`, `QuickSwitcher`, `Forms/ToolServerForm`, the roots and tools sections of `Forms/AgentForm` (P5), `Settings/*`, `Usage/*`.
 
 ---
 
@@ -817,7 +867,7 @@ Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA
 
 ## 9. Conventions
 
-- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`, `connection_in_use`, `connection_disabled`, `model_required`; protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
 - **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Later phases add a fake in-memory MCP server. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four).

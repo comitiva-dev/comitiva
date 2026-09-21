@@ -89,7 +89,7 @@ export function AgentPanel({ agent }: { agent: Agent }) {
           )}
         </dd>
         <dt className={ui.muted}>{t('agents.form.model')}</dt>
-        <dd data-testid="panel-model" className="truncate">
+        <dd data-testid="panel-model" className="truncate" title={agent.model ?? fallbackModel}>
           {agent.model ?? <span className={ui.muted}>{fallbackModel}</span>}
         </dd>
         {connection?.kind !== 'cli' && (

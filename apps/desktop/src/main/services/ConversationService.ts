@@ -67,8 +67,6 @@ interface LiveRun extends RunContext {
   messageId: string;
   /** Authoritative content of the streaming reply. */
   blocks: Block[];
-  /** Bumped on every delta/block emission; snapshots carry it (ADR 0008). */
-  rev: number;
   /** Text in `blocks` not yet sent to the UI. */
   pendingText: string;
   uiTimer: NodeJS.Timeout | undefined;
@@ -94,6 +92,8 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   private readonly busy = new Set<string>();
   private readonly live = new Map<string, LiveRun>();
   private readonly byRun = new Map<string, LiveRun>();
+  /** Event revision per conversation: +1 on every message event; pages carry it (ADR 0008). */
+  private readonly revs = new Map<string, number>();
   private closed = false;
   private readonly uiFlushMs: number;
   private readonly dbFlushMs: number;
@@ -141,9 +141,9 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   // ----------------------------------------------------------------- messages
 
   /**
-   * A page of messages. For the conversation streaming right now, pending
-   * text is flushed first and the reply carries its live content, so the
-   * page is exactly the state at `live.rev`.
+   * A page of messages at the conversation's current `rev`. For a
+   * conversation streaming right now, pending text is flushed first and the
+   * reply carries its live content, so the page is exactly the state at `rev`.
    */
   listMessages(input: {
     conversationId: string;
@@ -154,14 +154,15 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
     this.deps.conversations.require(conversationId);
     const page = this.deps.messages.page(conversationId, input);
     const run = this.live.get(conversationId);
-    if (!run) return { ...page, live: null };
-    this.flushUi(run);
+    if (run) this.flushUi(run);
     return {
       hasMore: page.hasMore,
-      messages: page.messages.map((m) =>
-        m.id === run.messageId ? { ...m, status: 'streaming', content: [...run.blocks] } : m,
-      ),
-      live: { messageId: run.messageId, rev: run.rev },
+      messages: run
+        ? page.messages.map((m) =>
+            m.id === run.messageId ? { ...m, status: 'streaming', content: [...run.blocks] } : m,
+          )
+        : page.messages,
+      rev: this.revs.get(conversationId) ?? 0,
     };
   }
 
@@ -186,8 +187,8 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
         this.deps.conversations.setStatus(conversationId, 'running');
         return { user, reply, updated: this.deps.conversations.touch(conversationId, now) };
       });
-      this.emit('message.updated', { message: user });
-      this.emit('message.updated', { message: reply });
+      this.messageUpdated(user);
+      this.messageUpdated(reply);
       this.updated(updated);
       this.start(ctx, reply);
     } catch (err) {
@@ -211,7 +212,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
         this.deps.conversations.setStatus(conversationId, 'running');
         return { reply, updated: this.deps.conversations.touch(conversationId) };
       });
-      this.emit('message.updated', { message: reply });
+      this.messageUpdated(reply);
       this.updated(updated);
       this.start(ctx, reply);
     } catch (err) {
@@ -291,7 +292,6 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
       conversationId,
       messageId: reply.id,
       blocks: [],
-      rev: 0,
       pendingText: '',
       uiTimer: undefined,
       dbTimer: undefined,
@@ -353,7 +353,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
         this.emit('message.block', {
           conversationId: run.conversationId,
           messageId: run.messageId,
-          rev: ++run.rev,
+          rev: this.nextRev(run.conversationId),
           block: e.block,
         });
         this.scheduleDb(run);
@@ -392,7 +392,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
     this.emit('message.delta', {
       conversationId: run.conversationId,
       messageId: run.messageId,
-      rev: ++run.rev,
+      rev: this.nextRev(run.conversationId),
       text,
     });
   }
@@ -440,7 +440,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
       conversations.setStatus(run.conversationId, status === 'error' ? 'error' : 'idle');
       return { message, conversation: conversations.touch(run.conversationId) };
     });
-    this.emit('message.updated', { message });
+    this.messageUpdated(message);
     this.updated(conversation);
     if (status === 'complete') void this.suggestTitle(run, message);
   }
@@ -478,6 +478,16 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
     const current = this.deps.conversations.get(run.conversationId);
     if (!current || current.title !== placeholder) return;
     this.updated(this.deps.conversations.rename(run.conversationId, title));
+  }
+
+  private nextRev(conversationId: string): number {
+    const rev = (this.revs.get(conversationId) ?? 0) + 1;
+    this.revs.set(conversationId, rev);
+    return rev;
+  }
+
+  private messageUpdated(message: Message): void {
+    this.emit('message.updated', { message, rev: this.nextRev(message.conversationId) });
   }
 
   private updated(conversation: Conversation): Conversation {

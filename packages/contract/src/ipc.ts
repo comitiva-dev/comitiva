@@ -215,14 +215,14 @@ export const MessageListInput = z.object({
 export type MessageListInput = z.input<typeof MessageListInput>;
 
 /**
- * A page of messages, oldest first. `live` names the message that is
- * streaming right now and the `rev` its content is at: events for it with
- * `rev <= live.rev` are already included and must be dropped (ADR 0008).
+ * A page of messages, oldest first. `rev` is the conversation's event
+ * revision the page reflects: message events with `rev <= page.rev` are
+ * already included and must be dropped (ADR 0008).
  */
 export const MessagePage = z.object({
   messages: z.array(Message),
   hasMore: z.boolean(),
-  live: z.object({ messageId: Id, rev: z.number().int().nonnegative() }).nullable(),
+  rev: z.number().int().nonnegative(),
 });
 export type MessagePage = z.infer<typeof MessagePage>;
 
@@ -287,17 +287,20 @@ export type IpcInput<C extends IpcInvokeChannel> = z.input<(typeof ipcInvoke)[C]
 export type IpcParsedInput<C extends IpcInvokeChannel> = z.output<(typeof ipcInvoke)[C]['input']>;
 export type IpcOutput<C extends IpcInvokeChannel> = z.infer<(typeof ipcInvoke)[C]['output']>;
 
-const LiveRef = { conversationId: Id, messageId: Id, rev: z.number().int().positive() };
+/** Per-conversation event revision: increases by one with every message event. */
+const Rev = z.number().int().positive();
+const LiveRef = { conversationId: Id, messageId: Id, rev: Rev };
 
 /**
  * Main → renderer. Messages stream as `message.updated` snapshots (created,
- * reset for retry, final state) plus `message.delta` / `message.block` with an
- * increasing `rev` per live message (ADR 0008).
+ * reset for retry, final state) plus `message.delta` / `message.block`. All
+ * three carry the conversation's `rev`, so a page fetched mid-stream lines up
+ * with the events around it (ADR 0008).
  */
 export const ipcEvents = {
   'runner.status': z.object({ status: RunnerStatus }),
   'conversation.updated': z.object({ conversation: Conversation }),
-  'message.updated': z.object({ message: Message }),
+  'message.updated': z.object({ message: Message, rev: Rev }),
   'message.delta': z.object({ ...LiveRef, text: z.string() }),
   'message.block': z.object({ ...LiveRef, block: Block }),
 } as const;

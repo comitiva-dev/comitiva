@@ -209,7 +209,8 @@ describe('ConversationService: sending and streaming', () => {
     // 500 ms of streaming at 16 ms per flush: ~32 UI messages, not 100.
     expect(deltas.length).toBeGreaterThan(20);
     expect(deltas.length).toBeLessThan(40);
-    expect(deltas.map((d) => d.rev)).toEqual(deltas.map((_, i) => i + 1));
+    // Revs 1 and 2 went to the user message and the empty reply.
+    expect(deltas.map((d) => d.rev)).toEqual(deltas.map((_, i) => i + 3));
     expect(deltas.map((d) => d.text).join('')).toBe(full);
     expect(
       deltas.every((d) => d.messageId === reply.id && d.conversationId === conversation.id),
@@ -251,9 +252,9 @@ describe('ConversationService: sending and streaming', () => {
       (e) => e.channel === 'message.delta' || e.channel === 'message.block',
     );
     expect(live.map((e) => [e.channel, e.payload.rev])).toEqual([
-      ['message.delta', 1],
-      ['message.block', 2],
       ['message.delta', 3],
+      ['message.block', 4],
+      ['message.delta', 5],
     ]);
     expect(messages.get(reply.id)!.content).toEqual([
       ...text('Looking'),
@@ -533,7 +534,8 @@ describe('ConversationService: snapshots, shutdown and recovery', () => {
     vi.advanceTimersByTime(20);
     runner.send(runId, { type: 'run.text_delta', text: 'lo' }); // pending, not sent yet
     const page = service.listMessages({ conversationId: conversation.id, limit: 100 });
-    expect(page.live).toEqual({ messageId: reply.id, rev: 2 });
+    // user message 1, empty reply 2, "Hel" 3, "lo" flushed by the list itself 4.
+    expect(page.rev).toBe(4);
     expect(page.messages.at(-1)).toMatchObject({
       id: reply.id,
       status: 'streaming',
@@ -541,10 +543,34 @@ describe('ConversationService: snapshots, shutdown and recovery', () => {
     });
     runner.send(runId, { type: 'run.text_delta', text: '!' });
     vi.advanceTimersByTime(20);
-    const after = of('message.delta').filter((d) => d.rev > page.live!.rev);
+    const after = of('message.delta').filter((d) => d.rev > page.rev);
     expect(after.map((d) => d.text)).toEqual(['!']);
     runner.send(runId, done());
-    expect(service.listMessages({ conversationId: conversation.id, limit: 100 }).live).toBeNull();
+    const final = of('message.updated').at(-1)!;
+    const idle = service.listMessages({ conversationId: conversation.id, limit: 100 });
+    expect(idle.rev).toBe(final.rev);
+    expect(idle.messages.at(-1)).toMatchObject({ status: 'complete', content: text('Hello!') });
+  });
+
+  it('numbers every message event of a conversation in order, apart from other conversations', async () => {
+    const a = await started('a1');
+    const b = await started('a2');
+    runner.send(a.runId, { type: 'run.text_delta', text: 'x' });
+    runner.send(b.runId, { type: 'run.block', block: text('y')[0]! });
+    vi.advanceTimersByTime(20);
+    runner.send(a.runId, done());
+    runner.send(b.runId, done());
+    for (const id of [a.conversation.id, b.conversation.id]) {
+      const revs = events
+        .filter((e) => e.channel !== 'conversation.updated')
+        .filter((e) =>
+          e.channel === 'message.updated'
+            ? e.payload.message.conversationId === id
+            : e.payload.conversationId === id,
+        )
+        .map((e) => e.payload.rev);
+      expect(revs).toEqual(revs.map((_, i) => i + 1));
+    }
   });
 
   it('shutdown finalizes running replies as cancelled', async () => {

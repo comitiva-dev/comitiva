@@ -11,6 +11,8 @@ import {
 import { Connection } from './entities/connection.js';
 import { Conversation } from './entities/conversation.js';
 import { Message } from './entities/message.js';
+import { ApprovalDecision } from './entities/tool-approval.js';
+import { ToolServer } from './entities/tool-server.js';
 import { Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import {
@@ -21,7 +23,7 @@ import {
   OllamaConfig,
   OpenAICompatibleConfig,
 } from './provider-config.js';
-import { CliDetectResult, ModelInfo, TestResult } from './runner-protocol.js';
+import { CliDetectResult, ModelInfo, TestResult, ToolDef } from './runner-protocol.js';
 
 export { ipcEventChannels, ipcInvokeChannels } from './ipc-channels.js';
 
@@ -184,10 +186,72 @@ export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
 
 const ById = z.object({ id: Id });
 
+/**
+ * An env var or header value as the form submits it: a plain value, a new
+ * secret (stored in the SecretStore, never in SQLite), or, when editing, the
+ * stored secret kept as is. Secret values never come back to the renderer.
+ */
+export const ToolServerValueInput = z.union([
+  z.object({ value: z.string() }),
+  z.object({ secret: z.string().min(1) }),
+  z.object({ keepSecret: z.literal(true) }),
+]);
+export type ToolServerValueInput = z.infer<typeof ToolServerValueInput>;
+
+const EnvName = z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'invalid environment variable name');
+const HeaderName = z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, 'invalid header name');
+
+/** How to reach a third-party MCP server. */
+export const ToolServerSpec = z.discriminatedUnion('transport', [
+  z.object({
+    transport: z.literal('stdio'),
+    command: z.string().trim().min(1),
+    args: z.array(z.string()).default([]),
+    env: z.record(EnvName, ToolServerValueInput).default({}),
+  }),
+  z.object({
+    transport: z.literal('http'),
+    url: z.url({ protocol: /^https?$/ }),
+    headers: z.record(HeaderName, ToolServerValueInput).default({}),
+  }),
+]);
+export type ToolServerSpec = z.input<typeof ToolServerSpec>;
+
+/** A new third-party MCP server. */
+export const ToolServerDraft = z.object({
+  name: z.string().trim().min(1),
+  enabled: z.boolean().default(true),
+  spec: ToolServerSpec,
+});
+export type ToolServerDraft = z.input<typeof ToolServerDraft>;
+export type ValidToolServerDraft = z.output<typeof ToolServerDraft>;
+
+/** Changes to a server. Built-ins accept only `enabled`; `spec` replaces the whole spec. */
+export const ToolServerPatch = z.object({
+  name: z.string().trim().min(1).optional(),
+  enabled: z.boolean().optional(),
+  spec: ToolServerSpec.optional(),
+});
+export type ToolServerPatch = z.input<typeof ToolServerPatch>;
+export type ValidToolServerPatch = z.output<typeof ToolServerPatch>;
+
+/**
+ * A tool call waiting for the user's decision. At most one per conversation
+ * (tools run one at a time). Live state: it lasts as long as the run.
+ */
+export const PendingApproval = z.object({
+  toolUseId: z.string(),
+  toolServerId: Id,
+  toolName: z.string(),
+  input: z.unknown(),
+});
+export type PendingApproval = z.infer<typeof PendingApproval>;
+
 /** A conversation as a list shows it: the entity plus unread replies (local, per user). */
 export const ConversationSummary = z.object({
   conversation: Conversation,
   unread: z.number().int().nonnegative(),
+  pendingApproval: PendingApproval.nullable().default(null),
 });
 export type ConversationSummary = z.infer<typeof ConversationSummary>;
 
@@ -275,6 +339,18 @@ export const ipcInvoke = {
   'messages.retry': { input: ByConversation, output: z.void() },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
+  'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },
+  'toolServers.create': { input: ToolServerDraft, output: ToolServer },
+  'toolServers.update': { input: ById.extend({ patch: ToolServerPatch }), output: ToolServer },
+  /** Built-in servers cannot be deleted (invalid_request); disable them instead. */
+  'toolServers.delete': { input: ById, output: z.void() },
+  /** Starts the server in the runner and lists its tools. */
+  'toolServers.test': { input: ById, output: z.array(ToolDef) },
+  /** The user's answer to a pending tool call. */
+  'approvals.decide': {
+    input: ByConversation.extend({ toolUseId: z.string(), decision: ApprovalDecision }),
+    output: z.void(),
+  },
 } as const;
 
 export type IpcInvokeChannel = keyof typeof ipcInvoke;
@@ -299,7 +375,10 @@ const LiveRef = { conversationId: Id, messageId: Id, rev: Rev };
  */
 export const ipcEvents = {
   'runner.status': z.object({ status: RunnerStatus }),
-  'conversation.updated': z.object({ conversation: Conversation }),
+  'conversation.updated': z.object({
+    conversation: Conversation,
+    pendingApproval: PendingApproval.nullable().default(null),
+  }),
   'message.updated': z.object({ message: Message, rev: Rev }),
   'message.delta': z.object({ ...LiveRef, text: z.string() }),
   'message.block': z.object({ ...LiveRef, block: Block }),

@@ -14,6 +14,8 @@ export const AgentParams = z.object({
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
   topP: z.number().min(0).max(1).optional(),
+  /** API connections: model calls per run before the tool loop stops (default 25). */
+  maxToolIterations: z.number().int().min(1).max(200).optional(),
 });
 export type AgentParams = z.infer<typeof AgentParams>;
 

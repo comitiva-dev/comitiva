@@ -492,7 +492,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   }
 
   private updated(conversation: Conversation): Conversation {
-    this.emit('conversation.updated', { conversation });
+    this.emit('conversation.updated', { conversation, pendingApproval: null });
     return conversation;
   }
 

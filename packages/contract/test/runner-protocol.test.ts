@@ -89,3 +89,41 @@ describe('AppError', () => {
     expect(AppError.from('boom').message).toBe('boom');
   });
 });
+
+describe('tool servers in the protocol', () => {
+  it('parses toolServer.start with a stdio launch and roots', () => {
+    const r = RunnerRequest.parse({
+      id: '1',
+      type: 'toolServer.start',
+      toolServer: {
+        id: 'filesystem',
+        name: 'Files',
+        transport: 'stdio',
+        command: '/usr/bin/node',
+        builtin: 'filesystem',
+      },
+      roots: [{ path: '/tmp/a', mode: 'readwrite' }],
+    });
+    expect(r).toMatchObject({ toolServer: { args: [], env: {} } });
+  });
+
+  it('parses run.start with tool servers and rejects a launch without a command', () => {
+    const base = {
+      id: '1',
+      type: 'run.start',
+      runId: 'r1',
+      conversationId: userMessage.conversationId,
+      agent,
+      connection: anthropicConnection,
+      messages: [userMessage],
+    };
+    const http = { id: 's', name: 'S', transport: 'http', url: 'https://x.dev/mcp' };
+    expect(RunnerRequest.safeParse({ ...base, toolServers: [http] }).success).toBe(true);
+    expect(
+      RunnerRequest.safeParse({
+        ...base,
+        toolServers: [{ id: 's', name: 'S', transport: 'stdio' }],
+      }).success,
+    ).toBe(false);
+  });
+});

@@ -32,6 +32,12 @@ export const ipcInvokeChannels = [
   'messages.cancel',
   'messages.retry',
   'dialogs.pickFolder',
+  'toolServers.list',
+  'toolServers.create',
+  'toolServers.update',
+  'toolServers.delete',
+  'toolServers.test',
+  'approvals.decide',
 ] as const;
 
 export const ipcEventChannels = [

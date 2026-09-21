@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
+import { AppError } from '@comitiva/contract';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
 import { ConnectionRepository } from './db/repositories/ConnectionRepository';
@@ -59,6 +60,10 @@ function createWindow(): BrowserWindow {
   if (devServerUrl) void win.loadURL(devServerUrl);
   else void win.loadFile(join(__dirname, '../renderer/index.html'));
   return win;
+}
+
+function notYet(): never {
+  throw new AppError('not_implemented', 'Not implemented yet');
 }
 
 async function bootstrap(): Promise<void> {
@@ -145,6 +150,13 @@ async function bootstrap(): Promise<void> {
       'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
       'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
       'dialogs.pickFolder': () => pickFolder(),
+      // Wired with ToolServerService and approvals later in Phase 5.
+      'toolServers.list': notYet,
+      'toolServers.create': notYet,
+      'toolServers.update': notYet,
+      'toolServers.delete': notYet,
+      'toolServers.test': notYet,
+      'approvals.decide': notYet,
     },
     isTrustedUrl,
   );

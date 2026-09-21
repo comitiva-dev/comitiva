@@ -40,7 +40,11 @@ export class ConversationRepository {
       )
       .orderBy(desc(conversations.lastActivityAt), desc(conversations.id))
       .all();
-    return rows.map(({ row, unread }) => ({ conversation: toConversation(row), unread }));
+    return rows.map(({ row, unread }) => ({
+      conversation: toConversation(row),
+      unread,
+      pendingApproval: null,
+    }));
   }
 
   get(id: string): Conversation | null {

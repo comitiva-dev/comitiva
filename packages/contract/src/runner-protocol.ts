@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { Block, ToolResultContentBlock } from './blocks.js';
 import { Id } from './common.js';
-import { Agent } from './entities/agent.js';
+import { Agent, AgentRoot } from './entities/agent.js';
 import { Connection } from './entities/connection.js';
 import { Message } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
-import { ToolServer } from './entities/tool-server.js';
+import { BuiltinToolServer } from './entities/tool-server.js';
 import { AppErrorShape } from './errors.js';
 import { ProviderId } from './provider-config.js';
 
@@ -30,11 +30,39 @@ export const ConnectionListModelsRequest = z.object({
   connection: Connection,
   secret: z.string().optional(),
 });
+/**
+ * How the runner launches one MCP server: a ToolServer with its secrets
+ * resolved by the shell (values travel per request and are never persisted by
+ * the runner). `builtin` servers get extra arguments from the runner (the
+ * filesystem server gets the agent's roots).
+ */
+export const ToolServerLaunch = z.discriminatedUnion('transport', [
+  z.object({
+    id: Id,
+    name: z.string().min(1),
+    transport: z.literal('stdio'),
+    command: z.string().min(1),
+    args: z.array(z.string()).default([]),
+    env: z.record(z.string(), z.string()).default({}),
+    builtin: BuiltinToolServer.optional(),
+  }),
+  z.object({
+    id: Id,
+    name: z.string().min(1),
+    transport: z.literal('http'),
+    url: z.url(),
+    headers: z.record(z.string(), z.string()).default({}),
+  }),
+]);
+export type ToolServerLaunch = z.infer<typeof ToolServerLaunch>;
+
+/** Starts (or reuses) an MCP client and returns the server's tools. */
 export const ToolServerStartRequest = z.object({
   ...req,
   type: z.literal('toolServer.start'),
-  toolServer: ToolServer,
-  secrets: z.record(z.string(), z.string()).optional(),
+  toolServer: ToolServerLaunch,
+  /** Built-in filesystem server: the roots it serves (none → every path is refused). */
+  roots: z.array(AgentRoot).optional(),
 });
 export const ToolServerStopRequest = z.object({
   ...req,
@@ -58,6 +86,8 @@ export const RunStartRequest = z.object({
   workingDirectory: z.string().optional(),
   /** `${toolServerId}:${toolName}` pairs with a recorded allow-always decision. */
   alwaysAllowed: z.array(z.string()).optional(),
+  /** The agent's enabled MCP servers, resolved by the shell (Phase 5). */
+  toolServers: z.array(ToolServerLaunch).optional(),
 });
 /** Finds a CLI harness binary and reads its version (the form's "Detect"). */
 export const CliDetectRequest = z.object({
@@ -91,6 +121,7 @@ export const RunnerRequest = z.discriminatedUnion('type', [
 export type RunnerRequest = z.infer<typeof RunnerRequest>;
 export type RunnerRequestType = RunnerRequest['type'];
 export type RunStartRequest = z.infer<typeof RunStartRequest>;
+export type ToolServerStartRequest = z.infer<typeof ToolServerStartRequest>;
 export type ConnectionTestRequest = z.infer<typeof ConnectionTestRequest>;
 export type CliDetectRequest = z.infer<typeof CliDetectRequest>;
 
@@ -121,6 +152,9 @@ export const ToolDef = z.object({
     .optional(),
 });
 export type ToolDef = z.infer<typeof ToolDef>;
+
+export const ToolServerStartResult = z.array(ToolDef);
+export type ToolServerStartResult = z.infer<typeof ToolServerStartResult>;
 
 export const CliDetectResult = z.object({ path: z.string(), version: z.string() });
 export type CliDetectResult = z.infer<typeof CliDetectResult>;
@@ -174,6 +208,11 @@ export const RunTextDeltaEvent = z.object({
   text: z.string(),
 });
 export const RunBlockEvent = z.object({ ...run, type: z.literal('run.block'), block: Block });
+/**
+ * A tool call the model made, after the matching `run.block` tool_use. With
+ * `requiresApproval` the runner waits for `run.approval` before calling it.
+ * `toolName` is the server's own tool name (the block carries the prefixed one).
+ */
 export const RunToolCallEvent = z.object({
   ...run,
   type: z.literal('run.tool_call'),
@@ -183,6 +222,7 @@ export const RunToolCallEvent = z.object({
   input: z.unknown(),
   requiresApproval: z.boolean(),
 });
+/** The outcome of a tool call; shells store it as a `tool_result` block. */
 export const RunToolResultEvent = z.object({
   ...run,
   type: z.literal('run.tool_result'),
@@ -234,6 +274,8 @@ export const RunnerEvent = z.union([ResponseEvent, RunEvent, LogEvent]);
 export type RunnerEvent = z.infer<typeof RunnerEvent>;
 export type ResponseEvent = z.infer<typeof ResponseEvent>;
 export type RunTextDeltaEvent = z.infer<typeof RunTextDeltaEvent>;
+export type RunToolCallEvent = z.infer<typeof RunToolCallEvent>;
+export type RunToolResultEvent = z.infer<typeof RunToolResultEvent>;
 export type RunUsageEvent = z.infer<typeof RunUsageEvent>;
 export type RunDoneEvent = z.infer<typeof RunDoneEvent>;
 export type RunErrorEvent = z.infer<typeof RunErrorEvent>;

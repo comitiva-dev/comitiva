@@ -1097,143 +1097,117 @@
           "const": "toolServer.start"
         },
         "toolServer": {
-          "type": "object",
-          "properties": {
-            "id": {
-              "type": "string",
-              "minLength": 1
-            },
-            "name": {
-              "type": "string",
-              "minLength": 1
-            },
-            "transport": {
-              "type": "string",
-              "enum": [
-                "stdio",
-                "http"
-              ]
-            },
-            "command": {
-              "type": [
-                "string",
-                "null"
-              ]
-            },
-            "args": {
-              "type": "array",
-              "items": {
-                "type": "string"
-              }
-            },
-            "env": {
+          "oneOf": [
+            {
               "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ]
-                  },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "secretRef": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "secretRef"
-                    ]
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "transport": {
+                  "type": "string",
+                  "const": "stdio"
+                },
+                "command": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "args": {
+                  "default": [],
+                  "type": "array",
+                  "items": {
+                    "type": "string"
                   }
-                ]
-              }
+                },
+                "env": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
+                  },
+                  "additionalProperties": {
+                    "type": "string"
+                  }
+                },
+                "builtin": {
+                  "type": "string",
+                  "enum": [
+                    "filesystem"
+                  ]
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "transport",
+                "command"
+              ]
             },
-            "url": {
-              "anyOf": [
-                {
+            {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "transport": {
+                  "type": "string",
+                  "const": "http"
+                },
+                "url": {
                   "type": "string",
                   "format": "uri"
                 },
-                {
-                  "type": "null"
-                }
-              ]
-            },
-            "headers": {
-              "type": "object",
-              "propertyNames": {
-                "type": "string"
-              },
-              "additionalProperties": {
-                "anyOf": [
-                  {
-                    "type": "object",
-                    "properties": {
-                      "value": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "value"
-                    ]
+                "headers": {
+                  "default": {},
+                  "type": "object",
+                  "propertyNames": {
+                    "type": "string"
                   },
-                  {
-                    "type": "object",
-                    "properties": {
-                      "secretRef": {
-                        "type": "string"
-                      }
-                    },
-                    "required": [
-                      "secretRef"
-                    ]
+                  "additionalProperties": {
+                    "type": "string"
                   }
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "transport",
+                "url"
+              ]
+            }
+          ]
+        },
+        "roots": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "minLength": 1
+              },
+              "mode": {
+                "type": "string",
+                "enum": [
+                  "read",
+                  "readwrite"
                 ]
               }
             },
-            "builtin": {
-              "type": "boolean"
-            },
-            "enabled": {
-              "type": "boolean"
-            },
-            "createdAt": {
-              "type": "string",
-              "format": "date-time",
-              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
-            }
-          },
-          "required": [
-            "id",
-            "name",
-            "transport",
-            "command",
-            "args",
-            "env",
-            "url",
-            "headers",
-            "builtin",
-            "enabled",
-            "createdAt"
-          ]
-        },
-        "secrets": {
-          "type": "object",
-          "propertyNames": {
-            "type": "string"
-          },
-          "additionalProperties": {
-            "type": "string"
+            "required": [
+              "path",
+              "mode"
+            ]
           }
         }
       },
@@ -1353,6 +1327,11 @@
                   "type": "number",
                   "minimum": 0,
                   "maximum": 1
+                },
+                "maxToolIterations": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
                 }
               }
             },
@@ -2318,7 +2297,10 @@
                           "not_logged_in",
                           "sandbox_unavailable",
                           "outside_roots",
+                          "read_only_root",
                           "approval_denied",
+                          "tool_failed",
+                          "tool_server_failed",
                           "invalid_request",
                           "not_implemented",
                           "unknown_provider",
@@ -2377,6 +2359,100 @@
           "type": "array",
           "items": {
             "type": "string"
+          }
+        },
+        "toolServers": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "transport": {
+                    "type": "string",
+                    "const": "stdio"
+                  },
+                  "command": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "args": {
+                    "default": [],
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    }
+                  },
+                  "env": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  },
+                  "builtin": {
+                    "type": "string",
+                    "enum": [
+                      "filesystem"
+                    ]
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "transport",
+                  "command"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "name": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "transport": {
+                    "type": "string",
+                    "const": "http"
+                  },
+                  "url": {
+                    "type": "string",
+                    "format": "uri"
+                  },
+                  "headers": {
+                    "default": {},
+                    "type": "object",
+                    "propertyNames": {
+                      "type": "string"
+                    },
+                    "additionalProperties": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "required": [
+                  "id",
+                  "name",
+                  "transport",
+                  "url"
+                ]
+              }
+            ]
           }
         }
       },

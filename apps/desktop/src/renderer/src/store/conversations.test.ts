@@ -6,6 +6,7 @@ import { conversation, fakeBackend, message } from './testBackend';
 const summary = (id: string, over: Parameters<typeof conversation>[1] = {}, unread = 0) => ({
   conversation: conversation(id, over),
   unread,
+  pendingApproval: null,
 });
 
 describe('conversations store', () => {
@@ -30,7 +31,11 @@ describe('conversations store', () => {
     const update = (id: string, status: 'idle' | 'running' | 'error') =>
       store
         .getState()
-        .handleEvent({ type: 'conversation.updated', conversation: conversation(id, { status }) });
+        .handleEvent({
+          type: 'conversation.updated',
+          pendingApproval: null,
+          conversation: conversation(id, { status }),
+        });
     update('k1', 'idle');
     expect(agentStatus(store.getState(), 'a1')).toBe('idle');
     update('k2', 'error');
@@ -47,6 +52,7 @@ describe('conversations store', () => {
     const put = (id: string, agentId: string, at: string) =>
       store.getState().handleEvent({
         type: 'conversation.updated',
+        pendingApproval: null,
         conversation: conversation(id, { agentId, lastActivityAt: at }),
       });
     put('k1', 'a1', '2026-09-21T10:00:00.000Z');
@@ -69,10 +75,18 @@ describe('conversations store', () => {
       });
     store
       .getState()
-      .handleEvent({ type: 'conversation.updated', conversation: conversation('k1') });
+      .handleEvent({
+        type: 'conversation.updated',
+        pendingApproval: null,
+        conversation: conversation('k1'),
+      });
     store
       .getState()
-      .handleEvent({ type: 'conversation.updated', conversation: conversation('k2') });
+      .handleEvent({
+        type: 'conversation.updated',
+        pendingApproval: null,
+        conversation: conversation('k2'),
+      });
     store.getState().setVisible('k1');
     reply('k1', 'streaming');
     reply('k1', 'complete');

@@ -164,3 +164,70 @@ describe('ipc-channels', () => {
     ).toBe(false);
   });
 });
+
+describe('tool server IPC', () => {
+  const create = ipcInvoke['toolServers.create'].input;
+
+  it('accepts stdio and http servers with plain values and new secrets', () => {
+    const stdio = create.parse({
+      name: ' Search ',
+      spec: {
+        transport: 'stdio',
+        command: 'npx',
+        args: ['-y', 'search-mcp'],
+        env: { API_KEY: { secret: 'k' }, REGION: { value: 'eu' } },
+      },
+    });
+    expect(stdio).toMatchObject({ name: 'Search', enabled: true });
+    expect(
+      create.safeParse({
+        name: 'Remote',
+        spec: {
+          transport: 'http',
+          url: 'https://mcp.example.com/mcp',
+          headers: { Authorization: { secret: 'Bearer x' } },
+        },
+      }).success,
+    ).toBe(true);
+  });
+
+  it('rejects bad commands, urls and names', () => {
+    const stdio = (env: Record<string, unknown>, command = 'x') => ({
+      name: 'x',
+      spec: { transport: 'stdio', command, env },
+    });
+    expect(create.safeParse(stdio({}, ' ')).success).toBe(false);
+    expect(create.safeParse(stdio({ 'BAD NAME': { value: '1' } })).success).toBe(false);
+    expect(create.safeParse(stdio({ OK: { secret: '' } })).success).toBe(false);
+    expect(
+      create.safeParse({ name: 'x', spec: { transport: 'http', url: 'file:///etc/passwd' } })
+        .success,
+    ).toBe(false);
+  });
+
+  it('decides approvals with a known decision only', () => {
+    const decide = ipcInvoke['approvals.decide'].input;
+    expect(
+      decide.safeParse({ conversationId: 'c', toolUseId: 't', decision: 'allow-always' }).success,
+    ).toBe(true);
+    expect(
+      decide.safeParse({ conversationId: 'c', toolUseId: 't', decision: 'maybe' }).success,
+    ).toBe(false);
+  });
+
+  it('defaults the pending approval to null on conversation events', () => {
+    const e = ipcEvents['conversation.updated'].parse({
+      conversation: {
+        id: 'c',
+        agentId: 'a',
+        title: null,
+        status: 'idle',
+        harnessSessionId: null,
+        archived: false,
+        lastActivityAt: '2026-01-01T00:00:00.000Z',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    });
+    expect(e.pendingApproval).toBeNull();
+  });
+});

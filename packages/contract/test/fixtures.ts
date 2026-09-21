@@ -17,7 +17,7 @@ export const anthropicConnection: Connection = {
 export const agent: Agent = {
   id: '01J00000000000000000000002',
   name: 'Researcher',
-  avatar: '🔎',
+  avatar: { color: 'indigo', emoji: '🔎' },
   connectionId: anthropicConnection.id,
   model: null,
   role: 'You research things.',

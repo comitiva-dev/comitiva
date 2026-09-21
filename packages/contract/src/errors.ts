@@ -20,6 +20,8 @@ export const ErrorCode = z.enum([
   'not_found',
   'unsupported_content',
   'connection_in_use',
+  'connection_disabled',
+  'model_required',
   'secret_missing',
   'secret_store_unavailable',
   'runner_crashed',

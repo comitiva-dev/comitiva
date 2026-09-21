@@ -13,7 +13,32 @@
       "minLength": 1
     },
     "avatar": {
-      "type": "string"
+      "type": "object",
+      "properties": {
+        "color": {
+          "type": "string",
+          "enum": [
+            "indigo",
+            "violet",
+            "pink",
+            "rose",
+            "orange",
+            "amber",
+            "emerald",
+            "teal",
+            "sky",
+            "slate"
+          ]
+        },
+        "emoji": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 16
+        }
+      },
+      "required": [
+        "color"
+      ]
     },
     "connectionId": {
       "type": "string",
@@ -94,9 +119,12 @@
       }
     },
     "tags": {
+      "maxItems": 20,
       "type": "array",
       "items": {
-        "type": "string"
+        "type": "string",
+        "minLength": 1,
+        "maxLength": 32
       }
     },
     "createdAt": {

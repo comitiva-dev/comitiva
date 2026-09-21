@@ -1,5 +1,13 @@
 import { z } from 'zod';
 import { Id, IsoDate } from './common.js';
+import {
+  Agent,
+  AgentAvatar,
+  AgentParams,
+  AgentRoot,
+  AgentTags,
+  PermissionPolicy,
+} from './entities/agent.js';
 import { Connection } from './entities/connection.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import {
@@ -117,6 +125,60 @@ export const DetectBinaryInput = z.object({
 });
 export type DetectBinaryInput = z.infer<typeof DetectBinaryInput>;
 
+/** A model id typed or picked by the user; blank means "use the connection's default". */
+const AgentModel = z
+  .string()
+  .trim()
+  .nullable()
+  .transform((m) => (m ? m : null));
+
+const agentFields = {
+  name: z.string().trim().min(1),
+  avatar: AgentAvatar,
+  connectionId: Id,
+  model: AgentModel,
+  role: z.string(),
+  params: AgentParams,
+  tags: AgentTags,
+  // In the schema from Phase 3; edited in the UI from Phase 5.
+  toolServerIds: z.array(Id),
+  roots: z.array(AgentRoot),
+  permissionPolicy: PermissionPolicy,
+};
+
+/** A new agent as the form submits it. */
+export const AgentDraft = z.object({
+  ...agentFields,
+  model: AgentModel.optional().transform((m) => m ?? null),
+  role: agentFields.role.default(''),
+  params: agentFields.params.default({}),
+  tags: agentFields.tags.default([]),
+  toolServerIds: agentFields.toolServerIds.default([]),
+  roots: agentFields.roots.default([]),
+  permissionPolicy: agentFields.permissionPolicy.default('ask'),
+});
+/** What callers send (defaults may be omitted). */
+export type AgentDraft = z.input<typeof AgentDraft>;
+/** What main receives after validation. */
+export type ValidAgentDraft = z.output<typeof AgentDraft>;
+
+/** Changes to a saved agent; omitted fields are kept. */
+export const AgentPatch = z.object(agentFields).partial();
+export type AgentPatch = z.input<typeof AgentPatch>;
+export type ValidAgentPatch = z.output<typeof AgentPatch>;
+
+/** App-wide preferences kept in the local database. */
+export const AppSettings = z.object({
+  /** The first-run offer to create a sample agent: shown until accepted or dismissed. */
+  sampleAgentOffer: z.enum(['pending', 'done']).default('pending'),
+});
+export type AppSettings = z.infer<typeof AppSettings>;
+
+export const AppSettingsPatch = z
+  .object({ sampleAgentOffer: z.enum(['pending', 'done']) })
+  .partial();
+export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
+
 const ById = z.object({ id: Id });
 
 export const ipcInvoke = {
@@ -133,6 +195,17 @@ export const ipcInvoke = {
   'connections.test': { input: ConnectionTarget, output: TestResult },
   'connections.listModels': { input: ConnectionTarget, output: z.array(ModelInfo) },
   'connections.detectBinary': { input: DetectBinaryInput, output: CliDetectResult },
+  'agents.list': { input: z.undefined(), output: z.array(Agent) },
+  'agents.create': { input: AgentDraft, output: Agent },
+  'agents.update': { input: ById.extend({ patch: AgentPatch }), output: Agent },
+  'agents.delete': { input: ById, output: z.void() },
+  /** `name` is the copy's name (localized by the UI); defaults to "<name> (copy)". */
+  'agents.duplicate': {
+    input: ById.extend({ name: z.string().trim().min(1).optional() }),
+    output: Agent,
+  },
+  'settings.get': { input: z.undefined(), output: AppSettings },
+  'settings.update': { input: AppSettingsPatch, output: AppSettings },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
 } as const;
@@ -141,7 +214,10 @@ export type IpcInvokeChannel = keyof typeof ipcInvoke;
 
 /** Invoke results cross IPC wrapped, so AppError codes survive serialization. */
 export type IpcResult<T> = { ok: true; value: T } | { ok: false; error: AppErrorShape };
-export type IpcInput<C extends IpcInvokeChannel> = z.infer<(typeof ipcInvoke)[C]['input']>;
+/** What the renderer sends: fields with defaults may be omitted. */
+export type IpcInput<C extends IpcInvokeChannel> = z.input<(typeof ipcInvoke)[C]['input']>;
+/** What main handlers receive, after validation and defaults. */
+export type IpcParsedInput<C extends IpcInvokeChannel> = z.output<(typeof ipcInvoke)[C]['input']>;
 export type IpcOutput<C extends IpcInvokeChannel> = z.infer<(typeof ipcInvoke)[C]['output']>;
 
 export const ipcEvents = {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { Block, Connection, Message, UsagePolicy } from '../src/index.js';
-import { anthropicConnection, userMessage } from './fixtures.js';
+import { Agent, Block, Connection, Message, UsagePolicy } from '../src/index.js';
+import { agent, anthropicConnection, userMessage } from './fixtures.js';
 
 describe('Connection', () => {
   it('accepts a valid anthropic connection', () => {
@@ -23,6 +23,27 @@ describe('Connection', () => {
   it('applies provider config defaults', () => {
     const ollama = Connection.parse({ ...anthropicConnection, provider: 'ollama', config: {} });
     expect(ollama.config).toEqual({ baseUrl: 'http://localhost:11434' });
+  });
+});
+
+describe('Agent', () => {
+  it('accepts a valid agent', () => {
+    expect(Agent.parse(agent)).toEqual(agent);
+  });
+
+  it('types the avatar as a palette color with an optional emoji', () => {
+    expect(Agent.safeParse({ ...agent, avatar: { color: 'teal' } }).success).toBe(true);
+    expect(Agent.safeParse({ ...agent, avatar: '🔎' }).success).toBe(false);
+    expect(Agent.safeParse({ ...agent, avatar: { color: '#ff0000' } }).success).toBe(false);
+    expect(Agent.safeParse({ ...agent, avatar: { color: 'teal', emoji: '' } }).success).toBe(false);
+  });
+
+  it('trims tags and limits their length and count', () => {
+    expect(Agent.parse({ ...agent, tags: [' writing '] }).tags).toEqual(['writing']);
+    expect(Agent.safeParse({ ...agent, tags: ['x'.repeat(33)] }).success).toBe(false);
+    expect(
+      Agent.safeParse({ ...agent, tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }).success,
+    ).toBe(false);
   });
 });
 

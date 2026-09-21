@@ -15,6 +15,13 @@ export const ipcInvokeChannels = [
   'connections.test',
   'connections.listModels',
   'connections.detectBinary',
+  'agents.list',
+  'agents.create',
+  'agents.update',
+  'agents.delete',
+  'agents.duplicate',
+  'settings.get',
+  'settings.update',
   'dialogs.pickFolder',
 ] as const;
 

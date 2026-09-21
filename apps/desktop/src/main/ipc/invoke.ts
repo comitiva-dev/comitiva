@@ -1,14 +1,14 @@
 import {
   AppError,
   ipcInvoke,
-  type IpcInput,
+  type IpcParsedInput,
   type IpcInvokeChannel,
   type IpcOutput,
   type IpcResult,
 } from '@comitiva/contract';
 
 export type InvokeHandlers = {
-  [C in IpcInvokeChannel]: (input: IpcInput<C>) => Promise<IpcOutput<C>> | IpcOutput<C>;
+  [C in IpcInvokeChannel]: (input: IpcParsedInput<C>) => Promise<IpcOutput<C>> | IpcOutput<C>;
 };
 
 /**
@@ -30,7 +30,7 @@ export async function runInvoke<C extends IpcInvokeChannel>(
     };
   }
   try {
-    const value = await handler(input.data as IpcInput<C>);
+    const value = await handler(input.data as IpcParsedInput<C>);
     return { ok: true, value: schema.output.parse(value) as IpcOutput<C> };
   } catch (err) {
     return { ok: false, error: AppError.from(err).toJSON() };

@@ -82,7 +82,7 @@ export function testAgent(overrides: Partial<Agent> = {}): Agent {
   return {
     id: 'agent-1',
     name: 'Tester',
-    avatar: '🧪',
+    avatar: { color: 'indigo', emoji: '🧪' },
     connectionId: 'conn-anthropic',
     model: 'claude-haiku-4-5',
     role: '',

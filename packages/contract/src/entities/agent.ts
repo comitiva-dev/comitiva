@@ -17,11 +17,36 @@ export const AgentParams = z.object({
 });
 export type AgentParams = z.infer<typeof AgentParams>;
 
+/** Avatar background colors: palette names, so each shell picks light and dark shades. */
+export const AvatarColor = z.enum([
+  'indigo',
+  'violet',
+  'pink',
+  'rose',
+  'orange',
+  'amber',
+  'emerald',
+  'teal',
+  'sky',
+  'slate',
+]);
+export type AvatarColor = z.infer<typeof AvatarColor>;
+
+/** Always a color; without an emoji, shells show the name's initials. */
+export const AgentAvatar = z.object({
+  color: AvatarColor,
+  emoji: z.string().trim().min(1).max(16).optional(),
+});
+export type AgentAvatar = z.infer<typeof AgentAvatar>;
+
+export const AgentTag = z.string().trim().min(1).max(32);
+export const AgentTags = z.array(AgentTag).max(20);
+
 /** A persistent persona. */
 export const Agent = z.object({
   id: Id,
   name: z.string().min(1),
-  avatar: z.string(),
+  avatar: AgentAvatar,
   connectionId: Id,
   model: z.string().nullable(),
   role: z.string(),
@@ -30,7 +55,7 @@ export const Agent = z.object({
   roots: z.array(AgentRoot),
   permissionPolicy: PermissionPolicy,
   fallbackConnectionIds: z.array(Id),
-  tags: z.array(z.string()),
+  tags: AgentTags,
   createdAt: IsoDate,
   updatedAt: IsoDate,
 });

@@ -78,6 +78,49 @@ describe('IPC contract', () => {
   });
 });
 
+describe('agent IPC', () => {
+  const minimal = { name: ' Writer ', avatar: { color: 'indigo' }, connectionId: 'c1' };
+
+  it('applies draft defaults', () => {
+    expect(ipcInvoke['agents.create'].input.parse(minimal)).toEqual({
+      name: 'Writer',
+      avatar: { color: 'indigo' },
+      connectionId: 'c1',
+      model: null,
+      role: '',
+      params: {},
+      tags: [],
+      toolServerIds: [],
+      roots: [],
+      permissionPolicy: 'ask',
+    });
+  });
+
+  it('turns a blank model into null (use the connection default)', () => {
+    const create = ipcInvoke['agents.create'].input;
+    expect(create.parse({ ...minimal, model: '  ' }).model).toBeNull();
+    expect(create.parse({ ...minimal, model: ' gpt-5 ' }).model).toBe('gpt-5');
+    const update = ipcInvoke['agents.update'].input;
+    expect(update.parse({ id: 'a1', patch: { model: '' } }).patch).toEqual({ model: null });
+    expect(update.parse({ id: 'a1', patch: {} }).patch).toEqual({});
+  });
+
+  it('rejects bad names, params and avatars', () => {
+    const create = ipcInvoke['agents.create'].input;
+    expect(create.safeParse({ ...minimal, name: '  ' }).success).toBe(false);
+    expect(create.safeParse({ ...minimal, params: { temperature: 3 } }).success).toBe(false);
+    expect(create.safeParse({ ...minimal, params: { maxTokens: 0 } }).success).toBe(false);
+    expect(create.safeParse({ ...minimal, avatar: { color: 'mauve' } }).success).toBe(false);
+  });
+
+  it('defaults settings and validates patches', () => {
+    expect(ipcInvoke['settings.get'].output.parse({})).toEqual({ sampleAgentOffer: 'pending' });
+    expect(ipcInvoke['settings.update'].input.safeParse({ sampleAgentOffer: 'x' }).success).toBe(
+      false,
+    );
+  });
+});
+
 describe('ipc-channels', () => {
   it('only accepts channel names that exist in the schemas', () => {
     // Compile-time guard: every listed name must be a declared channel.

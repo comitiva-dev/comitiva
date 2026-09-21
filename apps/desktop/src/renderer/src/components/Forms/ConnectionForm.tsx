@@ -24,6 +24,7 @@ import {
   type FormState,
 } from '../../lib/connectionForm';
 import { useConnections } from '../../store/context';
+import { ProviderIcon } from '../ProviderIcon';
 import { ui } from '../ui';
 import { CliConnectionForm } from './CliConnectionForm';
 import { FormShell, ProviderSelect, TestOutcome, type Async } from './FormShell';
@@ -144,9 +145,8 @@ function ApiConnectionForm({
 
   return (
     <FormShell
-      provider={form.provider}
-      preset={form.preset}
-      editing={editing !== null}
+      icon={<ProviderIcon provider={form.provider} preset={form.preset} />}
+      title={editing ? t('connections.form.editTitle') : t('connections.form.createTitle')}
       saving={saving}
       onClose={close}
       onSubmit={() => void submit()}

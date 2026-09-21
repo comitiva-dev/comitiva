@@ -6,32 +6,27 @@ import {
   cliProviderDescriptors,
   providerDescriptors,
   type ErrorCode,
-  type OpenAICompatiblePreset,
   type ProviderId,
   type TestResult,
 } from '@comitiva/contract';
-import { ProviderIcon } from '../ProviderIcon';
+import type { Async } from '../../lib/async';
 import { ui } from '../ui';
 
-export type Async<T> =
-  | { state: 'idle' }
-  | { state: 'busy' }
-  | { state: 'done'; value: T }
-  | { state: 'failed'; code: ErrorCode };
+export type { Async };
 
-/** The side panel both connection forms live in: header, body, Save/Cancel. */
+/** The side panel the connection and agent forms live in: header, body, Save/Cancel. */
 export function FormShell({
-  provider,
-  preset,
-  editing,
+  icon,
+  title,
+  testId = 'connection-form',
   saving,
   onClose,
   onSubmit,
   children,
 }: {
-  provider: ProviderId;
-  preset?: OpenAICompatiblePreset | undefined;
-  editing: boolean;
+  icon: ReactNode;
+  title: string;
+  testId?: string;
   saving: Async<void>;
   onClose: () => void;
   onSubmit: () => void;
@@ -49,7 +44,7 @@ export function FormShell({
   return (
     <div className="fixed inset-0 z-40 flex justify-end bg-black/30" onClick={onClose}>
       <form
-        data-testid="connection-form"
+        data-testid={testId}
         aria-labelledby={`${ids}-title`}
         className="flex h-full w-full max-w-md flex-col overflow-y-auto bg-white shadow-2xl dark:bg-neutral-950"
         onClick={(e) => e.stopPropagation()}
@@ -60,9 +55,9 @@ export function FormShell({
         noValidate
       >
         <header className="flex items-center gap-3 border-b border-neutral-200 px-5 py-4 dark:border-neutral-800">
-          <ProviderIcon provider={provider} preset={preset} />
+          {icon}
           <h2 id={`${ids}-title`} className="text-base font-semibold">
-            {editing ? t('connections.form.editTitle') : t('connections.form.createTitle')}
+            {title}
           </h2>
         </header>
 

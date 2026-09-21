@@ -25,10 +25,9 @@
     "settings": "Configurações"
   },
   "sidebar": {
-    "noAgents": "Nenhum agente ainda. Eles chegam em breve; configure uma conexão primeiro."
+    "noAgents": "Nenhum agente ainda."
   },
   "placeholder": {
-    "agents": "Agentes são personas com um papel, uma conexão e ferramentas. Chegam em uma fase posterior.",
     "tools": "Ferramentas (pastas locais, Google Drive, qualquer servidor MCP) chegam em uma fase posterior.",
     "usage": "Uso de tokens e custos por conexão e agente chegam em uma fase posterior.",
     "settings": "Idioma, tema e outras preferências chegam em uma fase posterior."
@@ -114,7 +113,9 @@
       "loginHint": "Execute `{{command}}` em um terminal e teste de novo.",
       "sandboxHint": "Mude o sandbox para Acesso total ou corrija o sandbox neste sistema.",
       "testSlow": "O teste envia um prompt curto; um CLI pode demorar para iniciar."
-    }
+    },
+    "usedBy_one": "Usada por {{count}} agente. Mova-o para outra conexão ou exclua-o antes:",
+    "usedBy_other": "Usada por {{count}} agentes. Mova-os para outra conexão ou exclua-os antes:"
   },
   "errors": {
     "auth_failed": "A chave de API foi recusada.",
@@ -137,6 +138,114 @@
     "internal": "Algo deu errado.",
     "connection_in_use": "Esta conexão é usada por agentes. Mova-os para outra conexão antes.",
     "not_found": "Esse item não existe mais.",
-    "sandbox_unavailable": "O sandbox do harness não consegue iniciar neste sistema."
+    "sandbox_unavailable": "O sandbox do harness não consegue iniciar neste sistema.",
+    "connection_disabled": "Essa conexão está desativada. Ative-a ou escolha outra.",
+    "model_required": "Esta conexão não tem modelo padrão. Escolha um modelo para o agente."
+  },
+  "agents": {
+    "create": "Criar agente",
+    "edit": "Editar",
+    "duplicate": "Duplicar",
+    "delete": "Excluir",
+    "copyName": "{{name}} (cópia)",
+    "addConnectionFirst": "Adicione uma conexão primeiro",
+    "connectionDisabled": "A conexão dele está desativada: ative-a ou escolha outra para conversar.",
+    "connectionMissing": "A conexão dele não existe mais: escolha outra.",
+    "status": {
+      "idle": "Ocioso"
+    },
+    "deleteTitle": "Excluir “{{name}}”?",
+    "deleteBody": "As configurações dele serão removidas. Isso não pode ser desfeito.",
+    "conversationsSoon": "As conversas com este agente chegam na próxima atualização.",
+    "emptyTitle": "Nenhum agente ainda",
+    "emptyBody": "Um agente é uma persona com um papel, uma conexão e, em breve, ferramentas.",
+    "needConnection": "Agentes conversam por meio de uma conexão. Adicione uma primeiro.",
+    "pickTitle": "Escolha um agente",
+    "pickBody": "Selecione um na barra lateral ou crie um novo.",
+    "sample": {
+      "title": "Começar com um agente de exemplo?",
+      "body": "Cria o “Assistente”, um agente de uso geral em {{connection}}. Você pode editá-lo ou excluí-lo depois.",
+      "name": "Assistente",
+      "create": "Criar agente de exemplo",
+      "dismiss": "Agora não"
+    },
+    "panel": {
+      "label": "Detalhes do agente",
+      "harnessDefault": "Padrão do harness",
+      "connectionDefault": "Padrão da conexão ({{model}})",
+      "clickToEdit": "Clique para editar",
+      "noRole": "Sem papel ainda. Clique para escrever um.",
+      "roleKeys": "Ctrl+Enter salva · Esc cancela"
+    },
+    "form": {
+      "createTitle": "Novo agente",
+      "editTitle": "Editar agente",
+      "name": "Nome",
+      "namePlaceholder": "ex.: Assistente de pesquisa",
+      "nameRequired": "Dê um nome ao agente.",
+      "avatar": "Avatar",
+      "color": "Cor",
+      "noEmoji": "Sem emoji: mostrar iniciais",
+      "emojiPlaceholder": "Ou digite um emoji",
+      "connection": "Conexão",
+      "pickConnection": "Escolha uma conexão",
+      "disabledConnection": "{{name}} (desativada)",
+      "connectionRequired": "Escolha uma conexão.",
+      "model": "Modelo",
+      "modelHarnessDefault": "Padrão do harness",
+      "modelConnectionDefault": "Padrão da conexão ({{model}})",
+      "modelPlaceholder": "Digite ou escolha um modelo",
+      "modelFreeTextCli": "Digite um nome de modelo que o harness aceite, ou deixe em branco.",
+      "retry": "Tentar de novo",
+      "role": "Papel",
+      "startFrom": "Começar de:",
+      "replaceRole": "Substituir o papel atual por “{{template}}”?",
+      "replace": "Substituir",
+      "keep": "Manter o meu",
+      "rolePlaceholder": "Quem o agente é, o que ele faz e como deve responder.",
+      "temperature": "Temperatura",
+      "maxTokens": "Máx. de tokens",
+      "providerDefault": "Padrão do provedor",
+      "temperatureInvalid": "Use um número de 0 a 2.",
+      "maxTokensInvalid": "Use um número inteiro maior que 0.",
+      "paramsCliNote": "Harnesses de CLI usam os próprios limites de temperatura e tokens.",
+      "tags": "Tags",
+      "tagsPlaceholder": "Digite e pressione Enter",
+      "removeTag": "Remover {{tag}}"
+    },
+    "colors": {
+      "indigo": "Índigo",
+      "violet": "Violeta",
+      "pink": "Rosa",
+      "rose": "Rosa-escuro",
+      "orange": "Laranja",
+      "amber": "Âmbar",
+      "emerald": "Esmeralda",
+      "teal": "Verde-azulado",
+      "sky": "Azul-céu",
+      "slate": "Ardósia"
+    },
+    "templates": {
+      "generic": {
+        "name": "Assistente geral",
+        "role": "Você é um assistente prestativo e cuidadoso. Responda de forma clara e concisa, faça uma pergunta curta quando o pedido for ambíguo e diga quando não tiver certeza de algo, em vez de chutar."
+      },
+      "researcher": {
+        "name": "Pesquisador",
+        "role": "Você é um pesquisador. Divida as perguntas em partes, reúna informações das fontes disponíveis, compare-as e separe fatos de interpretações. Indique de onde vem cada afirmação, aponte lacunas ou evidências conflitantes e termine com um resumo curto do que se sabe e do que não se sabe."
+      },
+      "writer": {
+        "name": "Redator",
+        "role": "Você é um redator. Transforme ideias, anotações e rascunhos em textos claros e bem estruturados para o público certo. Siga o tom e o tamanho pedidos, prefira palavras simples e frases curtas e, quando o pedido for vago, proponha um roteiro antes de escrever o texto completo."
+      },
+      "reviewer": {
+        "name": "Revisor",
+        "role": "Você é um revisor. Leia com atenção o material recebido e dê um retorno específico e acionável: o que funciona, o que está confuso, o que está errado ou faltando e como corrigir. Ordene os pontos por importância e cite o trecho exato a que cada um se refere."
+      },
+      "fileOrganizer": {
+        "name": "Organizador de arquivos",
+        "role": "Você é um organizador de arquivos. Ajude a manter as pastas em ordem: veja o que existe, proponha uma estrutura clara e nomes consistentes e explique o plano antes de mover, renomear ou excluir qualquer coisa. Nunca remova arquivos sem dizer exatamente quais e por quê."
+      }
+    }
   }
 }

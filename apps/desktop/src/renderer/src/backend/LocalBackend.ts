@@ -1,4 +1,7 @@
 import type {
+  AgentDraft,
+  AgentPatch,
+  AppSettingsPatch,
   ConnectionDraft,
   ConnectionPatch,
   ConnectionTarget,
@@ -44,6 +47,20 @@ export class LocalBackend implements Backend {
     test: (target: ConnectionTarget) => this.api.invoke('connections.test', target),
     listModels: (target: ConnectionTarget) => this.api.invoke('connections.listModels', target),
     detectBinary: (input: DetectBinaryInput) => this.api.invoke('connections.detectBinary', input),
+  };
+
+  agents = {
+    list: () => this.api.invoke('agents.list', undefined),
+    create: (draft: AgentDraft) => this.api.invoke('agents.create', draft),
+    update: (id: string, patch: AgentPatch) => this.api.invoke('agents.update', { id, patch }),
+    delete: (id: string) => this.api.invoke('agents.delete', { id }),
+    duplicate: (id: string, name?: string) =>
+      this.api.invoke('agents.duplicate', name === undefined ? { id } : { id, name }),
+  };
+
+  settings = {
+    get: () => this.api.invoke('settings.get', undefined),
+    update: (patch: AppSettingsPatch) => this.api.invoke('settings.update', patch),
   };
 
   dialogs = {

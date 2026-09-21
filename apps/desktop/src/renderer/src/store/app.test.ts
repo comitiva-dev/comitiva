@@ -33,4 +33,13 @@ describe('app store', () => {
     store.getState().setSection('usage');
     expect(store.getState().section).toBe('usage');
   });
+
+  it('lands on a suggested section only until the user navigates', () => {
+    const store = createAppStore(fakeBackend());
+    store.getState().suggestSection('agents');
+    expect(store.getState().section).toBe('agents');
+    store.getState().setSection('usage');
+    store.getState().suggestSection('agents');
+    expect(store.getState().section).toBe('usage');
+  });
 });

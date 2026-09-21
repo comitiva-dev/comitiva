@@ -10,7 +10,7 @@ import { ProviderIcon } from '../components/ProviderIcon';
 import { ui } from '../components/ui';
 import { isApiProvider, providerLabel } from '../lib/connectionForm';
 import { relativeTime } from '../lib/time';
-import { useApp, useConnections } from '../store/context';
+import { useAgents, useApp, useConnections } from '../store/context';
 
 export function ConnectionsScreen() {
   const { t } = useTranslation();
@@ -24,10 +24,13 @@ export function ConnectionsScreen() {
   const cancelDelete = useConnections((s) => s.cancelDelete);
   const confirmDeletion = useConnections((s) => s.confirmDeletion);
   const secretStatus = useApp((s) => s.secretStatus);
+  const agents = useAgents((s) => s.items);
 
   const editing =
     editor.mode === 'edit' ? (items.find((i) => i.connection.id === editor.id) ?? null) : null;
   const deleting = items.find((i) => i.connection.id === confirmDelete);
+  // Main refuses too (connection_in_use); checking here lets the dialog say who uses it.
+  const usedBy = deleting ? agents.filter((a) => a.connectionId === deleting.connection.id) : [];
 
   return (
     <section
@@ -91,6 +94,20 @@ export function ConnectionsScreen() {
           title={t('connections.deleteTitle', { name: deleting.connection.name })}
           body={t('connections.deleteBody')}
           confirmLabel={t('connections.delete')}
+          blocked={
+            usedBy.length > 0 ? (
+              <div data-testid="delete-blocked" className="mt-2 text-sm">
+                <p className={ui.bad}>{t('connections.usedBy', { count: usedBy.length })}</p>
+                <ul className="mt-1 list-disc pl-5">
+                  {usedBy.map((a) => (
+                    <li key={a.id} data-testid="delete-blocked-agent">
+                      {a.name}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ) : undefined
+          }
           onConfirm={() => void confirmDeletion()}
           onCancel={cancelDelete}
         />

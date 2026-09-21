@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ui } from './ui';
 
@@ -7,12 +7,15 @@ export function ConfirmDialog({
   title,
   body,
   confirmLabel,
+  blocked,
   onConfirm,
   onCancel,
 }: {
   title: string;
   body: string;
   confirmLabel: string;
+  /** Shown instead of allowing the action: the reason it cannot happen now. */
+  blocked?: ReactNode;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -41,7 +44,7 @@ export function ConfirmDialog({
         <h2 id="confirm-title" className="text-base font-semibold">
           {title}
         </h2>
-        <p className={`mt-2 text-sm ${ui.muted}`}>{body}</p>
+        {blocked ?? <p className={`mt-2 text-sm ${ui.muted}`}>{body}</p>}
         <div className="mt-5 flex justify-end gap-2">
           <button
             ref={cancelRef}
@@ -51,7 +54,12 @@ export function ConfirmDialog({
           >
             {t('common.cancel')}
           </button>
-          <button data-testid="confirm-ok" className={ui.danger} onClick={onConfirm}>
+          <button
+            data-testid="confirm-ok"
+            className={`${ui.danger} disabled:cursor-not-allowed disabled:opacity-50`}
+            disabled={blocked !== undefined}
+            onClick={onConfirm}
+          >
             {confirmLabel}
           </button>
         </div>

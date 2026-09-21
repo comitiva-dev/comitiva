@@ -13,6 +13,8 @@ export interface AppState {
 
   init(): Promise<void>;
   setSection(section: Section): void;
+  /** Lands on a section at startup, unless the user already navigated. */
+  suggestSection(section: Section): void;
   handleEvent(event: BackendEvent): void;
 }
 
@@ -23,6 +25,7 @@ export function createAppStore(backend: Backend) {
   return createStore<AppState>()((set) => {
     // A status pushed by an event is always newer than the one init() fetched.
     let runnerStatusFromEvent = false;
+    let navigated = false;
 
     return {
       version: '',
@@ -40,7 +43,12 @@ export function createAppStore(backend: Backend) {
       },
 
       setSection(section) {
+        navigated = true;
         set({ section });
+      },
+
+      suggestSection(section) {
+        if (!navigated) set({ section });
       },
 
       handleEvent(event) {

@@ -1,4 +1,5 @@
 import { Sidebar } from './components/Sidebar/Sidebar';
+import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { PlaceholderScreen } from './screens/PlaceholderScreen';
 import { useApp } from './store/context';
@@ -11,6 +12,8 @@ export function App() {
       <main className="flex min-w-0 flex-1 overflow-y-auto">
         {section === 'connections' ? (
           <ConnectionsScreen />
+        ) : section === 'agents' ? (
+          <AgentsScreen />
         ) : (
           <PlaceholderScreen section={section} />
         )}

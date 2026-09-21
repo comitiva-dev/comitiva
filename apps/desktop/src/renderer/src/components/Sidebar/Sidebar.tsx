@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { Section } from '../../store/app';
-import { useApp } from '../../store/context';
+import { useAgents, useApp, useConnections } from '../../store/context';
 import { ui } from '../ui';
+import { AgentList } from './AgentList';
 
 const settingsSections: Array<Exclude<Section, 'agents'>> = [
   'connections',
@@ -16,6 +17,9 @@ export function Sidebar() {
   const setSection = useApp((s) => s.setSection);
   const version = useApp((s) => s.version);
   const runnerStatus = useApp((s) => s.runnerStatus);
+  const hasConnections = useConnections((s) => s.items.length > 0);
+  const openCreate = useAgents((s) => s.openCreate);
+  const select = useAgents((s) => s.select);
 
   const item = (id: Section, label: string) => (
     <button
@@ -41,8 +45,26 @@ export function Sidebar() {
       <div className="px-4 py-4 text-lg font-bold tracking-tight">{t('app.title')}</div>
 
       <div className="flex-1 overflow-y-auto px-2">
-        {item('agents', t('nav.agents'))}
-        <p className={`px-2.5 py-2 text-xs ${ui.muted}`}>{t('sidebar.noAgents')}</p>
+        <div className="flex items-center gap-1">
+          <div className="min-w-0 flex-1" onClick={() => select(null)}>
+            {item('agents', t('nav.agents'))}
+          </div>
+          {hasConnections && (
+            <button
+              data-testid="new-agent"
+              aria-label={t('agents.create')}
+              title={t('agents.create')}
+              className={ui.ghost}
+              onClick={() => {
+                setSection('agents');
+                openCreate();
+              }}
+            >
+              +
+            </button>
+          )}
+        </div>
+        <AgentList />
       </div>
 
       <div className="flex flex-col gap-0.5 border-t border-neutral-200 px-2 py-2 dark:border-neutral-800">

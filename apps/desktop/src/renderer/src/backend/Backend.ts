@@ -1,4 +1,9 @@
 import type {
+  Agent,
+  AgentDraft,
+  AgentPatch,
+  AppSettings,
+  AppSettingsPatch,
   CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
@@ -37,6 +42,19 @@ export interface Backend {
     listModels(target: ConnectionTarget): Promise<ModelInfo[]>;
     /** CLI harnesses: finds the binary (typed path or PATH) and reads its version. */
     detectBinary(input: DetectBinaryInput): Promise<CliDetectResult>;
+  };
+  agents: {
+    list(): Promise<Agent[]>;
+    /** Rejects with not_found, connection_disabled or model_required when the agent could not run. */
+    create(draft: AgentDraft): Promise<Agent>;
+    update(id: string, patch: AgentPatch): Promise<Agent>;
+    delete(id: string): Promise<void>;
+    /** `name` is the copy's (localized) name. */
+    duplicate(id: string, name?: string): Promise<Agent>;
+  };
+  settings: {
+    get(): Promise<AppSettings>;
+    update(patch: AppSettingsPatch): Promise<AppSettings>;
   };
   dialogs: {
     /** A native folder picker; null when cancelled (or when the backend has none). */

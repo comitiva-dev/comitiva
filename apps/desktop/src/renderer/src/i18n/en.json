@@ -25,10 +25,9 @@
     "settings": "Settings"
   },
   "sidebar": {
-    "noAgents": "No agents yet. Agents arrive soon; set up a connection first."
+    "noAgents": "No agents yet."
   },
   "placeholder": {
-    "agents": "Agents are personas with a role, a connection and tools. They arrive in a later phase.",
     "tools": "Tools (local folders, Google Drive, any MCP server) arrive in a later phase.",
     "usage": "Token usage and costs per connection and agent arrive in a later phase.",
     "settings": "Language, theme and other preferences arrive in a later phase."
@@ -114,7 +113,9 @@
       "loginHint": "Run `{{command}}` in a terminal, then test again.",
       "sandboxHint": "Switch the sandbox to Full access, or fix the sandbox on this system.",
       "testSlow": "The test sends a short prompt; a CLI can take a while to start."
-    }
+    },
+    "usedBy_one": "Used by {{count}} agent. Move it to another connection or delete it first:",
+    "usedBy_other": "Used by {{count}} agents. Move them to another connection or delete them first:"
   },
   "errors": {
     "auth_failed": "The API key was rejected.",
@@ -137,6 +138,114 @@
     "internal": "Something went wrong.",
     "connection_in_use": "This connection is used by agents. Move them to another connection first.",
     "not_found": "That item no longer exists.",
-    "sandbox_unavailable": "The harness's sandbox cannot start on this system."
+    "sandbox_unavailable": "The harness's sandbox cannot start on this system.",
+    "connection_disabled": "That connection is disabled. Enable it or pick another one.",
+    "model_required": "This connection has no default model. Pick a model for the agent."
+  },
+  "agents": {
+    "create": "Create agent",
+    "edit": "Edit",
+    "duplicate": "Duplicate",
+    "delete": "Delete",
+    "copyName": "{{name}} (copy)",
+    "addConnectionFirst": "Add a connection first",
+    "connectionDisabled": "Its connection is disabled: enable it or pick another one to chat.",
+    "connectionMissing": "Its connection no longer exists: pick another one.",
+    "status": {
+      "idle": "Idle"
+    },
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteBody": "Its settings are removed. This cannot be undone.",
+    "conversationsSoon": "Conversations with this agent arrive in the next update.",
+    "emptyTitle": "No agents yet",
+    "emptyBody": "An agent is a persona with a role, a connection and, soon, tools.",
+    "needConnection": "Agents talk through a connection. Add one first.",
+    "pickTitle": "Pick an agent",
+    "pickBody": "Choose one in the sidebar, or create a new one.",
+    "sample": {
+      "title": "Start with a sample agent?",
+      "body": "Creates “Assistant”, a general-purpose agent on {{connection}}. You can edit or delete it later.",
+      "name": "Assistant",
+      "create": "Create sample agent",
+      "dismiss": "Not now"
+    },
+    "panel": {
+      "label": "Agent details",
+      "harnessDefault": "The harness's default",
+      "connectionDefault": "Connection default ({{model}})",
+      "clickToEdit": "Click to edit",
+      "noRole": "No role yet. Click to write one.",
+      "roleKeys": "Ctrl+Enter saves · Esc cancels"
+    },
+    "form": {
+      "createTitle": "New agent",
+      "editTitle": "Edit agent",
+      "name": "Name",
+      "namePlaceholder": "e.g. Research assistant",
+      "nameRequired": "Give the agent a name.",
+      "avatar": "Avatar",
+      "color": "Color",
+      "noEmoji": "No emoji: show initials",
+      "emojiPlaceholder": "Or type an emoji",
+      "connection": "Connection",
+      "pickConnection": "Pick a connection",
+      "disabledConnection": "{{name}} (disabled)",
+      "connectionRequired": "Pick a connection.",
+      "model": "Model",
+      "modelHarnessDefault": "The harness's default",
+      "modelConnectionDefault": "Connection default ({{model}})",
+      "modelPlaceholder": "Type or pick a model",
+      "modelFreeTextCli": "Type a model name the harness accepts, or leave blank.",
+      "retry": "Retry",
+      "role": "Role",
+      "startFrom": "Start from:",
+      "replaceRole": "Replace the current role with “{{template}}”?",
+      "replace": "Replace",
+      "keep": "Keep mine",
+      "rolePlaceholder": "Who the agent is, what it does and how it should answer.",
+      "temperature": "Temperature",
+      "maxTokens": "Max tokens",
+      "providerDefault": "Provider default",
+      "temperatureInvalid": "Use a number from 0 to 2.",
+      "maxTokensInvalid": "Use a whole number above 0.",
+      "paramsCliNote": "CLI harnesses use their own temperature and token limits.",
+      "tags": "Tags",
+      "tagsPlaceholder": "Type and press Enter",
+      "removeTag": "Remove {{tag}}"
+    },
+    "colors": {
+      "indigo": "Indigo",
+      "violet": "Violet",
+      "pink": "Pink",
+      "rose": "Rose",
+      "orange": "Orange",
+      "amber": "Amber",
+      "emerald": "Emerald",
+      "teal": "Teal",
+      "sky": "Sky",
+      "slate": "Slate"
+    },
+    "templates": {
+      "generic": {
+        "name": "Generic Assistant",
+        "role": "You are a helpful, careful assistant. Answer clearly and concisely, ask a short clarifying question when a request is ambiguous, and say so when you are not sure about something instead of guessing."
+      },
+      "researcher": {
+        "name": "Researcher",
+        "role": "You are a researcher. Break questions into parts, gather information from the sources available to you, compare them, and separate facts from interpretation. Cite where each claim comes from, point out gaps or conflicting evidence, and end with a short summary of what is known and what is not."
+      },
+      "writer": {
+        "name": "Writer",
+        "role": "You are a writer. Turn ideas, notes and drafts into clear, well-structured text for the intended audience. Match the requested tone and length, prefer plain words and short sentences, and when the brief is thin, propose an outline before writing the full piece."
+      },
+      "reviewer": {
+        "name": "Reviewer",
+        "role": "You are a reviewer. Read the material you are given carefully and give specific, actionable feedback: what works, what is unclear, what is wrong or missing, and how to fix it. Order your points by importance and quote the exact passage each one refers to."
+      },
+      "fileOrganizer": {
+        "name": "File Organizer",
+        "role": "You are a file organizer. Help keep folders tidy: look at what is there, propose a clear structure and consistent names, and explain the plan before moving, renaming or deleting anything. Never remove files without saying exactly which ones and why."
+      }
+    }
   }
 }

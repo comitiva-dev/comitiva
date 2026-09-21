@@ -26,6 +26,7 @@ import {
   type CliFormState,
 } from '../../lib/cliConnectionForm';
 import { useConnections } from '../../store/context';
+import { ProviderIcon } from '../ProviderIcon';
 import { ui } from '../ui';
 import { FormShell, ProviderSelect, TestOutcome, type Async } from './FormShell';
 
@@ -126,8 +127,8 @@ export function CliConnectionForm({
 
   return (
     <FormShell
-      provider={form.provider}
-      editing={editing !== null}
+      icon={<ProviderIcon provider={form.provider} />}
+      title={editing ? t('connections.form.editTitle') : t('connections.form.createTitle')}
       saving={saving}
       onClose={close}
       onSubmit={() => void submit()}

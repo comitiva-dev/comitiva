@@ -24,6 +24,8 @@ export interface ProviderPreset {
   label: string;
   baseUrl: string;
   secret: SecretRequirement;
+  /** Cheap model for auto-titles on this endpoint; overrides the provider's. */
+  titleModel?: string;
 }
 
 export interface ProviderDescriptor {
@@ -36,6 +38,12 @@ export interface ProviderDescriptor {
   baseUrl: { mode: 'required' | 'advanced'; default: string };
   /** Only for openai-compatible: known endpoints that fill the base URL. */
   presets?: ProviderPreset[];
+  /**
+   * Cheap model used to title conversations. Absent: titles use the agent's
+   * model when it costs nothing (`'agent'`, local providers) or stay a
+   * truncation of the first message.
+   */
+  titleModel?: string;
 }
 
 const textOnly: Capabilities = {
@@ -55,6 +63,7 @@ export const providerDescriptors = {
     capabilities: { ...textOnly, images: true },
     secret: 'required',
     baseUrl: { mode: 'advanced', default: 'https://api.anthropic.com' },
+    titleModel: 'claude-haiku-4-5',
   },
   'openai-compatible': {
     id: 'openai-compatible',
@@ -64,7 +73,13 @@ export const providerDescriptors = {
     secret: 'optional',
     baseUrl: { mode: 'required', default: 'https://api.openai.com/v1' },
     presets: [
-      { id: 'openai', label: 'OpenAI', baseUrl: 'https://api.openai.com/v1', secret: 'required' },
+      {
+        id: 'openai',
+        label: 'OpenAI',
+        baseUrl: 'https://api.openai.com/v1',
+        secret: 'required',
+        titleModel: 'gpt-5-mini',
+      },
       {
         id: 'openrouter',
         label: 'OpenRouter',
@@ -77,7 +92,13 @@ export const providerDescriptors = {
         baseUrl: 'https://api.groq.com/openai/v1',
         secret: 'required',
       },
-      { id: 'lmstudio', label: 'LM Studio', baseUrl: 'http://localhost:1234/v1', secret: 'none' },
+      {
+        id: 'lmstudio',
+        label: 'LM Studio',
+        baseUrl: 'http://localhost:1234/v1',
+        secret: 'none',
+        titleModel: 'agent',
+      },
       { id: 'custom', label: 'Custom', baseUrl: '', secret: 'optional' },
     ],
   },
@@ -88,6 +109,7 @@ export const providerDescriptors = {
     capabilities: textOnly,
     secret: 'required',
     baseUrl: { mode: 'advanced', default: 'https://generativelanguage.googleapis.com' },
+    titleModel: 'gemini-2.5-flash-lite',
   },
   ollama: {
     id: 'ollama',
@@ -96,6 +118,8 @@ export const providerDescriptors = {
     capabilities: textOnly,
     secret: 'optional',
     baseUrl: { mode: 'required', default: 'http://localhost:11434' },
+    // Local models cost nothing: titles use the agent's own model.
+    titleModel: 'agent',
   },
 } as const satisfies Record<string, ProviderDescriptor>;
 
@@ -109,6 +133,22 @@ export function secretRequirement(
 ): SecretRequirement {
   const d: ProviderDescriptor = providerDescriptors[provider];
   return d.presets?.find((p) => p.id === preset)?.secret ?? d.secret;
+}
+
+/**
+ * The model to title a conversation with: a cheap one for the provider or
+ * preset, `null` to keep the truncated first message. `'agent'` in a
+ * descriptor means the agent's own model (local providers).
+ */
+export function titleModelFor(
+  provider: ApiProviderId,
+  preset: OpenAICompatiblePreset | undefined,
+  agentModel: string,
+): string | null {
+  const d: ProviderDescriptor = providerDescriptors[provider];
+  const model = d.presets ? d.presets.find((p) => p.id === preset)?.titleModel : d.titleModel;
+  if (model === 'agent') return agentModel || null;
+  return model ?? null;
 }
 
 // ------------------------------------------------------------ CLI harnesses

@@ -37,6 +37,7 @@ export const userMessage: Message = {
   role: 'user',
   content: [{ type: 'text', text: 'Hello' }],
   status: 'complete',
+  error: null,
   seq: 0,
   createdAt: now,
 };

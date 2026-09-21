@@ -26,6 +26,8 @@ export const ErrorCode = z.enum([
   'secret_store_unavailable',
   'runner_crashed',
   'runner_unavailable',
+  'conversation_busy',
+  'interrupted',
   'timeout',
   'internal',
 ]);

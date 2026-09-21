@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Agent, Block, Connection, Message, UsagePolicy } from '../src/index.js';
+import { Agent, Block, Connection, Message, UsagePolicy, appendText } from '../src/index.js';
 import { agent, anthropicConnection, userMessage } from './fixtures.js';
 
 describe('Connection', () => {
@@ -102,5 +102,25 @@ describe('UsagePolicy', () => {
     expect(UsagePolicy.safeParse({ ...base, windowStart: '25:00', windowEnd: null }).success).toBe(
       false,
     );
+  });
+});
+
+describe('appendText', () => {
+  it('extends the last text block or starts one after a tool block', () => {
+    const tool = {
+      type: 'tool_use' as const,
+      id: 't',
+      toolServerId: 'harness:codex',
+      name: 'shell',
+      input: {},
+    };
+    const start = appendText([], 'Hel');
+    expect(appendText(start, 'lo')).toEqual([{ type: 'text', text: 'Hello' }]);
+    expect(appendText([...start, tool], 'x')).toEqual([
+      ...start,
+      tool,
+      { type: 'text', text: 'x' },
+    ]);
+    expect(start).toEqual([{ type: 'text', text: 'Hel' }]);
   });
 });

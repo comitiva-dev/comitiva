@@ -128,4 +128,39 @@ describe('ipc-channels', () => {
     const events: readonly (keyof typeof ipcEvents)[] = ipcEventChannels;
     expect(invoke.length + events.length).toBeGreaterThan(0);
   });
+
+  it('accepts user content with text, images or documents, never empty or tool blocks', () => {
+    const schema = ipcInvoke['messages.send'].input;
+    const text = (t: string) => ({ type: 'text', text: t });
+    expect(schema.safeParse({ conversationId: 'c', content: [text('hi')] }).success).toBe(true);
+    expect(schema.safeParse({ conversationId: 'c', content: [] }).success).toBe(false);
+    expect(schema.safeParse({ conversationId: 'c', content: [text('  ')] }).success).toBe(false);
+    expect(
+      schema.safeParse({
+        conversationId: 'c',
+        content: [{ type: 'tool_use', id: 't', toolServerId: 's', name: 'n', input: {} }],
+      }).success,
+    ).toBe(false);
+  });
+
+  it('defaults conversation listing to non-archived and message pages to 100', () => {
+    expect(ipcInvoke['conversations.list'].input.parse(undefined)).toEqual({ archived: false });
+    expect(ipcInvoke['messages.list'].input.parse({ conversationId: 'c' })).toEqual({
+      conversationId: 'c',
+      limit: 100,
+    });
+    expect(ipcInvoke['conversations.rename'].input.safeParse({ id: 'c', title: ' ' }).success).toBe(
+      false,
+    );
+  });
+
+  it('carries a positive rev on live message events', () => {
+    const delta = ipcEvents['message.delta'];
+    expect(
+      delta.safeParse({ conversationId: 'c', messageId: 'm', rev: 1, text: 'x' }).success,
+    ).toBe(true);
+    expect(
+      delta.safeParse({ conversationId: 'c', messageId: 'm', rev: 0, text: 'x' }).success,
+    ).toBe(false);
+  });
 });

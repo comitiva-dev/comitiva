@@ -2300,6 +2300,60 @@
                 "type": "string",
                 "format": "date-time",
                 "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "error": {
+                "default": null,
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "code": {
+                        "type": "string",
+                        "enum": [
+                          "auth_failed",
+                          "rate_limited",
+                          "provider_unavailable",
+                          "provider_error",
+                          "binary_not_found",
+                          "not_logged_in",
+                          "sandbox_unavailable",
+                          "outside_roots",
+                          "approval_denied",
+                          "invalid_request",
+                          "not_implemented",
+                          "unknown_provider",
+                          "not_found",
+                          "unsupported_content",
+                          "connection_in_use",
+                          "connection_disabled",
+                          "model_required",
+                          "secret_missing",
+                          "secret_store_unavailable",
+                          "runner_crashed",
+                          "runner_unavailable",
+                          "conversation_busy",
+                          "interrupted",
+                          "timeout",
+                          "internal"
+                        ]
+                      },
+                      "message": {
+                        "type": "string"
+                      },
+                      "retryable": {
+                        "type": "boolean"
+                      }
+                    },
+                    "required": [
+                      "code",
+                      "message",
+                      "retryable"
+                    ]
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
               }
             },
             "required": [

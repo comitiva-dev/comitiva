@@ -105,6 +105,7 @@ export function userText(conversationId: string, text: string, seq = 0): Message
     role: 'user',
     content: [{ type: 'text', text }],
     status: 'complete',
+    error: null,
     seq,
     createdAt: now,
   };

@@ -22,7 +22,22 @@ export const ipcInvokeChannels = [
   'agents.duplicate',
   'settings.get',
   'settings.update',
+  'conversations.list',
+  'conversations.create',
+  'conversations.rename',
+  'conversations.archive',
+  'conversations.markRead',
+  'messages.list',
+  'messages.send',
+  'messages.cancel',
+  'messages.retry',
   'dialogs.pickFolder',
 ] as const;
 
-export const ipcEventChannels = ['runner.status'] as const;
+export const ipcEventChannels = [
+  'runner.status',
+  'conversation.updated',
+  'message.updated',
+  'message.delta',
+  'message.block',
+] as const;

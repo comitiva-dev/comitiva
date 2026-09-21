@@ -59,3 +59,16 @@ export const Block = z.discriminatedUnion('type', [
   ToolResultBlock,
 ]);
 export type Block = z.infer<typeof Block>;
+
+/**
+ * Appends streamed text to a message's content: extends the last block when
+ * it is text, else starts a new text block (text after a tool block). Every
+ * shell applies deltas with this same rule, so snapshots and streams agree.
+ * Returns a new array; blocks are not mutated.
+ */
+export function appendText(content: readonly Block[], text: string): Block[] {
+  const last = content.at(-1);
+  if (last?.type === 'text')
+    return [...content.slice(0, -1), { type: 'text', text: last.text + text }];
+  return [...content, { type: 'text', text }];
+}

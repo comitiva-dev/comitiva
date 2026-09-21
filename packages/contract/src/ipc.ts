@@ -9,6 +9,9 @@ import {
   PermissionPolicy,
 } from './entities/agent.js';
 import { Connection } from './entities/connection.js';
+import { Conversation } from './entities/conversation.js';
+import { Message } from './entities/message.js';
+import { Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import {
   AnthropicConfig,
@@ -181,6 +184,50 @@ export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
 
 const ById = z.object({ id: Id });
 
+/** A conversation as a list shows it: the entity plus unread replies (local, per user). */
+export const ConversationSummary = z.object({
+  conversation: Conversation,
+  unread: z.number().int().nonnegative(),
+});
+export type ConversationSummary = z.infer<typeof ConversationSummary>;
+
+export const ConversationListInput = z
+  .object({ agentId: Id.optional(), archived: z.boolean().default(false) })
+  .default({ archived: false });
+export type ConversationListInput = z.input<typeof ConversationListInput>;
+
+/** What a user sends: text, images and documents (tool blocks come only from runs). */
+export const UserContent = z
+  .array(z.discriminatedUnion('type', [TextBlock, ImageBlock, DocumentBlock]))
+  .min(1)
+  .refine(
+    (blocks) => blocks.some((b) => b.type !== 'text' || b.text.trim() !== ''),
+    'message is empty',
+  );
+export type UserContent = z.infer<typeof UserContent>;
+
+export const MessageListInput = z.object({
+  conversationId: Id,
+  /** Only messages with a lower seq (older pages). */
+  beforeSeq: z.number().int().nonnegative().optional(),
+  limit: z.number().int().min(1).max(500).default(100),
+});
+export type MessageListInput = z.input<typeof MessageListInput>;
+
+/**
+ * A page of messages, oldest first. `live` names the message that is
+ * streaming right now and the `rev` its content is at: events for it with
+ * `rev <= live.rev` are already included and must be dropped (ADR 0008).
+ */
+export const MessagePage = z.object({
+  messages: z.array(Message),
+  hasMore: z.boolean(),
+  live: z.object({ messageId: Id, rev: z.number().int().nonnegative() }).nullable(),
+});
+export type MessagePage = z.infer<typeof MessagePage>;
+
+const ByConversation = z.object({ conversationId: Id });
+
 export const ipcInvoke = {
   'app.getVersion': { input: z.undefined(), output: z.string() },
   'runner.getStatus': { input: z.undefined(), output: z.object({ status: RunnerStatus }) },
@@ -206,6 +253,26 @@ export const ipcInvoke = {
   },
   'settings.get': { input: z.undefined(), output: AppSettings },
   'settings.update': { input: AppSettingsPatch, output: AppSettings },
+  'conversations.list': { input: ConversationListInput, output: z.array(ConversationSummary) },
+  'conversations.create': { input: z.object({ agentId: Id }), output: Conversation },
+  'conversations.rename': {
+    input: ById.extend({ title: z.string().trim().min(1).max(200) }),
+    output: Conversation,
+  },
+  'conversations.archive': { input: ById.extend({ archived: z.boolean() }), output: Conversation },
+  /** Marks every reply so far as read. */
+  'conversations.markRead': { input: ById, output: z.void() },
+  'messages.list': { input: MessageListInput, output: MessagePage },
+  /**
+   * Persists the user message and starts a run. Rejects before persisting
+   * anything with conversation_busy, connection_disabled, model_required or
+   * secret_missing. Run failures arrive later as an `error` message.
+   */
+  'messages.send': { input: ByConversation.extend({ content: UserContent }), output: z.void() },
+  /** Cancels the conversation's run; a no-op when none is running. */
+  'messages.cancel': { input: ByConversation, output: z.void() },
+  /** Runs the last errored reply again, in the same message. */
+  'messages.retry': { input: ByConversation, output: z.void() },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
 } as const;
@@ -220,8 +287,19 @@ export type IpcInput<C extends IpcInvokeChannel> = z.input<(typeof ipcInvoke)[C]
 export type IpcParsedInput<C extends IpcInvokeChannel> = z.output<(typeof ipcInvoke)[C]['input']>;
 export type IpcOutput<C extends IpcInvokeChannel> = z.infer<(typeof ipcInvoke)[C]['output']>;
 
+const LiveRef = { conversationId: Id, messageId: Id, rev: z.number().int().positive() };
+
+/**
+ * Main → renderer. Messages stream as `message.updated` snapshots (created,
+ * reset for retry, final state) plus `message.delta` / `message.block` with an
+ * increasing `rev` per live message (ADR 0008).
+ */
 export const ipcEvents = {
   'runner.status': z.object({ status: RunnerStatus }),
+  'conversation.updated': z.object({ conversation: Conversation }),
+  'message.updated': z.object({ message: Message }),
+  'message.delta': z.object({ ...LiveRef, text: z.string() }),
+  'message.block': z.object({ ...LiveRef, block: Block }),
 } as const;
 
 export type IpcEventChannel = keyof typeof ipcEvents;

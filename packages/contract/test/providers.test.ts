@@ -7,6 +7,7 @@ import {
   providerKind,
   providerDescriptors,
   secretRequirement,
+  titleModelFor,
 } from '../src/index.js';
 
 describe('provider descriptors', () => {
@@ -29,6 +30,15 @@ describe('provider descriptors', () => {
       if (p.id === 'custom') expect(p.baseUrl).toBe('');
       else expect(() => new URL(p.baseUrl)).not.toThrow();
     }
+  });
+
+  it('picks a cheap title model per provider or preset, or the agent model for local ones', () => {
+    expect(titleModelFor('anthropic', undefined, 'claude-opus-5')).toBe('claude-haiku-4-5');
+    expect(titleModelFor('openai-compatible', 'openai', 'gpt-5')).toBe('gpt-5-mini');
+    expect(titleModelFor('openai-compatible', 'openrouter', 'x')).toBeNull();
+    expect(titleModelFor('openai-compatible', 'lmstudio', 'qwen')).toBe('qwen');
+    expect(titleModelFor('ollama', undefined, 'llama3')).toBe('llama3');
+    expect(titleModelFor('ollama', undefined, '')).toBeNull();
   });
 
   it('resolves the key requirement through presets', () => {

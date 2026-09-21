@@ -203,6 +203,7 @@ describe('toProviderMessages', () => {
         conversationId: 'c',
         role: 'assistant',
         status: 'complete',
+        error: null,
         seq: 1,
         createdAt: at,
         content: [
@@ -220,6 +221,7 @@ describe('toProviderMessages', () => {
         conversationId: 'c',
         role: 'tool',
         status: 'complete',
+        error: null,
         seq: 2,
         createdAt: at,
         content: [

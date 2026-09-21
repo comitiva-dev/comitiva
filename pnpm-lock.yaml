@@ -51,6 +51,9 @@ importers:
       '@comitiva/contract':
         specifier: workspace:*
         version: link:../../packages/contract
+      '@comitiva/mcp-servers':
+        specifier: workspace:*
+        version: link:../../packages/mcp-servers
       '@comitiva/runner':
         specifier: workspace:*
         version: link:../../packages/runner

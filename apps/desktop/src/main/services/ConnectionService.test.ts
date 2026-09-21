@@ -3,30 +3,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { AppError, type ConnectionDraft } from '@comitiva/contract';
 import { Database } from '../db/Database';
 import { ConnectionRepository } from '../db/repositories/ConnectionRepository';
-import type { SecretStore } from '../secrets/SecretStore';
+import { MemorySecrets } from '../testing/MemorySecrets';
 import { ConnectionService } from './ConnectionService';
-
-class MemorySecrets implements SecretStore {
-  readonly values = new Map<string, string>();
-  available = true;
-  async set(ref: string, value: string) {
-    if (!this.available) throw new AppError('secret_store_unavailable', 'no keyring');
-    this.values.set(ref, value);
-  }
-  async get(ref: string) {
-    if (!this.available) throw new AppError('secret_store_unavailable', 'no keyring');
-    return this.values.get(ref) ?? null;
-  }
-  async has(ref: string) {
-    return this.values.has(ref);
-  }
-  async delete(ref: string) {
-    this.values.delete(ref);
-  }
-  status() {
-    return { available: this.available, weak: false };
-  }
-}
 
 let db: Database;
 let repo: ConnectionRepository;

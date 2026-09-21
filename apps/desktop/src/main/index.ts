@@ -1,11 +1,12 @@
 import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
-import { AppError } from '@comitiva/contract';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
 import { ConnectionRepository } from './db/repositories/ConnectionRepository';
 import { ConversationRepository } from './db/repositories/ConversationRepository';
 import { MessageRepository } from './db/repositories/MessageRepository';
+import { ToolApprovalRepository } from './db/repositories/ToolApprovalRepository';
+import { ToolServerRepository } from './db/repositories/ToolServerRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { UsageRepository } from './db/repositories/UsageRepository';
 import { IpcRouter } from './ipc/IpcRouter';
@@ -16,6 +17,7 @@ import { AgentService } from './services/AgentService';
 import { ConnectionService } from './services/ConnectionService';
 import { ConversationService } from './services/ConversationService';
 import { TitleService } from './services/TitleService';
+import { ToolServerService } from './services/ToolServerService';
 
 // One data directory named after the product, in dev and packaged builds.
 // COMITIVA_USER_DATA isolates e2e runs.
@@ -62,10 +64,6 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
-function notYet(): never {
-  throw new AppError('not_implemented', 'Not implemented yet');
-}
-
 async function bootstrap(): Promise<void> {
   const db = Database.open(paths.database());
   db.migrate(paths.migrations());
@@ -102,6 +100,18 @@ async function bootstrap(): Promise<void> {
   const agents = new AgentService(agentRepo);
   const settings = new SettingsRepository(db);
 
+  const toolServers = new ToolServerService({
+    repo: new ToolServerRepository(db),
+    secrets,
+    runner: supervisor.client,
+    // The app's own binary in Node mode, like the runner (ADR 0002).
+    filesystem: {
+      command: process.execPath,
+      args: [paths.filesystemServer()],
+      env: { ELECTRON_RUN_AS_NODE: '1' },
+    },
+  });
+
   const usage = new UsageRepository(db);
   const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
   const chat = new ConversationService({
@@ -115,6 +125,8 @@ async function bootstrap(): Promise<void> {
     runner: supervisor.client,
     title: new TitleService({ runner: supervisor.client, usage, secretFor }),
     workspacesDir: paths.workspaces(),
+    toolServers,
+    approvals: new ToolApprovalRepository(db),
   });
   chat.recover();
 
@@ -150,13 +162,13 @@ async function bootstrap(): Promise<void> {
       'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
       'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
       'dialogs.pickFolder': () => pickFolder(),
-      // Wired with ToolServerService and approvals later in Phase 5.
-      'toolServers.list': notYet,
-      'toolServers.create': notYet,
-      'toolServers.update': notYet,
-      'toolServers.delete': notYet,
-      'toolServers.test': notYet,
-      'approvals.decide': notYet,
+      'toolServers.list': () => toolServers.list(),
+      'toolServers.create': (draft) => toolServers.create(draft),
+      'toolServers.update': ({ id, patch }) => toolServers.update(id, patch),
+      'toolServers.delete': ({ id }) => toolServers.delete(id),
+      'toolServers.test': ({ id }) => toolServers.test(id),
+      'approvals.decide': ({ conversationId, toolUseId, decision }) =>
+        chat.decide(conversationId, toolUseId, decision),
     },
     isTrustedUrl,
   );

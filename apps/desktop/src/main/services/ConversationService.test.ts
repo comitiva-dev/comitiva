@@ -15,7 +15,10 @@ import { AgentRepository } from '../db/repositories/AgentRepository';
 import { ConnectionRepository } from '../db/repositories/ConnectionRepository';
 import { ConversationRepository } from '../db/repositories/ConversationRepository';
 import { MessageRepository } from '../db/repositories/MessageRepository';
+import { ToolApprovalRepository } from '../db/repositories/ToolApprovalRepository';
+import { ToolServerRepository } from '../db/repositories/ToolServerRepository';
 import { UsageRepository } from '../db/repositories/UsageRepository';
+import { MemorySecrets } from '../testing/MemorySecrets';
 import {
   buildHistory,
   ConversationService,
@@ -23,17 +26,22 @@ import {
   type RunnerPort,
 } from './ConversationService';
 import { TitleService } from './TitleService';
+import { ToolServerService } from './ToolServerService';
 
 /** Records run requests; tests play the runner's events with `send`. */
 class FakeRunner extends EventEmitter<{ 'run.event': [RunEvent & { receivedAt: number }] }> {
   readonly started: RunStartPayload[] = [];
   readonly cancelled: string[] = [];
+  readonly approved: Array<{ runId: string; toolUseId: string; decision: string }> = [];
   startRun(payload: RunStartPayload) {
     this.started.push(payload);
     return { runId: payload.runId! };
   }
   cancelRun(runId: string) {
     this.cancelled.push(runId);
+  }
+  approve(runId: string, toolUseId: string, decision: string) {
+    this.approved.push({ runId, toolUseId, decision });
   }
   send(runId: string, event: RunEventPayload, receivedAt = Date.now()) {
     this.emit('run.event', { ...event, runId, receivedAt } as RunEvent & { receivedAt: number });
@@ -86,6 +94,13 @@ function makeService(titleService: unknown = title) {
     runner: runner as unknown as RunnerPort,
     title: titleService as TitleService,
     workspacesDir: '/data/workspaces',
+    toolServers: new ToolServerService({
+      repo: new ToolServerRepository(db),
+      secrets: new MemorySecrets(),
+      runner: { startToolServer: vi.fn(), stopToolServer: vi.fn() } as never,
+      filesystem: { command: '/app/node', args: ['/app/filesystem.cjs'], env: {} },
+    }),
+    approvals: new ToolApprovalRepository(db),
   });
   for (const channel of [
     'conversation.updated',
@@ -601,6 +616,172 @@ describe('ConversationService: snapshots, shutdown and recovery', () => {
     agents.delete('a1');
     runner.send(runId, done()); // nothing to write any more; must not throw
     expect(conversations.get(conversation.id)).toBeNull();
+  });
+});
+
+describe('ConversationService: tools and approvals', () => {
+  const toolUse = (id: string, name = 'fs__write_file'): RunEventPayload => ({
+    type: 'run.block',
+    block: { type: 'tool_use', id, toolServerId: 'filesystem', name, input: { path: '/w/a.txt' } },
+  });
+  const toolCall = (id: string, requiresApproval = true): RunEventPayload => ({
+    type: 'run.tool_call',
+    toolUseId: id,
+    toolServerId: 'filesystem',
+    toolName: 'write_file',
+    input: { path: '/w/a.txt' },
+    requiresApproval,
+  });
+  const toolResult = (id: string, isError = false): RunEventPayload => ({
+    type: 'run.tool_result',
+    toolUseId: id,
+    output: [{ type: 'text', text: isError ? 'approval_denied: no' : 'Created /w/a.txt' }],
+    isError,
+    durationMs: 4,
+  });
+
+  beforeEach(() => {
+    agents.update('a1', {
+      toolServerIds: ['filesystem'],
+      roots: [{ path: '/w', mode: 'readwrite' }],
+    });
+  });
+
+  it('starts the run with the agent servers and its always-allowed tools', async () => {
+    await started();
+    expect(runner.started[0]).toMatchObject({
+      toolServers: [
+        {
+          id: 'filesystem',
+          transport: 'stdio',
+          builtin: 'filesystem',
+          command: '/app/node',
+          args: ['/app/filesystem.cjs'],
+        },
+      ],
+      alwaysAllowed: [],
+    });
+  });
+
+  it('waits for approval: status, pending approval in events and lists, then the decision', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, toolUse('t1'));
+    runner.send(runId, toolCall('t1'));
+    expect(conversations.get(conversation.id)!.status).toBe('awaiting-approval');
+    const pending = {
+      toolUseId: 't1',
+      toolServerId: 'filesystem',
+      toolName: 'write_file',
+      input: { path: '/w/a.txt' },
+    };
+    expect(of('conversation.updated').at(-1)).toMatchObject({ pendingApproval: pending });
+    expect(service.list({ archived: false })[0]!.pendingApproval).toEqual(pending);
+
+    expect(() => service.decide(conversation.id, 'other', 'allow')).toThrow(
+      expect.objectContaining({ code: 'invalid_request' }),
+    );
+    service.decide(conversation.id, 't1', 'allow');
+    expect(runner.approved).toEqual([{ runId, toolUseId: 't1', decision: 'allow' }]);
+    expect(conversations.get(conversation.id)!.status).toBe('running');
+    expect(of('conversation.updated').at(-1)).toMatchObject({ pendingApproval: null });
+    expect(service.list({ archived: false })[0]!.pendingApproval).toBeNull();
+    // A decision is taken once.
+    expect(() => service.decide(conversation.id, 't1', 'allow')).toThrow();
+  });
+
+  it('persists tool_use and tool_result blocks in the reply and sends them in the next history', async () => {
+    const { conversation, runId, reply } = await started();
+    runner.send(runId, { type: 'run.text_delta', text: 'Writing. ' });
+    runner.send(runId, toolUse('t1'));
+    runner.send(runId, toolCall('t1'));
+    service.decide(conversation.id, 't1', 'allow');
+    runner.send(runId, toolResult('t1'));
+    runner.send(runId, { type: 'run.text_delta', text: 'Done.' });
+    runner.send(runId, usage());
+    runner.send(runId, done());
+    const saved = messages.get(reply.id)!;
+    expect(saved.content.map((b) => b.type)).toEqual(['text', 'tool_use', 'tool_result', 'text']);
+    expect(saved.content[2]).toEqual({
+      type: 'tool_result',
+      toolUseId: 't1',
+      content: [{ type: 'text', text: 'Created /w/a.txt' }],
+      isError: false,
+      durationMs: 4,
+    });
+    expect(of('message.block').map((e) => e.block.type)).toEqual(['tool_use', 'tool_result']);
+    expect(conversations.get(conversation.id)!.status).toBe('idle');
+
+    await service.sendMessage(conversation.id, text('Again'));
+    const history = runner.started[1]!.messages;
+    expect(history[1]!.content.map((b) => b.type)).toEqual([
+      'text',
+      'tool_use',
+      'tool_result',
+      'text',
+    ]);
+  });
+
+  it('records every decision, and allow-always reaches the next run', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, toolUse('t1'));
+    runner.send(runId, toolCall('t1'));
+    service.decide(conversation.id, 't1', 'allow-always');
+    runner.send(runId, toolResult('t1'));
+    runner.send(runId, done());
+    const second = await started();
+    runner.send(second.runId, toolUse('t2', 'fs__delete'));
+    runner.send(second.runId, { ...toolCall('t2'), toolName: 'delete' } as RunEventPayload);
+    service.decide(second.conversation.id, 't2', 'deny');
+    const approvals = new ToolApprovalRepository(db);
+    expect(approvals.listByConversation(conversation.id)).toMatchObject([
+      { agentId: 'a1', toolUseId: 't1', toolName: 'write_file', decision: 'allow-always' },
+    ]);
+    expect(approvals.listByConversation(second.conversation.id)[0]).toMatchObject({
+      decision: 'deny',
+    });
+    expect(runner.started[1]!.alwaysAllowed).toEqual(['filesystem:write_file']);
+  });
+
+  it('does not wait for calls that need no approval', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, toolUse('t1', 'fs__read_file'));
+    runner.send(runId, toolCall('t1', false));
+    expect(conversations.get(conversation.id)!.status).toBe('running');
+  });
+
+  it('cancel while waiting ends the reply cancelled and clears the pending approval', async () => {
+    const { conversation, runId, reply } = await started();
+    runner.send(runId, toolUse('t1'));
+    runner.send(runId, toolCall('t1'));
+    service.cancel(conversation.id);
+    expect(runner.cancelled).toEqual([runId]);
+    runner.send(runId, usage({ estimated: true }));
+    runner.send(runId, done('cancelled'));
+    expect(messages.get(reply.id)!.status).toBe('cancelled');
+    expect(conversations.get(conversation.id)!.status).toBe('idle');
+    expect(of('conversation.updated').at(-1)).toMatchObject({ pendingApproval: null });
+    expect(() => service.decide(conversation.id, 't1', 'allow')).toThrow();
+  });
+
+  it('refuses to send when a server secret is missing, before writing anything', async () => {
+    const repo = new ToolServerRepository(db);
+    repo.create({
+      id: 'gh',
+      name: 'GitHub',
+      transport: 'stdio',
+      command: 'gh-mcp',
+      args: [],
+      env: { TOKEN: { secretRef: 'toolServer:gh:env:TOKEN' } },
+      url: null,
+      headers: {},
+      enabled: true,
+    });
+    agents.update('a1', { toolServerIds: ['gh'] });
+    const conversation = service.create('a1');
+    await expect(service.sendMessage(conversation.id, text('hi'))).rejects.toMatchObject({
+      code: 'secret_missing',
+    });
+    expect(messages.all(conversation.id)).toEqual([]);
   });
 });
 

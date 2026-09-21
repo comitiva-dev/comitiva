@@ -5,6 +5,7 @@ import {
   appendText,
   type Agent,
   type AppErrorShape,
+  type ApprovalDecision,
   type Block,
   type Connection,
   type Conversation,
@@ -13,8 +14,10 @@ import {
   type Message,
   type MessagePage,
   type MessageStatus,
+  type PendingApproval,
   type RunEvent,
   type RunUsageEvent,
+  type ToolServerLaunch,
   type UserContent,
 } from '@comitiva/contract';
 import type { RunnerClient } from '@comitiva/runner';
@@ -23,11 +26,13 @@ import type { AgentRepository } from '../db/repositories/AgentRepository';
 import type { ConnectionRepository } from '../db/repositories/ConnectionRepository';
 import type { ConversationRepository } from '../db/repositories/ConversationRepository';
 import type { MessageRepository } from '../db/repositories/MessageRepository';
+import type { ToolApprovalRepository } from '../db/repositories/ToolApprovalRepository';
 import type { UsageRepository } from '../db/repositories/UsageRepository';
 import { placeholderTitle, type TitleService } from './TitleService';
+import type { ToolServerService } from './ToolServerService';
 import { resolveWorkingDirectory } from './workingDirectory';
 
-export type RunnerPort = Pick<RunnerClient, 'startRun' | 'cancelRun' | 'on' | 'off'>;
+export type RunnerPort = Pick<RunnerClient, 'startRun' | 'cancelRun' | 'approve' | 'on' | 'off'>;
 
 export interface ConversationEvents {
   'conversation.updated': [IpcEventPayload<'conversation.updated'>];
@@ -47,6 +52,9 @@ export interface ConversationServiceDeps {
   secretFor(connection: Connection): Promise<string | undefined>;
   runner: RunnerPort;
   title: TitleService;
+  /** The agent's MCP servers, resolved for a run (secrets included). */
+  toolServers: Pick<ToolServerService, 'launchesFor'>;
+  approvals: ToolApprovalRepository;
   /** `<userData>/workspaces`: default working directory of CLI harness conversations. */
   workspacesDir: string;
   timing?: { uiFlushMs?: number; dbFlushMs?: number; cancelGraceMs?: number };
@@ -58,6 +66,8 @@ interface RunContext {
   connection: Connection;
   model: string;
   secret: string | undefined;
+  toolServers: ToolServerLaunch[];
+  alwaysAllowed: string[];
 }
 
 /** One active run: the streaming reply lives here until it is final. */
@@ -74,6 +84,8 @@ interface LiveRun extends RunContext {
   cancelTimer: NodeJS.Timeout | undefined;
   usage: RunUsageEvent | undefined;
   startedAt: number;
+  /** A tool call waiting for the user (tools run one at a time: at most one). */
+  pending: PendingApproval | undefined;
 }
 
 /**
@@ -87,6 +99,11 @@ interface LiveRun extends RunContext {
  * `message.updated` snapshots plus `message.delta` / `message.block`, all
  * numbered by one `rev` per conversation, so a list fetched mid-stream lines
  * up with the stream (ADR 0008).
+ *
+ * Tools: the reply keeps its tool_use and tool_result blocks in order (the
+ * runner splits them into provider turns). A `run.tool_call` that needs
+ * approval puts the conversation in `awaiting-approval` with a pending
+ * approval; `decide` records the answer and sends `run.approval`.
  */
 export class ConversationService extends EventEmitter<ConversationEvents> {
   /** Conversations with a run starting or streaming: the double-send guard. */
@@ -111,7 +128,10 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   // ------------------------------------------------------------ conversations
 
   list(filter: { agentId?: string | undefined; archived: boolean }): ConversationSummary[] {
-    return this.deps.conversations.list(filter);
+    return this.deps.conversations.list(filter).map((s) => ({
+      ...s,
+      pendingApproval: this.live.get(s.conversation.id)?.pending ?? null,
+    }));
   }
 
   create(agentId: string): Conversation {
@@ -238,6 +258,34 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
     );
   }
 
+  /**
+   * The user's answer to the pending tool call: recorded (allow-always makes
+   * later calls of that tool by this agent run without asking), sent to the
+   * runner, and the conversation goes back to `running`.
+   */
+  decide(conversationId: string, toolUseId: string, decision: ApprovalDecision): void {
+    const run = this.live.get(conversationId);
+    const pending = run?.pending;
+    if (!run || pending?.toolUseId !== toolUseId) {
+      throw new AppError('invalid_request', 'Nothing is waiting for that decision');
+    }
+    const conversation = this.deps.db.transaction(() => {
+      this.deps.approvals.insert({
+        conversationId,
+        agentId: run.agent.id,
+        toolUseId,
+        toolServerId: pending.toolServerId,
+        toolName: pending.toolName,
+        input: pending.input,
+        decision,
+      });
+      return this.deps.conversations.setStatus(conversationId, 'running');
+    });
+    run.pending = undefined;
+    this.deps.runner.approve(run.runId, toolUseId, decision);
+    this.updated(conversation);
+  }
+
   /** Before an agent (and, by cascade, its conversations) is deleted: stop its runs, write nothing. */
   forgetAgent(agentId: string): void {
     for (const run of [...this.live.values()]) {
@@ -278,11 +326,13 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
       throw new AppError('model_required', `Agent ${agent.name} has no model`);
     }
     const secret = await this.deps.secretFor(connection);
-    return { agent, connection, model, secret };
+    const toolServers = await this.deps.toolServers.launchesFor(agent);
+    const alwaysAllowed = this.deps.approvals.alwaysAllowed(agent.id);
+    return { agent, connection, model, secret, toolServers, alwaysAllowed };
   }
 
   private start(ctx: RunContext, reply: Message): void {
-    const { agent, connection, secret } = ctx;
+    const { agent, connection, secret, toolServers, alwaysAllowed } = ctx;
     const conversationId = reply.conversationId;
     const history = buildHistory(
       this.deps.messages.all(conversationId).filter((m) => m.seq < reply.seq),
@@ -299,6 +349,7 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
       cancelTimer: undefined,
       usage: undefined,
       startedAt: Date.now(),
+      pending: undefined,
     };
     // Registered before the request goes out: a failed start comes back as run.error.
     this.live.set(conversationId, run);
@@ -315,6 +366,8 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
       agent,
       connection,
       messages: history,
+      toolServers,
+      alwaysAllowed,
       ...(secret !== undefined ? { secret } : {}),
       ...(harnessSessionId !== undefined ? { harnessSessionId } : {}),
       ...(workingDirectory !== undefined ? { workingDirectory } : {}),
@@ -349,22 +402,31 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
         this.scheduleDb(run);
         return;
       case 'run.block':
-        this.flushUi(run); // pending text goes out before the block
-        run.blocks = [...run.blocks, e.block];
-        this.emit('message.block', {
-          conversationId: run.conversationId,
-          messageId: run.messageId,
-          rev: this.nextRev(run.conversationId),
-          block: e.block,
-        });
-        this.scheduleDb(run);
+        this.addBlock(run, e.block);
         return;
       case 'run.usage':
         run.usage = e; // written with the terminal event: one record per run
         return;
       case 'run.tool_call':
+        if (!e.requiresApproval) return;
+        run.pending = {
+          toolUseId: e.toolUseId,
+          toolServerId: e.toolServerId,
+          toolName: e.toolName,
+          input: e.input,
+        };
+        this.updated(this.deps.conversations.setStatus(run.conversationId, 'awaiting-approval'));
+        return;
       case 'run.tool_result':
-        return; // Phase 5
+        if (run.pending?.toolUseId === e.toolUseId) run.pending = undefined;
+        this.addBlock(run, {
+          type: 'tool_result',
+          toolUseId: e.toolUseId,
+          content: e.output,
+          isError: e.isError,
+          durationMs: e.durationMs,
+        });
+        return;
       case 'run.done':
         this.finish(
           run,
@@ -382,6 +444,18 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
         );
         return;
     }
+  }
+
+  private addBlock(run: LiveRun, block: Block): void {
+    this.flushUi(run); // pending text goes out before the block
+    run.blocks = [...run.blocks, block];
+    this.emit('message.block', {
+      conversationId: run.conversationId,
+      messageId: run.messageId,
+      rev: this.nextRev(run.conversationId),
+      block,
+    });
+    this.scheduleDb(run);
   }
 
   private flushUi(run: LiveRun): void {
@@ -492,7 +566,8 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   }
 
   private updated(conversation: Conversation): Conversation {
-    this.emit('conversation.updated', { conversation, pendingApproval: null });
+    const pendingApproval = this.live.get(conversation.id)?.pending ?? null;
+    this.emit('conversation.updated', { conversation, pendingApproval });
     return conversation;
   }
 
@@ -505,9 +580,10 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
 /**
  * The history a run gets: finished messages only (errored and streaming
  * replies are left out; cancelled ones keep what the user saw). Tool blocks
- * a CLI harness reported (`harness:*`) are display-only: the harness keeps
- * its own history, and an API provider would reject them. Messages left
- * empty are dropped.
+ * a CLI harness reported for its native tools (`harness:*`) are display-only:
+ * the harness keeps its own history, and an API provider would reject them.
+ * Calls to MCP tools stay (the runner pairs them into provider turns).
+ * Messages left empty are dropped.
  */
 export function buildHistory(messages: readonly Message[]): Message[] {
   const harnessTools = new Set<string>();

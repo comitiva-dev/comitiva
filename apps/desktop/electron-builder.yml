@@ -9,11 +9,17 @@ directories:
 files:
   - out/**
   - package.json
-# The runner is a separate Node process (ELECTRON_RUN_AS_NODE, ADR 0002) and
-# migrations are read from disk at startup: both live outside the asar.
+# The runner and the built-in MCP servers are separate Node processes
+# (ELECTRON_RUN_AS_NODE, ADR 0002), the MCP proxy for CLI harnesses sits next
+# to the runner (ADR 0009), and migrations are read from disk at startup: all
+# live outside the asar.
 extraResources:
   - from: ../../packages/runner/dist/bin.cjs
     to: runner/bin.cjs
+  - from: ../../packages/runner/dist/mcp-proxy.cjs
+    to: runner/mcp-proxy.cjs
+  - from: ../../packages/mcp-servers/dist/filesystem.cjs
+    to: mcp-servers/filesystem.cjs
   - from: src/main/db/migrations
     to: migrations
 asarUnpack:

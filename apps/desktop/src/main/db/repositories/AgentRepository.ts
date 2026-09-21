@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { asc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { Agent, AppError, type ValidAgentDraft, type ValidAgentPatch } from '@comitiva/contract';
@@ -190,6 +191,9 @@ function validate(candidate: unknown): Agent {
   const paths = parsed.data.roots.map((r) => r.path);
   if (new Set(paths).size !== paths.length) {
     throw new AppError('invalid_request', 'Invalid agent: a root is listed twice');
+  }
+  if (paths.some((p) => !isAbsolute(p))) {
+    throw new AppError('invalid_request', 'Invalid agent: roots must be absolute paths');
   }
   return parsed.data;
 }

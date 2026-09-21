@@ -8,6 +8,12 @@ export const paths = {
       ? join(process.resourcesPath, 'runner', 'bin.cjs')
       : join(app.getAppPath(), '..', '..', 'packages', 'runner', 'dist', 'bin.cjs');
   },
+  /** The built-in filesystem MCP server, run with the app's own binary in Node mode. */
+  filesystemServer(): string {
+    return app.isPackaged
+      ? join(process.resourcesPath, 'mcp-servers', 'filesystem.cjs')
+      : join(app.getAppPath(), '..', '..', 'packages', 'mcp-servers', 'dist', 'filesystem.cjs');
+  },
   migrations(): string {
     return app.isPackaged
       ? join(process.resourcesPath, 'migrations')

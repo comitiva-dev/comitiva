@@ -8,6 +8,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 - `docs/design.md` — how it is built: file layout, package names, data model, classes and methods, runner protocol, flows, commands. Follow it unless there is a reason to deviate; if you deviate, say so and update it in the same commit.
 - `docs/architecture.md` — processes, runner protocol, boundaries, data locations.
 - `docs/providers.md` — how to add a provider adapter (rules, shared helpers, conformance tests).
+- `docs/tools.md` — tools, roots, the permission gate and approvals, the CLI MCP proxy, adding MCP servers.
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
@@ -15,8 +16,8 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 
 ```
 packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
-packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs) + RunnerClient + testing/ fake providers
-packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (Phase 5+)
+packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs, dist/mcp-proxy.cjs) + RunnerClient + testing/ fakes
+packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (dist/filesystem.cjs; google-drive in 5b)
 apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
 ```
 

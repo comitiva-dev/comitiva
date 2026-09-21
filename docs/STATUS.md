@@ -2,11 +2,139 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 4 — Full chat with parallelism, persistence, retry, auto-title (done)
+## Current phase: 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals (done)
+
+Done when an agent reads and creates a file in an allowed directory, a write asks for approval, and a path outside the root is denied: yes. The first test of `e2e/tools.spec.ts` covers it through the built app. The agent is set up in the form (folder picker, Files, "Ask before changes"). It reads a file on its own. The write waits on the approval card, the sidebar says "Approve", and after **Allow** the file is on disk. A read outside the folder comes back `outside_roots` from the server. The same path is covered for both CLI harnesses through the runner's MCP proxy, and by hand with the real Claude Code and Codex.
+
+### Done
+
+- **Approval handshake (confirmed before implementing), ADR 0009:**
+  - The runner is the only MCP client of every server.
+  - API runs: the tool loop calls `Run.callTool`.
+  - CLI harnesses: they get a single MCP server, `comitiva`, which is `mcp-proxy.cjs` launched by the harness. It forwards every call over a local socket, with a per-run token, to the same `Run.callTool`.
+  - `PermissionGate` decides allow, ask or deny. `ask` emits `run.tool_call { requiresApproval }` and waits for `run.approval`.
+  - The filesystem server never asks. It exposes write tools only when started with `--gated-by-client`.
+- **Contract:**
+  - `ToolServerLaunch` (a server with its secrets resolved) in `toolServer.start` (plus `roots`) and in `run.start.toolServers`.
+  - IPC `toolServers.list | create | update | delete | test` and `approvals.decide`.
+  - `ToolServerDraft`/`Patch`, whose values are `{ value } | { secret } | { keepSecret }`.
+  - `PendingApproval` on `ConversationSummary` and on `conversation.updated`.
+  - New error codes `read_only_root`, `tool_failed` and `tool_server_failed`.
+  - `AgentParams.maxToolIterations`, `ToolUseBlock.signature`, and `FILESYSTEM_TOOL_SERVER_ID`.
+- **mcp-servers:** `filesystem` (`dist/filesystem.cjs`, bin `comitiva-mcp-filesystem`).
+  - Tools: `list_dir`, `read_file` (text by line range, or images), `search` (name glob plus content), `write_file`, `create_dir`, `move` and `delete`, annotated `readOnlyHint` or `destructiveHint`.
+  - `RootGuard` compares the realpaths of the candidate and the roots. It refuses `..`, absolute paths outside the roots, symlinks pointing out, dangling symlinks, and writes under read-only roots. The most specific root wins.
+  - Errors come back as `isError` results that start with the stable code.
+- **Runner:**
+  - `McpClientManager` keeps one client per server launch (stdio, or Streamable HTTP).
+    - Clients start on demand, are reused across runs, and restart on their next use after a crash. Failed starts back off.
+    - The filesystem server runs one instance per set of roots.
+    - An edited server replaces its client once the client is idle.
+  - `ToolCatalog` gives prefixed names (`fs__read_file`).
+  - `PermissionGate`: allow-always, the three policies, and read-only tools hidden under `read-only`.
+  - `toolLoop` runs for all four API adapters:
+    - Anthropic `tool_use` with streamed JSON
+    - OpenAI `tool_calls`
+    - Gemini `functionCall`, with thought signatures sent back
+    - Ollama `tool_calls`
+
+    It has an iteration limit (25) and one summed usage per run.
+  - `normalizeHistory` turns stored replies into strict tool_use/tool_result pairs.
+  - `toolServer.start/stop` and `run.approval`, plus `RunnerClient.startToolServer/stopToolServer`.
+  - CLI harnesses:
+    - `ToolBridge` and `mcp-proxy.cjs`.
+    - Claude Code gets `--mcp-config`, `MCP_TOOL_TIMEOUT`, and `--tools WebSearch,WebFetch` when the agent has Files.
+    - Codex gets `-c mcp_servers.comitiva.*` with `default_tools_approval_mode="approve"`, and a read-only sandbox when the agent has Files.
+    - The parsers drop the harness's own copy of proxy calls.
+    - The working directory is the agent's first read-write root.
+  - Test kit:
+    - the in-memory fake MCP server (`createFakeMcp`)
+    - `[tool:NAME {json}]` in the fake providers
+    - `[mcp:NAME {json}]` in the fake harnesses, which really connect to the proxy
+- **Desktop main:**
+  - Migration `0004_builtin_tool_servers` seeds the Files server.
+  - `ToolServerRepository` and `ToolApprovalRepository`.
+  - `ToolServerService`:
+    - Secret env vars and headers go to the SecretStore (`toolServer:<id>:env|header:<NAME>`).
+    - It resolves launches per run, restarts servers in the runner after edits, and tests them through `toolServer.start`.
+    - Built-ins can only be toggled.
+  - `ConversationService`:
+    - `run.start` carries the servers and `alwaysAllowed`.
+    - A call that needs approval sets `awaiting-approval` and a pending approval.
+    - `decide` records the decision and answers the runner.
+    - `tool_use` and `tool_result` blocks are kept in the reply.
+  - Agent roots must be absolute.
+  - Packaging ships `mcp-proxy.cjs` next to the runner, and `mcp-servers/filesystem.cjs`.
+- **Renderer:**
+  - `Backend.toolServers` and `Backend.approvals`.
+  - A pending approval per conversation. The agent status order is awaiting-approval > running > error > idle.
+  - `ToolCallBlock` states: waiting for you, running, done, failed, denied, no result.
+  - `ApprovalCard`: Allow / Deny / Always allow for this agent, with the paths involved.
+  - Sidebar "Approve" flag.
+  - Tools screen: a built-in badge, an enable switch, Test (lists the tools, read-only marked), and a form for stdio or http servers whose secret rows are masked and never prefilled.
+  - Agent form: Folders (native picker, read or read-write, reorder), the Tools checklist and the permission policy. The panel shows them.
+  - Strings in en and pt-BR, including the Codex warning, which now explains the read-only sandbox.
+- **Docs:** `docs/tools.md` (new) and ADR 0009. SPEC §4.1–4.3 and §7, `design.md`, `architecture.md` and `providers.md` are synced.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 494 tests: contract 49, runner 226, desktop 197, mcp-servers 22 (Phase 4: 395). |
+| `pnpm contract:schema` / `pnpm --filter desktop db:generate` | `Agent.json`, `AppError.json`, `Block.json`, `Message.json` and the runner protocol schemas regenerated. `0004_builtin_tool_servers.sql` is a custom migration (seed only). |
+| mcp-servers | `RootGuard` (10 tests): relative paths; `..`; absolute outside; a symlinked file and folder pointing out, and new files under them; a dangling symlink; symlinks that stay inside; a symlinked root; read-only roots and nested roots; no roots; NUL. Every tool over the in-memory transport, including 15 escape attempts that leave the outside untouched, no write tools without `--gated-by-client`, and the bundled binary over stdio. |
+| Runner | The loop with a scripted adapter and the fake MCP server (13): read-only runs, allow, deny, allow-always within a run and from `run.start`, allow-writes, read-only hides and refuses, cancel while waiting, cancel during a slow tool (the server sees the cancel), the iteration limit, a crash mid-call then a restart, a server that cannot start plus backoff, reuse across runs, name collisions. Units: gate, history, results, catalog, manager (roots, supersede, stop), bridge token. The conformance suite adds a tool round trip for all four providers. The runner binary with the real filesystem server (Anthropic and OpenAI-compatible): read, write after approval, refused outside, deny, cancel. Both fake harnesses through the proxy: argv (`--tools`, `--mcp-config`, read-only sandbox, `default_tools_approval_mode`), cwd = root, the config removed after the turn. |
+| Desktop main | Repositories: seed, secret refs only, built-ins protected, approvals and `alwaysAllowed`. `ToolServerService` (8): secrets never in SQLite, launches, missing secret, keep/replace/drop secrets, built-ins, keyring unavailable, test. `ConversationService` (7 new): servers and `alwaysAllowed` in `run.start`, awaiting approval with the pending approval in events and lists, decide once, blocks persisted and replayed, allow-always reaching the next run, cancel while waiting, `secret_missing` before writing. |
+| Renderer logic | `store/conversations` (pending, decide, status order), `store/toolServers`, `lib/toolServerForm`, `lib/agentForm` (folders, tools, policy), `lib/chat` (labels, states, targets), i18n parity and error codes. |
+| `pnpm --filter desktop test:e2e` | 33/33 green (28 earlier + 5 new in `tools.spec.ts`): the exit criterion; deny; allow always for one agent (another still asks, and Stop while waiting leaves no file); a CLI harness through the proxy under Electron; the Tools screen (built-in test lists 7 tools, a third-party server with a secret env var that is in neither `comitiva.db*` nor the listing, edit keeps it, disable removes it from the agent form). |
+| **Real CLIs**, by hand through the runner binary with the real filesystem server | **Claude Code 2.1.278**: it read `notes.txt` through the proxy, `write_file` waited for approval, and `answer.txt` was created. Block ids are Claude's own `toolu_…` (from `_meta`). **Codex 0.155.1**: the same, after adding `default_tools_approval_mode="approve"`. Without it, Codex declined `write_file` itself ("unavailable without approval") and never called the proxy. |
+| UI | Screenshots of the approval card, the finished tool blocks (with the `outside_roots` result expanded) and the Tools screen (`apps/desktop/test-results/tools-*.png`), in pt-BR. |
+| `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
+
+### Deviations from the plan and design (all reflected in the docs)
+
+1. **Handshake:** the runner's MCP proxy instead of the filesystem server asking over `--approval-socket` (ADR 0009, confirmed before implementing). Third-party servers are gated under harnesses too, and no secret goes into a temp file.
+2. `toolServer.start` takes a resolved `ToolServerLaunch` (secrets inside) instead of `toolServer` plus `secrets`. `run.start` gained `toolServers`.
+3. There is no `approval.requested` event. The pending approval rides on `conversation.updated` and `conversations.list`.
+4. A reply keeps its `tool_use` and `tool_result` blocks in one assistant message. The runner splits it into assistant/tool turns (`normalizeHistory`), instead of main writing separate `tool` messages.
+5. There is no `ApprovalService`: `decide` lives in `ConversationService`, which owns the live run.
+6. The built-in server has the fixed id `filesystem`, seeded by a custom SQL migration. There is no new column, and its command is resolved by main at run time.
+7. Filesystem tool names follow design.md (`list_dir`, `read_file`, …). SPEC is updated.
+8. Under the `read-only` policy, write tools are hidden from the model as well as refused.
+9. `ToolUseBlock.signature` was added for Gemini thought signatures.
+10. MCP client instances are keyed by server plus launch spec and roots. Idle filesystem instances close after 10 min.
+
+### Decisions
+
+- **New folders** are read-write (writes still ask under the default policy). The first folder turns on the Files tool.
+- **Allow always** applies to one server's tool for one agent, from that moment in the run and in every later run.
+- **Claude Code with Files:** only `WebSearch` and `WebFetch` stay native. Bash is off too, because it can write files.
+- **Codex with Files:** a read-only sandbox (`apply_patch` cannot be turned off), and `default_tools_approval_mode="approve"` for the proxy (the runner is the gate).
+- **A server that cannot start** fails the run with `tool_server_failed`, instead of running without it.
+
+### Open
+
+- Allow-always decisions cannot be revoked from the UI yet. They are rows in `tool_approvals`.
+- Tool results with images reach Anthropic as images, but OpenAI-compatible, Gemini and Ollama get `[image not shown]` (their tool results are text here).
+- MCP `tools/list_changed` is not followed: tools are listed once per client start. HTTP servers use Streamable HTTP only: no SSE fallback, and OAuth comes in 5b.
+- `RootGuard` does not defend against a process swapping a folder for a symlink between the check and the operation. `delete` or `move` on a symlink inside the roots acts on its target, which is also inside.
+- The bridge (named pipe), the proxy and the filesystem server have not run on Windows or macOS.
+- The real-provider check with tools: no API key on the dev machine (carried over from Phase 1).
+- Carried over: the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
+
+## Next: Phase 5b — Google Drive and third-party servers
+
+1. Decide the `google-drive` server: our own, or a community one (SPEC §7).
+2. OAuth (loopback) in main, with tokens in `safeStorage`, injected as env when the server starts, and refreshed.
+3. The server: `search`, `read` (Docs → text, Sheets → CSV), `create`, `update`, `move`, with the same annotations and approvals.
+4. Third-party servers: OAuth for http servers if needed, and revoking allow-always decisions.
+5. Done when an agent reads a Google Doc and creates another one with approval.
+
+## Phase 4 — Full chat with parallelism, persistence, retry, auto-title (done)
 
 Done when two agents respond at the same time: yes. Two agents stream at once and the sidebar shows both responding (e2e `chat.spec.ts`, first test).
 
-### Done
+#### Done
 
 - **Contract**:
   - New channels:
@@ -47,7 +175,7 @@ Done when two agents respond at the same time: yes. Two agents stream at once an
   - Strings in en and pt-BR. A new test checks that every `ErrorCode` has a translation; `conversation_busy` and `interrupted` were missing.
 - **Docs**: ADR 0008 (live message events and revisions). `design.md` and `architecture.md` are synced.
 
-### Verification
+#### Verification
 
 | Check | Result |
 |---|---|
@@ -59,7 +187,7 @@ Done when two agents respond at the same time: yes. Two agents stream at once an
 | UI | Screenshots of the parallel stream, the error card and the restored conversation (`apps/desktop/test-results/`), in pt-BR (the machine locale). |
 | `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
 
-### Deviations from the plan and design (all reflected in docs/design.md)
+#### Deviations from the plan and design (all reflected in docs/design.md)
 
 1. The channel set changed from the Phase 0 sketch. `conversations.listByAgent` became `conversations.list({ agentId?, archived })`, so one call at boot loads every agent's status and unread count. `setStatus` is not a channel, because status belongs to main. `markRead` is new.
 2. `message.completed` became `message.updated`, a full snapshot sent on create, on reset for retry and at the end. Each message event carries a per-conversation `rev`; it started per reply and was changed in `495ca1e`. See ADR 0008.
@@ -67,28 +195,20 @@ Done when two agents respond at the same time: yes. Two agents stream at once an
 4. There is no `ChatScreen`: the chat lives in the Agents screen's center column, as SPEC §5 describes.
 5. The harness session is stored with the connection it belongs to (`harness_connection_id`). Moving an agent to another connection therefore replays the history instead of resuming a foreign session.
 
-### Decisions
+#### Decisions
 
 - **Selection**: opening an agent shows its most recent conversation. "New conversation" is an explicit empty state, and the conversation is created on the first send.
 - **Unread**: a finished reply counts as unread unless its conversation is on screen. The count is persisted as `last_read_seq`, so it survives a restart.
 - **Titles**: a placeholder (the first line) right away, then one cheap-model call after the first reply. A rename by the user always wins.
 - **Markdown**: GFM with no raw HTML and no syntax highlighting (fewer dependencies; highlighting can come in Phase 7).
 
-### Open
+#### Open
 
 - If the first send from "New conversation" is refused (for example `model_required`), the conversation that was just created stays, empty, with the draft kept in it.
 - Replies are marked read while their conversation is on screen, even when the app window is in the background.
 - Virtuoso keeps rows hidden for one frame while it measures a conversation that was just opened.
 - Right-panel conversation usage waits for Phase 6. The Cmd/Ctrl+K quick switcher and attachments wait for Phase 7.
 - Carried over: the real-provider check (Phase 1), the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
-
-## Next: Phase 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals
-
-1. Contract: `ToolServer` IPC, `run.tool_call` approval flow (`run.approval`, `approval.requested`), `ToolApproval`.
-2. Runner: `McpClientManager`, the tool loop for API adapters, `PermissionGate`, and MCP passthrough to harnesses (`--mcp-config`, `-c mcp_servers.…`).
-3. mcp-servers: `filesystem` with `RootGuard` (symlink escapes included) and approval on writes.
-4. Main and renderer: `ToolServerService`, `ApprovalService`, the roots and tools sections of the agent form, `ApprovalCard`, and `awaiting-approval` in the sidebar.
-5. Done when an agent reads and creates a file in an allowed directory, a write asks for approval, and a path outside the root is denied.
 
 ## Phase 3 — Agents: CRUD, role, model, avatar (done)
 

@@ -122,8 +122,8 @@ Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` re
 | Directory | `name` | Publishable |
 |---|---|---|
 | packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`; subpath `./ipc-channels` has no zod) |
-| packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`; subpaths `./bin`, `./testing`) |
-| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bins `comitiva-mcp-filesystem` (P5), `comitiva-mcp-gdrive` (P5b); none yet) |
+| packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`, with `dist/mcp-proxy.cjs` next to it (P5); subpaths `./bin`, `./testing`) |
+| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bin `comitiva-mcp-filesystem` = `dist/filesystem.cjs`, subpath `./filesystem-bin` (P5); `comitiva-mcp-gdrive` (P5b)) |
 | apps/desktop | `desktop` | no |
 
 ### 1.5 Phase 0 exit checklist
@@ -163,39 +163,42 @@ packages/runner/src/
 ├── index.ts           public API: RunnerClient
 ├── version.ts
 ├── server/            RunnerServer.ts Transport.ts RequestRouter.ts
-├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts (P5)
+├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts history.ts (P5)
 ├── providers/         ProviderRegistry.ts (+ createDefaultRegistry) ProviderAdapter.ts
 │   ├── api/           shared.ts AnthropicAdapter.ts OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts
 │   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts process.ts locateBinary.ts
 │                      prompt.ts parsers/ (claudeCode.ts codex.ts types.ts) (P2)
-├── mcp/               McpClientManager.ts McpClient.ts ToolCatalog.ts (P5)
+├── mcp/               McpClientManager.ts McpConnection.ts ToolCatalog.ts ToolBridge.ts content.ts names.ts (P5)
+├── proxy/             bin.ts → dist/mcp-proxy.cjs, the MCP server CLI harnesses launch (P5, ADR 0009)
 ├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts (P6)
 ├── client/            RunnerClient.ts        (embedded by shells)
 ├── testing/           fakeProviders.ts fixtures.ts  (exported as @comitiva/runner/testing)
-│                      fakeHarness.ts → dist/testing/bin/fake-claude, fake-codex (P2)
+│                      fakeHarness.ts → dist/testing/bin/fake-claude, fake-codex (P2)   fakeMcpServer.ts (P5)
 └── util/              jsonl.ts errors.ts logger.ts
 packages/runner/test/fixtures/{claude-code,codex}/   recorded harness output (scrubbed), P2
 
-packages/mcp-servers/src/            index.ts (scaffold)
-├── filesystem/        server.ts RootGuard.ts tools/*.ts approval.ts (P5)
+packages/mcp-servers/src/            index.ts
+├── filesystem/        server.ts RootGuard.ts operations.ts bin.ts → dist/filesystem.cjs (P5)
 └── google-drive/      server.ts drive-api.ts tools/*.ts (P5b)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
-├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4)
+├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4) tools.spec.ts (P5)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
-    │   │                            0002_agent_settings (P3), 0003_chat (P4), meta/)
+    │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5), meta/)
     │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
-    │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4; others P5+)
+    │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4)
+    │   │                            ToolServerRepository.ts ToolApprovalRepository.ts (P5)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
-    │   │                            ToolServerService.ts ApprovalService.ts UsageService.ts (P5+)
+    │   │                            ToolServerService.ts (P5; approvals live in ConversationService) UsageService.ts (P6)
+    │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
@@ -204,16 +207,17 @@ apps/desktop/
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
             ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4)
+            │                        toolServers.ts (P5)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
-            │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)
+            │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)   toolServerForm.ts (P5)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
             │                        Forms/CliConnectionForm.tsx Forms/FormShell.tsx (P2)
             │                        AgentAvatar.tsx AgentPanel.tsx Sidebar/AgentList.tsx Forms/AgentForm.tsx (P3)
             │                        Chat/ (ChatView ConversationList MessageList MessageBubble Markdown StatusDot)
             │                        Composer/Composer.tsx ToolBlock/ToolCallBlock.tsx (P4)
-            │                        ApprovalCard/ Settings/ (P5+)
-            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)
-            │                        ToolsScreen UsageScreen SettingsScreen (P5+; chat lives in AgentsScreen)
+            │                        ApprovalCard/ApprovalCard.tsx Forms/ToolServerForm.tsx Switch.tsx (P5)   Settings/ (later)
+            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)
+            │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)
             └── i18n/                index.ts en.json pt-BR.json
 ```
 
@@ -317,6 +321,10 @@ CREATE UNIQUE INDEX idx_messages_conv_seq ON messages(conversation_id, seq);
 ALTER TABLE messages ADD error TEXT;
 ALTER TABLE conversations ADD harness_connection_id TEXT;
 ALTER TABLE conversations ADD last_read_seq INTEGER NOT NULL DEFAULT 0;
+-- 0004_builtin_tool_servers (Phase 5, custom SQL): the built-in filesystem server, fixed id,
+-- command resolved by the shell at run time.
+INSERT OR IGNORE INTO tool_servers (id, name, transport, command, args, env, url, headers, builtin, enabled, created_at)
+VALUES ('filesystem', 'Files', 'stdio', NULL, '[]', '{}', NULL, '{}', 1, 1, '2026-09-21T00:00:00.000Z');
 
 CREATE TABLE tool_approvals (
   id TEXT PRIMARY KEY, conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
@@ -349,13 +357,13 @@ type Block =
   | { type: 'text'; text: string }
   | { type: 'image'; source: { kind: 'base64'; mediaType: string; data: string } | { kind: 'file'; path: string } }
   | { type: 'document'; name: string; mediaType: string; source: /* same */ }
-  | { type: 'tool_use'; id: string; toolServerId: string; name: string; input: unknown }
+  | { type: 'tool_use'; id: string; toolServerId: string; name: string; input: unknown; signature?: string }
   | { type: 'tool_result'; toolUseId: string; content: Array<TextBlock | ImageBlock | DocumentBlock>; isError: boolean; durationMs?: number };
 ```
 
 `tool_result.content` cannot nest `tool_use`/`tool_result`, the same restriction as the Anthropic API (ADR 0004).
 
-An `assistant` message can mix `text` and `tool_use`; the following `tool` message carries the `tool_result`s. Adapters translate to the provider's format (OpenAI uses `tool_calls`/`role: tool`; Gemini uses `functionCall`/`functionResponse`).
+In the canonical format an `assistant` message mixes `text` and `tool_use`, and the following `tool` message carries the `tool_result`s. The desktop stores one reply per run with its `text`, `tool_use` and `tool_result` blocks in order (Phase 5); the runner's `normalizeHistory` splits it into that alternation before a request, and gives an unfinished call an error result. `tool_use.name` is the prefixed name the model saw (`fs__read_file`) and `toolServerId` the server; `signature` carries opaque provider data to send back (Gemini thought signatures). Adapters translate to the provider's format (OpenAI uses `tool_calls`/`role: tool`; Gemini uses `functionCall`/`functionResponse`; Ollama `tool_calls`/`role: tool` with `tool_name`).
 
 ---
 
@@ -390,10 +398,11 @@ class JsonLinesTransport {
 
 // server/RunnerServer.ts
 class RunnerServer {
-  constructor(opts: { input: ReadableStream; output: WritableStream; logger?; registry?: ProviderRegistry; onExit?: () => void });
-  // builds JsonLinesTransport, RunManager and RequestRouter itself; McpClientManager joins in Phase 5
+  constructor(opts: { input; output; logger?; registry?: ProviderRegistry; openMcp?: OpenConnection; proxyPath?: string; onExit? });
+  // builds JsonLinesTransport, McpClientManager, ToolBridge (when proxyPath is set: bin.ts passes dist/mcp-proxy.cjs),
+  // RunManager and RequestRouter
   start(): void;                        // validates each line with the RunnerRequest schema, dispatches to RequestRouter
-  stop(): Promise<void>;                // idempotent: cancels runs (closes MCP clients from P5), then onExit
+  stop(): Promise<void>;                // idempotent: cancels runs, closes MCP clients and the bridge, then onExit
 }
 
 // server/RequestRouter.ts
@@ -402,48 +411,57 @@ class RequestRouter {
   // connection.test → registry.get(provider).testConnection
   // connection.listModels → registry.get(provider).listModels
   // cli.detect → (registry.get(provider) as CliHarnessAdapter).detect(binaryPath)   (P2)
-  // toolServer.start/stop → mcp.start/stop
-  // run.start → runs.start ; run.cancel → runs.cancel ; run.approval → runs.resolveApproval
+  // toolServer.start → mcp.start(launch, roots) ; toolServer.stop → mcp.stop(id)
+  // run.start → runs.start ; run.cancel → runs.cancel ; run.approval → runs.resolveApproval (a no-op when nothing waits)
 }
 
 // runs/RunManager.ts — one Run per runId, all concurrent
 class RunManager {
-  constructor(registry: ProviderRegistry, emit: (e: RunEvent) => void, logger: Logger);
+  constructor(deps: { registry; emit: (e: RunEvent) => void; logger; mcp: McpClientManager; bridge?: CliToolAccess });
   start(req: RunStartRequest): void;                 // creates Run, does not block; duplicate runId → invalid_request
   cancel(runId: string): boolean;                    // AbortController.abort(); idempotent, false if unknown
   cancelAll(timeoutMs?: number): Promise<void>;      // on shutdown / stdin close
-  resolveApproval(runId: string, toolUseId: string, decision: ApprovalDecision): void;
+  resolveApproval(runId, toolUseId, decision): boolean;   // false when nothing waits
   active(): string[];
 }
 
-// runs/Run.ts — Phase 0 takes (req, adapter, emit, logger); tools and gate join in Phase 5
+// runs/Run.ts
 class Run {
-  constructor(req: RunStartRequest, adapter: ProviderAdapter, tools: ToolCatalog, gate: PermissionGate, emit: (e: RunnerEvent) => void);
+  constructor(req: RunStartRequest, deps: { adapter; emit; logger; mcp: McpClientManager; bridge?: CliToolAccess });
   execute(): Promise<void>;
   // guarantees exactly one terminal event (run.done | run.error) and nothing after it; stamps runId + ts
-  // model = agent.model ?? connection.config.defaultModel, else invalid_request
-  // builds RunInput, creates RunContext { tools, callTool }, iterates adapter.run(...)
-  // translates AdapterEvent → RunnerEvent with runId; measures latency; collects usage
-  private callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  // → gate.check(...) → if approval is needed, emits run.tool_call{requiresApproval:true} and awaits a promise
-  // → tools.call(...) → emits run.tool_result
+  // model = agent.model ?? connection.config.defaultModel, else invalid_request (API)
+  // API history → normalizeHistory; CLI workingDirectory = agent's first readwrite root ?? req.workingDirectory
+  // acquires req.toolServers from McpClientManager (one failing → tool_server_failed), builds the ToolCatalog
+  // (read-only policy: read-only tools only), creates RunContext, iterates adapter.run(...); releases servers at the end
+  callTool(toolUseId, name, input): Promise<ToolResult>;
+  // unknown name → invalid_request result; else run.tool_call → PermissionGate: deny → approval_denied result;
+  // ask → waits for run.approval (abortable), deny → approval_denied, allow-always → gate.remember;
+  // → handle.call(signal) → run.tool_result { durationMs }. Failures are isError results; only cancel rejects.
+  callFromHarness(name, input, toolUseId?): Promise<ToolResult>;   // ToolBridge: emits the tool_use block, then callTool
+  resolveApproval(toolUseId, decision): boolean;
 }
 
-// runs/ToolLoop.ts — used by the API adapters (Phase 5; the Phase 0 Anthropic adapter streams one turn)
+// runs/ToolLoop.ts — every API adapter's run() is streamTurn(body: toolLoop(...))
 async function* toolLoop(opts: {
-  callModel: (messages: Message[], tools: ToolDef[], signal: AbortSignal) => AsyncIterable<AdapterEvent>;
-  ctx: RunContext; messages: Message[]; maxIterations: number; signal: AbortSignal;
-}): AsyncIterable<AdapterEvent>
-// loop: call model → accumulate tool_use → for each, ctx.callTool → append tool_result → repeat until stopReason != 'tool_use'
+  call: (messages: Message[], tools: ToolDef[]) => AsyncGenerator<AdapterEvent, StopReason>;   // one model call
+  ctx: RunContext; messages: Message[]; usage: UsageTracker; maxIterations?: number /* 25 */;
+}): AsyncGenerator<AdapterEvent, StopReason>
+// call → collect text and tool_use (toolServerId filled from ctx) → no tool_use (or max_tokens): return the stop
+// reason; else ctx.callTool each in order → append assistant + tool messages → usage.nextCall() → call again;
+// at maxIterations model calls → 'max_iterations' (the last calls are not run)
 
 // runs/PermissionGate.ts
 class PermissionGate {
-  constructor(policy: PermissionPolicy, alwaysAllowed: Set<string> /* `${serverId}:${tool}` */);
-  check(tool: ToolDef): 'allow' | 'ask' | 'deny';
-  // read-only (annotations.readOnlyHint) → allow
-  // policy read-only + tool not read-only → deny
-  // allow-always recorded → allow ; policy allow-writes → allow ; otherwise ask
+  constructor(policy: PermissionPolicy, alwaysAllowed: Iterable<string> /* `${serverId}:${tool}` */);
+  check(serverId: string, tool: ToolDef): 'allow' | 'ask' | 'deny';
+  // read-only (annotations.readOnlyHint) → allow ; policy read-only → deny ;
+  // allow-always recorded → allow ; policy allow-writes → allow ; otherwise (no annotations included) ask
+  remember(serverId: string, toolName: string): void;   // allow-always during a run
 }
+
+// runs/history.ts
+function normalizeHistory(messages: Message[]): Message[];   // strict assistant/tool alternation; unfinished calls get an error result
 ```
 
 ```ts
@@ -458,11 +476,13 @@ interface ProviderAdapter {
 }
 
 interface RunContext {
-  tools: ToolDef[];                                            // aggregated from the agent's servers
+  tools: ToolDef[];                                            // aggregated from the agent's servers, prefixed names
+  toolServerId(name: string): string;                          // for tool_use blocks
   callTool(toolUseId: string, name: string, input: unknown): Promise<ToolResult>;
-  mcpConfigForCli?(): Promise<{ path: string; cleanup(): void }>; // temporary file for harnesses (P2)
+  mcpConfigForCli?(): Promise<CliMcpConfig | undefined>;       // the proxy config for harnesses (P5, ADR 0009)
   log(level: 'debug' | 'info' | 'warn', msg: string): void;
 }
+interface CliMcpConfig { path; command; args; env; serverName: 'comitiva'; hasFilesystem: boolean; cleanup(): Promise<void> }
 
 // providers/ProviderRegistry.ts
 class ProviderRegistry {
@@ -505,7 +525,7 @@ class AnthropicAdapter implements ProviderAdapter {
 abstract class CliHarnessAdapter implements ProviderAdapter {
   kind = 'cli' as const;                                          // capabilities from cliProviderDescriptors
   constructor(options?: { env?; searchDirs?; idleTimeoutMs?; probeTimeoutMs? });
-  protected abstract buildArgs(turn: TurnSpec): string[];         // TurnSpec { config, model ('' → harness default), system, resume, mcpConfigPath, probe }
+  protected abstract buildArgs(turn: TurnSpec): string[];         // TurnSpec { config, model ('' → harness default), system, resume, mcp: CliMcpConfig?, probe }
   protected abstract createParser(opts: { usage; log; idPrefix }): HarnessParser;
   protected abstract authCheck(bin, env, cwd): Promise<void>;     // throws not_logged_in
   protected preflight(bin, env, cwd, connection): Promise<void>;  // Codex: sandbox probe → sandbox_unavailable
@@ -525,26 +545,49 @@ function locateBinary({ name, label, explicit?, env?, extraDirs? }): Promise<str
 function buildPrompt(messages, resume: boolean): string;          // resume → last user message; else transcript + new message
 function harnessEnv(base): NodeJS.ProcessEnv;                     // drops ELECTRON_RUN_AS_NODE, COMITIVA_*, provider keys
 class ClaudeCodeAdapter extends CliHarnessAdapter { /* -p --output-format stream-json --verbose --include-partial-messages
-  --permission-mode bypassPermissions --setting-sources "" --strict-mcp-config [--model] [--append-system-prompt] [--resume] */ }
+  --permission-mode bypassPermissions --setting-sources "" --strict-mcp-config [--model] [--append-system-prompt] [--resume]
+  [--mcp-config <proxy config> [--tools WebSearch,WebFetch]] (P5: env MCP_TOOL_TIMEOUT 30 min) */ }
 class CodexAdapter extends CliHarnessAdapter { /* exec [resume] --json --skip-git-repo-check --ignore-user-config
-  -c sandbox_mode=… [-m] [-c developer_instructions=…] … [<thread_id>] - */ }
+  -c sandbox_mode=… (read-only with the filesystem server, P5) [-m] [-c developer_instructions=…]
+  [-c mcp_servers.comitiva.{command,args,env,tool_timeout_sec,default_tools_approval_mode="approve"}] (P5) … [<thread_id>] - */ }
+// Both parsers drop the harness's own report of calls to the proxy (mcp__comitiva__*, mcp_tool_call server comitiva):
+// the run reports them (ADR 0009).
 ```
 
 ```ts
-// mcp/McpClientManager.ts
+// mcp/McpClientManager.ts — one MCP client per server launch, reused across runs
 class McpClientManager {
-  start(server: ToolServer, secrets: Record<string, string>): Promise<ToolDef[]>;  // idempotent
-  stop(serverId: string): Promise<void>;
-  catalogFor(serverIds: string[]): ToolCatalog;
-  private restartOnFailure(serverId: string): void;
+  constructor(logger, opts?: { open?: OpenConnection });       // tests inject in-memory servers
+  acquire(launch: ToolServerLaunch, roots?: AgentRoot[]): Promise<ServerHandle>;   // starts or reuses; held until release()
+  start(launch, roots?): Promise<ToolDef[]>;                   // toolServer.start
+  stop(serverId): Promise<void>; stopAll(): Promise<void>;     // a stopped instance is never restarted
+  // key = serverId + hash(launch, extra args): the filesystem server gets `--root p:mode … --gated-by-client`,
+  // one instance per set of roots (idle ones close after 10 min); an edited launch supersedes the old instance,
+  // closed when its last holder releases it. A dead instance restarts on its next use; failed starts back off
+  // 1 s … 30 s (tool_server_failed meanwhile).
+}
+interface ServerHandle { serverId; name; builtin?; tools: ToolDef[]; call(name, input, signal): Promise<ToolResult>; release() }
+// ServerHandle.call never throws for server failures: a crash mid-call → `tool_server_failed: …` result, other errors
+// → `tool_failed: …`; rejects only on abort.
+
+// mcp/McpConnection.ts — one SDK Client over StdioClientTransport (safe default env + the server's) or
+// StreamableHTTPClientTransport; lists tools at start (30 s), calls with a 10 min timeout reset by progress.
+
+// mcp/ToolCatalog.ts — the tools of one run
+class ToolCatalog {
+  constructor(handles: ServerHandle[], filter?: (tool) => boolean);
+  defs(): ToolDef[];                                            // `${slug}__${tool}` (fs for the built-in), ≤ 64 chars
+  resolve(name: string): { name; serverId; tool; handle } | undefined;
+  hasBuiltin('filesystem'): boolean;
 }
 
-// mcp/ToolCatalog.ts — aggregated view for a run
-class ToolCatalog {
-  defs(): ToolDef[];                                            // prefixed names: `${serverSlug}__${tool}` to avoid collisions
-  call(name: string, input: unknown, signal: AbortSignal): Promise<ToolResult>;
-  resolve(name: string): { serverId: string; tool: ToolDef };
+// mcp/ToolBridge.ts — how CLI harnesses reach a run's tools (ADR 0009)
+class ToolBridge implements CliToolAccess {
+  register(run: Run): Promise<CliMcpConfig>;   // per turn: 0600 config (only server: the proxy) + token file
+  close(): Promise<void>;
+  // Unix socket in a 0700 temp dir (named pipe on Windows); JSON lines hello{token} → list → call{name, input, toolUseId?}
 }
+// proxy/bin.ts (dist/mcp-proxy.cjs <bridge-file>): stdio MCP server that forwards tools/list and tools/call to the bridge.
 
 // usage/UsageCalculator.ts
 class UsageCalculator {
@@ -561,6 +604,8 @@ class RunnerClient extends EventEmitter {
   startRun(req: RunStartPayload): { runId: string };            // returns at once; start failures arrive as run.error
   cancelRun(runId: string): void;
   approve(runId: string, toolUseId: string, decision: ApprovalDecision): void;
+  startToolServer({ toolServer, roots? }): Promise<ToolDef[]>;  // 45 s (servers may be slow to start) (P5)
+  stopToolServer(toolServerId): Promise<void>;
   testConnection(req): Promise<TestResult>;                     // provider failures come back as { ok: false }
   listModels(req): Promise<ModelInfo[]>;                        // rejects with the provider's AppError
   detectCli(req): Promise<CliDetectResult>;                     // cli.detect; rejects with binary_not_found (P2)
@@ -615,7 +660,7 @@ sequenceDiagram
     R-->>CS: run.tool_result
     A-->>R: text_delta* , done, usage
     R-->>CS: run.usage, run.done
-    CS->>CS: persists assistant/tool msg, usage_record; status=idle
+    CS->>CS: persists the reply (text, tool_use, tool_result blocks), usage_record; status=idle
     CS-->>UI: done
 ```
 
@@ -628,19 +673,21 @@ Batching: `ConversationService` accumulates `text_delta` and writes to SQLite ev
 ```ts
 // mcp-servers/src/filesystem/RootGuard.ts
 class RootGuard {
-  constructor(roots: Array<{ path: string; mode: 'read' | 'readwrite' }>);
-  resolve(requested: string, op: 'read' | 'write'): string;
-  // realpath of the candidate AND of each root; requires realpath(candidate) to start with realpath(root) + sep
-  // for write, requires a readwrite root; for paths that do not exist yet, validates the parent directory
-  // throws OutsideRootsError / ReadOnlyRootError — never returns a path outside the roots
+  static create(roots: Array<{ path: string; mode: 'read' | 'readwrite' }>, warn?): Promise<RootGuard>;
+  // realpath of each root (missing or relative roots are dropped with a warning)
+  resolve(requested: string, access: 'read' | 'write'): Promise<{ path; root; isRoot }>;
+  // realpath of the candidate (deepest existing ancestor + missing tail for new paths); it must be a root or
+  // inside one + sep (the most specific root wins); dangling symlinks refused; write needs a readwrite root.
+  // Relative paths start at the first root. Throws GuardError(outside_roots | read_only_root | invalid_request)
 }
 
-// mcp-servers/src/filesystem/server.ts — arguments: --root <path>:<mode> (repeatable)
+// mcp-servers/src/filesystem/server.ts — args: --root <path>:<mode> (repeatable) [--gated-by-client]
 // tools: list_dir, read_file, search (glob + content), write_file, create_dir, move, delete
-// annotations: list_dir/read_file/search → readOnlyHint:true ; delete/move → destructiveHint:true
-// approval: the server does NOT approve anything; the runner decides before calling tools/call (PermissionGate).
-// For CLI harnesses that call the server directly, the server receives --approval-socket <path>
-// and asks the runner over a local socket before executing writes (Phase 5, design to be confirmed).
+// annotations: list_dir/read_file/search → readOnlyHint:true ; write_file/move/delete → destructiveHint:true ;
+// create_dir → destructiveHint:false
+// approval: the server never asks. It registers write tools only with --gated-by-client (the runner, which asks
+// the user before every write call) and a read-write root, so a stray launch is read-only (ADR 0009).
+// errors: isError results whose text starts with the stable code (`outside_roots: …`)
 ```
 
 ```ts
@@ -691,7 +738,7 @@ class AgentRepository {
   // Connection rule (create, duplicate, and updates that change connectionId or model): the connection must
   // exist (not_found) and be enabled (connection_disabled); an API connection needs agent.model or
   // config.defaultModel (model_required). Renaming an agent on a since-disabled connection still works.
-  // alwaysAllowed(agentId) joins in Phase 5.
+  // Roots must be absolute paths (P5); an unknown tool server → invalid_request.
 }
 class SettingsRepository { get(): AppSettings /* defaults for missing or invalid keys */; update(patch) }
 // ConnectionRepository.agentsUsing(id) → [{ id, name }]; delete's connection_in_use message names them.
@@ -711,7 +758,12 @@ class MessageRepository {        // (P4)
   recoverInterrupted();   // at boot: streaming → error { interrupted }
 }
 class UsageRepository { insert(NewUsageRecord); listByConversation(id) }   // (P4; summary/timeseries in P6)
-class ToolServerRepository, ToolApprovalRepository { /* P5 */ }
+class ToolServerRepository {    // (P5) built-ins first; rows validated by the ToolServer schema
+  list(); get(id); require(id); create(NewToolServer); update(id, changes); delete(id) /* built-ins: invalid_request */;
+}
+class ToolApprovalRepository {  // (P5) every decision is kept
+  insert(NewToolApproval); alwaysAllowed(agentId): string[] /* `${serverId}:${tool}` */; listByConversation(id);
+}
 
 // main/secrets/SecretStore.ts
 interface SecretStore {
@@ -763,6 +815,10 @@ class ConversationService extends EventEmitter<ConversationEvents> {
   retryLast(conversationId): Promise<void>;   // last message must be a failed reply; reset in place
   cancel(conversationId): void;               // runner cancel; finalized locally as cancelled after a grace period
   forgetAgent(agentId): void;                 // before deleting an agent: stop its runs, write nothing
+  decide(conversationId, toolUseId, decision): void;   // (P5) records a tool_approvals row, run.approval, status running
+  // (P5) run.start carries toolServers (ToolServerService.launchesFor) and alwaysAllowed; run.tool_call with
+  // requiresApproval → status awaiting-approval + pendingApproval (conversation.updated, list); run.tool_result →
+  // a tool_result block in the reply (with durationMs)
   recover(): void;                            // at boot (interrupted); shutdown(): cancels and finalizes every run
   // Runs: one per conversation at a time, no global queue. History = stored messages before the reply.
   // CLI: harnessSession(conversationId, connectionId) + resolveWorkingDirectory. run.session is persisted at once.
@@ -770,6 +826,17 @@ class ConversationService extends EventEmitter<ConversationEvents> {
   // one usage record per run, status idle | error, touch, all in one transaction; after the first complete reply,
   // TitleService replaces the placeholder unless the user renamed it.
   // Events → IpcRouter.broadcast: conversation.updated, message.updated, message.delta, message.block (rev per conversation)
+}
+
+// main/services/ToolServerService.ts (P5)
+class ToolServerService {
+  constructor(deps: { repo; secrets: SecretStore; runner: Pick<RunnerClient, 'startToolServer' | 'stopToolServer'>;
+                      filesystem: { command; args; env } /* process.execPath + paths.filesystemServer() + ELECTRON_RUN_AS_NODE */ });
+  list(); create(draft); update(id, patch); delete(id);   // secrets → SecretStore `toolServer:<id>:env|header:<NAME>`;
+  // keepSecret keeps the stored one; unused secrets deleted; edits and deletes stop the server in the runner
+  test(id): Promise<ToolDef[]>;                          // toolServer.start (the filesystem server gets a scratch root)
+  launchesFor(agent): Promise<ToolServerLaunch[]>;       // enabled servers, secrets resolved (secret_missing);
+                                                         // the filesystem server only when the agent has roots
 }
 
 // main/services/TitleService.ts (P4)
@@ -801,7 +868,7 @@ runner.getStatus
 secrets.getStatus                                                    (P1)
 connections.list | create | update | delete | test | listModels     (P1)
 connections.detectBinary                                            (P2)
-toolServers.list | create | update | delete | test | connectGoogle (5b)
+toolServers.list | create | update | delete | test                  (P5; connectGoogle in 5b)
 agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
@@ -810,7 +877,7 @@ approvals.decide                                                    (P5)
 usage.summary | timeseries | export
 dialogs.pickFolder                                                  (P2)
 events: runner.status (P0); conversation.updated, message.updated, message.delta, message.block (P4, ADR 0008);
-        approval.requested (P5)
+        conversation.updated carries the pending approval (P5; no separate approval event)
 ```
 
 ---
@@ -837,7 +904,7 @@ interface Backend {
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
 // Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings;
-// Phase 4 conversations, messages and their events.
+// Phase 4 conversations, messages and their events; Phase 5 toolServers and approvals.
 
 // renderer/src/store/*.ts (Zustand vanilla stores created with the Backend injected; StoresProvider + useApp/useConnections)
 appStore:               version, runnerStatus (pushed status wins over init), secretStatus, section (sidebar navigation)
@@ -852,7 +919,11 @@ conversationsStore (P4): byId, idsByAgent / archivedIdsByAgent (newest activity 
 messagesStore (P4):     byConversation: { items, status, hasMore, loadingOlder, rev, buffered }, drafts, sending,
                         actionError; load (buffers events until the page is in), loadOlder, send, cancel, retry.
                         Events apply by rev (ADR 0008): stale dropped, next applied, a gap reloads the page.
-uiStore (later):        rightPanelOpen, theme, quickSwitcherOpen, pendingApprovals (P5)
+conversationsStore (P5): + pending (PendingApproval per conversation, from main), deciding, decide; agentStatus:
+                        awaiting-approval > running > error > idle.
+toolServersStore (P5):  items, loaded, tests (per server: its tools or the error), editor, confirmDelete, notice;
+                        load, save, setEnabled, test, delete.
+uiStore (later):        rightPanelOpen, theme, quickSwitcherOpen
 ```
 
 Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.
@@ -885,7 +956,14 @@ Phase 4 (pure logic in `lib/chat.ts`):
 - `Chat/StatusDot` for agents (sidebar) and conversations. The sidebar also shows an unread badge per agent.
 - Deleting an agent says how many conversations go with it (archived ones included).
 
-Later components: `ApprovalCard`, `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Forms/ToolServerForm`, the roots and tools sections of `Forms/AgentForm` (P5), `Settings/*`, `Usage/*`.
+Phase 5 (pure logic in `lib/toolServerForm.ts`, `lib/agentForm.ts`, `lib/chat.ts`; docs/tools.md):
+- `ToolBlock/ToolCallBlock`: tool, server and state (waiting for you, running, done, failed, denied, no result), arguments, result and duration, collapsible.
+- `ApprovalCard/ApprovalCard`: inline under the pending call, with the paths it touches; Allow / Deny / Always allow for this agent.
+- Sidebar: an agent awaiting approval shows an "Approve" flag and an amber dot.
+- `screens/ToolsScreen`: servers (built-in badged) with an enable `Switch`, Test (lists the tools, read-only marked), Edit/Delete for third-party ones; `Forms/ToolServerForm`: stdio (command, args per line, env) or http (URL, headers), rows marked Secret are masked and never prefilled.
+- `Forms/AgentForm`: Folders (native picker, read or read-write, reorder; the first folder turns on Files), a Tools checklist (enabled servers plus disabled ones still linked) and the permission policy. `AgentPanel` shows tools, folders and policy.
+
+Later components: `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Settings/*`, `Usage/*`.
 
 ---
 
@@ -919,10 +997,10 @@ Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA
 
 ## 9. Conventions
 
-- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `approval_denied`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`, `connection_in_use`, `connection_disabled`, `model_required`, `conversation_busy`, `interrupted` (P4); protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
+- **Errors**: `AppError { code: ErrorCode; message; retryable; cause? }` class in `contract`; adapters map provider errors to stable codes (`auth_failed`, `rate_limited`, `provider_unavailable`, `provider_error`, `timeout`, `binary_not_found`, `not_logged_in`, `sandbox_unavailable`, `outside_roots`, `read_only_root`, `approval_denied`, `tool_failed`, `tool_server_failed`), and the shell adds `secret_missing`, `secret_store_unavailable`, `runner_crashed`, `runner_unavailable`, `connection_in_use`, `connection_disabled`, `model_required`, `conversation_busy`, `interrupted` (P4); protocol-level: `invalid_request`, `not_implemented`, `unknown_provider`, `unsupported_content`, `internal`. The UI translates by code (i18n), never shows a raw provider message as a title.
 - **Logs**: `pino` in the runner and in main; levels via env; no message content in logs at `info` level.
 - **Secrets**: only `secretRef` in the database and in IPC payloads; the renderer never receives a secret value; the runner receives the value per request and does not persist it.
-- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Later phases add a fake in-memory MCP server. Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four; Phase 4: chat, with setup through `window.api` and everything under test through the UI).
+- **Tests**: runner and mcp-servers with vitest and fakes. Adapter unit tests use **msw** through a shared conformance suite (`test/adapters/conformance.ts`). A real local fake server for all four providers (`startFakeProviders` in `@comitiva/runner/testing`) serves what msw cannot reach: runner integration tests that spawn the bundled `dist/bin.cjs`, and the desktop e2e. A fake harness binary (`dist/testing/bin/fake-claude`, `fake-codex`) speaks the recorded CLI line formats for the CLI adapter, runner-binary and e2e tests (P2); CLI parsers are tested against real recordings in `test/fixtures/`. Phase 5 adds the in-memory fake MCP server (`createFakeMcp`), `[tool:NAME {json}]` in the fake providers and `[mcp:NAME {json}]` in the fake harnesses (docs/tools.md → Testing). Desktop main runs under plain Node with in-memory SQLite (better-sqlite3 is N-API); renderer stores tested with a fake `Backend` (testing-library when components grow); Playwright launches the built app against the fake providers (Phase 1: the Connections flow for all four; Phase 4: chat, with setup through `window.api` and everything under test through the UI).
 - **Commits**: conventional commits; scope = package (`feat(runner): ...`, `fix(desktop): ...`).
 - **ADR**: one per decision that affects more than one package; format: context, decision, consequences.
 

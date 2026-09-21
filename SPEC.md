@@ -80,9 +80,9 @@ type RunnerRequest =
   | { id; type: 'ping' }                                         // → { version, protocolVersion }
   | { id; type: 'connection.test'; connection; secret? }
   | { id; type: 'connection.listModels'; connection; secret? }
-  | { id; type: 'toolServer.start'; toolServer; secrets? }     // opens MCP client, returns tool list
+  | { id; type: 'toolServer.start'; toolServer: ToolServerLaunch; roots? }  // opens (or reuses) the MCP client, returns tool list
   | { id; type: 'toolServer.stop'; toolServerId }
-  | { id; type: 'run.start'; runId; conversationId; agent; connection; secret?; messages: Message[]; harnessSessionId?; alwaysAllowed? }
+  | { id; type: 'run.start'; runId; conversationId; agent; connection; secret?; messages: Message[]; harnessSessionId?; alwaysAllowed?; toolServers?: ToolServerLaunch[] }
   | { id; type: 'run.cancel'; runId }
   | { id; type: 'run.approval'; runId; toolUseId; decision: 'allow' | 'deny' | 'allow-always' }
   | { id; type: 'shutdown' }
@@ -104,6 +104,8 @@ type RunnerEvent =
   | { type: 'log'; level; message }
 ```
 
+A `ToolServerLaunch` is a ToolServer with its secrets resolved by the shell (plain env and header values, per request, never persisted by the runner).
+
 Every run ends with exactly one terminal event (`run.done` or `run.error`). Cancelling is not an error: it ends with the usage known so far (estimated if the provider had not reported it) and `run.done { stopReason: 'cancelled' }`. If the runner process dies, the shell reports `run.error { code: 'runner_crashed', retryable: true }` for its active runs. The full protocol reference is in `docs/architecture.md`.
 
 #### 4.2 Connection adapters
@@ -121,12 +123,13 @@ interface ProviderAdapter {
 `RunContext` gives the adapter `tools` (definitions aggregated from the agent's MCP servers) and `callTool(toolUseId, name, input)`, which already goes through the permission policy and returns the result or a denial.
 
 - **API** (`anthropic`, `openai-compatible`, `google`, `ollama`): the runner controls the loop. Streaming → `tool_use` → `ctx.callTool` → `tool_result` → new call, until a `stopReason` without tools, with a configurable iteration limit.
-- **CLI** (`claude-code`, `codex`; `gemini-cli` later): the runner starts the binary once per turn in non-interactive mode with streaming JSON output, the prompt on stdin, and translates lines into `AdapterEvent` (ADR 0007). The working directory is the agent's first `readwrite` root (Phase 5), else the connection's working directory, else `<userData>/workspaces/<conversationId>`. The harness keeps the conversation history and is resumed by `harnessSessionId`; without one, or when the harness lost it, the history is replayed into a new session. The harness runs isolated from the user's own CLI settings and MCP servers, with only its own login. From Phase 5, the runner writes a temporary MCP configuration with the agent's servers and passes it to the binary (Claude Code `--mcp-config`; Codex `-c mcp_servers.…`). Write approval: the harness runs with auto-accept and the agent's policy is enforced by the built-in `filesystem` server, which asks the shell for approval through the runner itself. The harness's native file tools are disabled when possible (Claude Code: `--tools`), so every write goes through the built-in server. When that is not possible (Codex's `apply_patch`), the connection form warns the user. Codex streams one message at a time (its `exec --json` has no token deltas).
+- **CLI** (`claude-code`, `codex`; `gemini-cli` later): the runner starts the binary once per turn in non-interactive mode with streaming JSON output, the prompt on stdin, and translates lines into `AdapterEvent` (ADR 0007). The working directory is the agent's first `readwrite` root (Phase 5), else the connection's working directory, else `<userData>/workspaces/<conversationId>`. The harness keeps the conversation history and is resumed by `harnessSessionId`; without one, or when the harness lost it, the history is replayed into a new session. The harness runs isolated from the user's own CLI settings and MCP servers, with only its own login. Tools (Phase 5, ADR 0009): the runner writes a temporary MCP configuration whose only server is its own proxy (`mcp-proxy.cjs`) and passes it to the binary (Claude Code `--mcp-config`; Codex `-c mcp_servers.comitiva.…`). The proxy forwards the harness's tool calls to the runner over a local socket, so they go through the same permission gate and approvals as API runs, and the runner stays the only MCP client of the agent's servers. When the agent has the built-in `filesystem` server, the harness's native file tools are turned off (Claude Code: `--tools WebSearch,WebFetch`) or, when that is not possible (Codex's `apply_patch`), confined by a read-only sandbox, so every write goes through the built-in server. Codex streams one message at a time (its `exec --json` has no token deltas).
 
 #### 4.3 Tools and permissions
 
-- The runner keeps one MCP client per enabled `ToolServer`, started on demand and reused across runs.
-- Built-in **`filesystem`** server: receives the agent's roots and modes as arguments; exposes `list`, `read`, `search`, `write`, `create`, `move`, `delete`. Any path outside the roots is rejected in the server, not only in the UI. Write operations emit an approval request, unless `allow-always` is already recorded for that agent and tool.
+- The runner keeps one MCP client per enabled `ToolServer` (per set of roots for the built-in `filesystem` server), started on demand, reused across runs and restarted after a crash. It is the only MCP client of every server, for API and CLI runs alike (ADR 0009).
+- Every tool call goes through the runner's permission gate: read-only tools run; others emit `run.tool_call` with `requiresApproval` and wait for `run.approval`, unless `allow-always` is recorded for that agent and tool or the policy is `allow-writes`; under `read-only` they are not offered at all.
+- Built-in **`filesystem`** server: receives the agent's roots and modes as arguments; exposes `list_dir`, `read_file`, `search`, `write_file`, `create_dir`, `move`, `delete`. Any path outside the roots is rejected in the server, not only in the UI, symlink escapes included. It exposes its write tools only when started by the runner, which asks before every write (`--gated-by-client`).
 - Built-in **`google-drive`** server: OAuth done by the desktop (loopback), tokens in `safeStorage`, injected via env when starting the server. Exposes `search`, `read` (with Google Docs/Sheets export to text), `create`, `update`, `move`. Writes follow the same approval policy.
 - Third-party servers: tools classified by `readOnlyHint`/`destructiveHint` (MCP annotations) to decide whether they ask for approval; without annotations, they ask.
 - In the UI: each tool call is a collapsible block with name, arguments, result and duration. An approval request is an inline card with **Allow**, **Deny**, **Always allow for this agent**. While waiting, the conversation is `awaiting-approval` and the sidebar flags it.
@@ -169,6 +172,8 @@ Three columns, Slack style:
 Resolved in Phase 0 (see `docs/adr/`): name **Comitiva** and license **Apache-2.0** (ADR 0001); the runner runs as **Electron in Node mode via `ELECTRON_RUN_AS_NODE`** (ADR 0002); desktop ORM **Drizzle** (ADR 0003); canonical blocks in the Anthropic format (ADR 0004); JSON Schema generated with zod 4 (ADR 0005).
 
 Resolved in Phase 1: on Linux without a keyring (Chromium's `basic_text` backend), Comitiva **refuses** to store API keys and explains how to get a keyring; connections without a key (Ollama, LM Studio) keep working. Obfuscated storage is only for tests and CI (`COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`).
+
+Resolved in Phase 5: tool approvals go through the runner for API and CLI runs alike; CLI harnesses reach the agent's tools through the runner's MCP proxy, and their native file tools are turned off or sandboxed read-only when the agent has the `filesystem` server (ADR 0009).
 
 Still open: implementation of the `google-drive` server (own vs community), decided in Phase 5b.
 

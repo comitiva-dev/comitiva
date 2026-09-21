@@ -52,15 +52,30 @@ export class XxxAdapter implements ProviderAdapter {
     const usage = UsageTracker.for(input);
     return streamTurn({
       signal, usage, toAppError,
-      body: async function* (): AsyncGenerator<AdapterEvent, StopReason> {
-        // call the API with `signal`, yield { type: 'run.text_delta', text },
-        // usage.report({ input, output, cacheRead, final: true }) when the provider says so,
-        // return the mapped stop reason
-      },
+      body: () => toolLoop({
+        ctx, usage, messages: input.messages, maxIterations: input.params.maxToolIterations,
+        call: (messages, tools) => this.stream(input, messages, tools, usage, signal),
+      }),
     });
+  }
+  /** One model call. */
+  private async *stream(input, messages, tools, usage, signal): AsyncGenerator<AdapterEvent, StopReason> {
+    // send `messages` (translated) and `tools` (when any) with `signal`;
+    // yield { type: 'run.text_delta', text } as text streams, and each complete tool call as
+    // { type: 'run.block', block: { type: 'tool_use', id, toolServerId: '', name, input } };
+    // usage.report({ input, output, cacheRead, final: true }) when the provider says so;
+    // return the mapped stop reason
   }
 }
 ```
+
+**Tools** (Phase 5, `docs/tools.md`): `toolLoop` (`runs/ToolLoop.ts`) runs the calls through `ctx.callTool` (gate, approvals, MCP), appends the assistant turn and a `tool` message with the results, and calls `stream` again. It fills `toolServerId`, sums usage across calls, and stops at the iteration limit. The adapter only translates:
+- `ToolDef` → the provider's tool format. `inputSchema` is a JSON Schema object; add `type: 'object'`.
+- `tool_use` blocks in `assistant` messages → the provider's tool calls. Keep `signature` if the provider needs it back (Gemini thought signatures).
+- `tool_result` blocks in `tool` messages → the provider's results (`toolResultText` for text-only providers; results start with a stable code when they are errors).
+- Streamed tool calls → complete `tool_use` blocks. Accumulate fragments by index, then parse the JSON with `parseJson`, which turns an empty or cut-off input into `{}`. Generate an id when the provider gives none.
+
+Some providers end a turn with a plain stop even when it called tools (Ollama, Gemini): the loop goes by the tool calls, not the stop reason.
 
 Register it in `createDefaultRegistry()` (`providers/ProviderRegistry.ts`).
 
@@ -74,7 +89,7 @@ The helpers in `providers/api/shared.ts` enforce the rules every adapter must fo
 | HTTP errors map to stable codes: 401/403 → `auth_failed`; 429 → `rate_limited` (retryable); 5xx → `provider_unavailable` (retryable); other 4xx → `provider_error`. | `httpError` |
 | No response (refused, DNS, reset) → `provider_unavailable` (retryable). A timeout → `timeout` (retryable). | `networkError`, `isFetchFailure` |
 | Test and list models give up after 15 s with `timeout`. `testConnection` never throws; it returns `{ ok: false, error }`. | `withDeadline`, `probe` |
-| Messages the provider cannot take yet (images, tool results) fail with `unsupported_content`. | `plainText` |
+| Content the provider cannot take yet (images, documents) fails with `unsupported_content`. | `plainText` |
 
 Your own `toAppError(err)` should check the SDK's error classes first (timeout before connection error), then fall back to `httpError(status, …)`, `networkError`, and finally `AppError.from`.
 
@@ -98,10 +113,11 @@ Your own `toAppError(err)` should check the SDK's error classes first (timeout b
 - model parsing
 - test latency
 - ambient env credentials ignored
+- a tool round trip: a streamed tool call reaches `ctx.callTool`, the result goes back in the next request, and usage is summed (the `Wire` describes `toolCallFrames`, `toolNamesIn`, `toolResultIn`)
 
 Add provider-specific tests next to it: the request body mapping, and any odd error shapes (Gemini answers a bad key with 400 `API_KEY_INVALID`, for example).
 
-**Fake server.** Add routes under a new prefix in `src/testing/fakeProviders.ts`, honoring the same prompt controls (`[error:N]`, `[chunks:N]`, `[interval:MS]`) and `bad-key`. Add a fixture in `src/testing/fixtures.ts` and include it in `fakeConnections`. The `bin.cjs` integration tests (`test/client.test.ts`) and the desktop e2e (`apps/desktop/e2e/connections.spec.ts`) then run through it. msw cannot reach a spawned process, which is why this real server exists.
+**Fake server.** Add routes under a new prefix in `src/testing/fakeProviders.ts`, honoring the same prompt controls (`[error:N]`, `[chunks:N]`, `[interval:MS]`, `[tool:NAME {json}]`) and `bad-key`. Add a fixture in `src/testing/fixtures.ts` and include it in `fakeConnections`. The `bin.cjs` integration tests (`test/client.test.ts`) and the desktop e2e (`apps/desktop/e2e/connections.spec.ts`) then run through it. msw cannot reach a spawned process, which is why this real server exists.
 
 **Real provider.** Before calling it done, run it by hand once against the real API: test, list models, and a short streamed run. Record the result in `docs/STATUS.md`.
 
@@ -113,7 +129,7 @@ Connections of kind `cli` run a coding-agent CLI as a child process of the runne
 
 ## Rules every harness follows
 
-- **One process per turn**, started in the working directory: `connection.config.workingDirectory` if set, else `<userData>/workspaces/<conversationId>`. Main resolves it and sends it in `run.start.workingDirectory`, and the runner creates it. In Phase 5, the agent's first `readwrite` root goes ahead of both.
+- **One process per turn**, started in the working directory: `connection.config.workingDirectory` if set, else `<userData>/workspaces/<conversationId>`. Main resolves it and sends it in `run.start.workingDirectory`, and the runner creates it. The agent's first `readwrite` root goes ahead of both (the runner applies it, Phase 5).
 - **Non-interactive, auto-accept.** The harness never waits for a person. The connection form says so.
 - **Isolated from the user's CLI setup.** User settings, hooks and MCP servers are not loaded; only the harness's own login is used. `extraArgs` are appended last and can override this.
 - **Env hygiene.** The child gets the runner's env minus `ELECTRON_RUN_AS_NODE`, `COMITIVA_*`, `ANTHROPIC_API_KEY`, `ANTHROPIC_AUTH_TOKEN`, `OPENAI_API_KEY` and `CODEX_API_KEY`. The harness then authenticates with the same login its `auth status` reports.
@@ -121,6 +137,7 @@ Connections of kind `cli` run a coding-agent CLI as a child process of the runne
 - **History.** Both harnesses keep it (resume by `harnessSessionId`). With a session id, only the new user message is sent. Without one (first turn, or a conversation moved from another connection), the prior messages are replayed as one transcript prompt and a new session starts. If a resume fails because the session no longer exists, and no output has been yielded yet, the turn is retried once as a replay.
 - **Cancel** kills the process group (SIGTERM, then SIGKILL after 3 s; `taskkill /T` on Windows). It yields the usage known so far (estimated) and `done(cancelled)`, as the API adapters do.
 - **Tools the harness runs itself** are reported as `run.block` `tool_use` / `tool_result` blocks with `toolServerId: 'harness:<provider>'`. They never go through `run.tool_call`, because the harness has already run them.
+- **The agent's MCP tools** (Phase 5, ADR 0009, `docs/tools.md`): the only MCP server the harness gets is the runner's proxy, named `comitiva` (`ctx.mcpConfigForCli()` → `TurnSpec.mcp`). Its calls go through the runner's gate and approvals, and the run reports them itself, so a parser must drop the harness's own report of `comitiva` calls. MCP calls can wait for the user: give them a long timeout (30 min). When `mcp.hasFilesystem`, turn the harness's native file tools off, or confine them read-only when they cannot be turned off.
 - **testConnection**: locate the binary → `--version` → auth check → (Codex) sandbox probe → a minimal prompt. Errors: `binary_not_found` ("not found at X" / "not found on PATH"), `not_logged_in` (with the login command), `sandbox_unavailable`.
 
 ## Claude Code
@@ -130,9 +147,9 @@ Connections of kind `cli` run a coding-agent CLI as a child process of the runne
 | Non-interactive | `-p` (`--print`). With no prompt argument, the prompt is read from stdin. |
 | JSON stream | `--output-format stream-json --verbose --include-partial-messages` (the last one gives token deltas). |
 | Resume | `--resume <session_id>` keeps the history. `--no-session-persistence` for probes. |
-| MCP (Phase 5) | `--mcp-config <file>` plus `--strict-mcp-config` |
+| MCP (Phase 5) | `--mcp-config <file>` plus `--strict-mcp-config`; the file names only the runner's proxy. `MCP_TOOL_TIMEOUT` (ms, env) is set to 30 min, since a call may wait for approval. Claude Code passes its tool-use id in `tools/call` `_meta` (`claudecode/toolUseId`), and the run reuses it. |
 | Permissions | `--permission-mode bypassPermissions` (auto-accept; works under `-p`) |
-| Built-in tools | `--tools ""` turns all of them off; `--tools A,B` limits the set; `--disallowedTools`. Phase 2 keeps the defaults. Phase 5 removes the file-writing ones. |
+| Built-in tools | `--tools ""` turns all of them off; `--tools A,B` limits the set; `--disallowedTools`. Without tools the defaults stay; with the filesystem server, `--tools WebSearch,WebFetch` (no Read/Write/Edit, and no Bash, which can write too). |
 | System prompt | `--append-system-prompt <role>` |
 | Model | `--model <id or alias>`; omitted → the harness default |
 | Isolation | `--setting-sources ""` and `--strict-mcp-config`. **Not** `--bare`: it skips OAuth and the keychain, so subscription logins stop working. |
@@ -161,10 +178,10 @@ Observed failures:
 | Non-interactive | `codex exec … -` (with `-`, the prompt comes from stdin) |
 | JSON stream | `--json` (JSONL events) |
 | Resume | `codex exec resume <thread_id> … -` keeps the history. `--ephemeral` for probes. `exec resume` has no `-s`, so the sandbox goes through `-c sandbox_mode="…"` in both cases. |
-| MCP (Phase 5) | No file flag: `-c mcp_servers.<name>.command="…"` and `-c mcp_servers.<name>.args=[…]` (TOML values), or a temp `CODEX_HOME`. Decided in Phase 5. |
+| MCP (Phase 5) | No file flag: `-c mcp_servers.comitiva.command="…"`, `.args=[…]`, `.env={ ELECTRON_RUN_AS_NODE = "1" }` (TOML values), `.tool_timeout_sec=1800` and `.default_tools_approval_mode="approve"`. Without the last one, `exec` declines every MCP tool that is not `readOnlyHint` on its own ("unavailable without approval"), verified on 0.155.1; the runner is the gate, so Codex lets them through. |
 | Approvals | `exec` never prompts (approval policy `never`). Anything that would need approval fails, and the model sees the failure. |
 | Sandbox | `sandbox_mode` = `read-only` \| `workspace-write` (default) \| `danger-full-access`, set per connection. On Ubuntu 24.04 with AppArmor's userns restriction, `workspace-write` could not start its bubblewrap sandbox, so even reads in the working directory failed. `codex sandbox -- true` reproduces this in about 1 s (`bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted`, exit 1), and testConnection uses it as a probe. |
-| Built-in tools | `--disable shell_tool` works, but `apply_patch` (file writes) cannot be turned off (`-c include_apply_patch_tool=false` had no effect). **Codex's own file writes never go through Comitiva's approvals**, and the form warns about it. |
+| Built-in tools | `--disable shell_tool` works, but `apply_patch` (file writes) cannot be turned off (`-c include_apply_patch_tool=false` had no effect). So when the agent has the filesystem server, the runner forces `sandbox_mode="read-only"`: native writes fail, and writes go through the built-in server and its approvals. Without it, **Codex's own file writes never go through Comitiva's approvals**, and the form warns about it. |
 | System prompt | `-c developer_instructions="<role>"` (a TOML string) |
 | Model | `-m <model>`; omitted → the harness default |
 | Isolation | `--ignore-user-config` (auth still comes from `CODEX_HOME`) and `--skip-git-repo-check` (needed outside Git repositories) |

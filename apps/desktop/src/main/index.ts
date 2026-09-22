@@ -9,6 +9,9 @@ import { ToolApprovalRepository } from './db/repositories/ToolApprovalRepository
 import { ToolServerRepository } from './db/repositories/ToolServerRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { UsageRepository } from './db/repositories/UsageRepository';
+import { PricingRepository } from './db/repositories/PricingRepository';
+import { Pricing } from './usage/Pricing';
+import { UsageService } from './usage/UsageService';
 import { IpcRouter } from './ipc/IpcRouter';
 import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
 import { paths } from './paths';
@@ -39,6 +42,17 @@ async function pickFolder(): Promise<string | null> {
   const win = BrowserWindow.getFocusedWindow();
   const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
   return r.canceled ? null : (r.filePaths[0] ?? null);
+}
+
+/** Native save dialog, attached to the focused window. */
+async function pickSaveFile(suggestedName: string): Promise<string | null> {
+  const opts: Electron.SaveDialogOptions = {
+    defaultPath: suggestedName,
+    filters: [{ name: 'CSV', extensions: ['csv'] }],
+  };
+  const win = BrowserWindow.getFocusedWindow();
+  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
+  return r.canceled ? null : (r.filePath ?? null);
 }
 
 function createWindow(): BrowserWindow {
@@ -136,7 +150,16 @@ async function bootstrap(): Promise<void> {
     },
   });
 
-  const usage = new UsageRepository(db);
+  const prices = new PricingRepository(db);
+  const pricing = new Pricing(prices);
+  const usage = new UsageRepository(db, pricing);
+  const usageReports = new UsageService({
+    db,
+    usage,
+    prices,
+    pricing,
+    saveFile: (name) => pickSaveFile(name),
+  });
   const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
   const chat = new ConversationService({
     db,
@@ -198,6 +221,14 @@ async function bootstrap(): Promise<void> {
       'googleDrive.disconnect': () => googleDrive.disconnect(),
       'approvals.decide': ({ conversationId, toolUseId, decision }) =>
         chat.decide(conversationId, toolUseId, decision),
+      'usage.summary': (range) => usageReports.summary(range),
+      'usage.timeseries': (range) => usageReports.timeseries(range),
+      'usage.conversation': ({ conversationId }) => usageReports.conversation(conversationId),
+      'usage.export': ({ shape, ...range }) => usageReports.export(range, shape),
+      'usage.prices': () => usageReports.prices(),
+      'usage.setPrice': ({ provider, model, prices: p }) =>
+        usageReports.setPrice(provider, model, p),
+      'usage.clearPrice': ({ provider, model }) => usageReports.clearPrice(provider, model),
     },
     isTrustedUrl,
   );

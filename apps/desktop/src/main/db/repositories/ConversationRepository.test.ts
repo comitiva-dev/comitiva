@@ -153,13 +153,13 @@ describe('UsageRepository', () => {
       agentId: 'a1',
       conversationId: c.id,
       messageId: null,
+      provider: 'ollama',
       model: 'llama3',
       inputTokens: 10,
       outputTokens: 3,
       cacheReadTokens: null,
       cacheWriteTokens: null,
       estimated: true,
-      estimatedCostUsd: null,
       latencyMs: 120,
     });
     expect(usage.listByConversation(c.id)).toEqual([

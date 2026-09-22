@@ -187,6 +187,8 @@ export const usageRecords = sqliteTable(
     agentId: text('agent_id').notNull(),
     conversationId: text('conversation_id').notNull(),
     messageId: text('message_id'),
+    /** The connection's provider, kept so the row survives the connection. */
+    provider: text('provider').notNull().default(''),
     model: text('model').notNull(),
     inputTokens: integer('input_tokens'),
     outputTokens: integer('output_tokens'),
@@ -194,13 +196,35 @@ export const usageRecords = sqliteTable(
     cacheWriteTokens: integer('cache_write_tokens'),
     estimated: integer('estimated', { mode: 'boolean' }).notNull().default(false),
     costUsd: real('cost_usd'),
+    /** 'table' | 'override' | 'harness'; a price change never touches 'harness'. */
+    costSource: text('cost_source'),
+    costEstimated: integer('cost_estimated', { mode: 'boolean' }).notNull().default(false),
     latencyMs: integer('latency_ms'),
     createdAt: text('created_at').notNull(),
   },
   (t) => [
     index('idx_usage_conn_time').on(t.connectionId, t.createdAt),
     index('idx_usage_agent_time').on(t.agentId, t.createdAt),
+    // A dashboard over every connection, and the by-model table and reprice.
+    index('idx_usage_time').on(t.createdAt),
+    index('idx_usage_model_time').on(t.provider, t.model, t.createdAt),
+    index('idx_usage_conv').on(t.conversationId),
   ],
+);
+
+/** The user's corrections to the runner's pricing table, per model. */
+export const modelPrices = sqliteTable(
+  'model_prices',
+  {
+    provider: text('provider').notNull(),
+    model: text('model').notNull(),
+    inputPer1M: real('input_per_1m').notNull(),
+    outputPer1M: real('output_per_1m').notNull(),
+    cacheReadPer1M: real('cache_read_per_1m'),
+    cacheWritePer1M: real('cache_write_per_1m'),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.provider, t.model] })],
 );
 
 /** App-wide preferences (AppSettings in the contract), one row per key. */

@@ -181,13 +181,14 @@ export class TitleService {
         agentId: req.agent.id,
         conversationId: req.conversationId,
         messageId: null,
-        model,
+        provider: req.connection.provider,
+        model: e.model ?? model,
         inputTokens: e.inputTokens,
         outputTokens: e.outputTokens,
         cacheReadTokens: e.cacheReadTokens ?? null,
         cacheWriteTokens: e.cacheWriteTokens ?? null,
         estimated: e.estimated,
-        estimatedCostUsd: null,
+        reportedCostUsd: e.reportedCostUsd ?? null,
         latencyMs: Math.max(0, Math.round(e.receivedAt - startedAt)),
       });
     } catch (err) {

@@ -33,6 +33,7 @@ describe('Database', () => {
         'connections',
         'conversations',
         'messages',
+        'model_prices',
         'tool_approvals',
         'tool_servers',
         'usage_records',
@@ -47,6 +48,9 @@ describe('Database', () => {
         'idx_approvals_always',
         'idx_usage_conn_time',
         'idx_usage_agent_time',
+        'idx_usage_time',
+        'idx_usage_model_time',
+        'idx_usage_conv',
       ]),
     );
   });

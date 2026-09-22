@@ -502,13 +502,16 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
           agentId: run.agent.id,
           conversationId: run.conversationId,
           messageId: run.messageId,
-          model: run.model || 'default',
+          provider: run.connection.provider,
+          // What the provider or harness actually ran beats what we asked
+          // for: a CLI connection often names no model at all.
+          model: u.model ?? run.model,
           inputTokens: u.inputTokens,
           outputTokens: u.outputTokens,
           cacheReadTokens: u.cacheReadTokens ?? null,
           cacheWriteTokens: u.cacheWriteTokens ?? null,
           estimated: u.estimated,
-          estimatedCostUsd: null, // Phase 6
+          reportedCostUsd: u.reportedCostUsd ?? null,
           latencyMs: Math.max(0, Math.round(at - run.startedAt)),
         });
       }

@@ -18,6 +18,8 @@ import { MessageRepository } from '../db/repositories/MessageRepository';
 import { ToolApprovalRepository } from '../db/repositories/ToolApprovalRepository';
 import { ToolServerRepository } from '../db/repositories/ToolServerRepository';
 import { UsageRepository } from '../db/repositories/UsageRepository';
+import { PricingRepository } from '../db/repositories/PricingRepository';
+import { Pricing } from '../usage/Pricing';
 import { MemorySecrets } from '../testing/MemorySecrets';
 import {
   buildHistory,
@@ -143,7 +145,7 @@ beforeEach(() => {
   runner = new FakeRunner();
   conversations = new ConversationRepository(db);
   messages = new MessageRepository(db);
-  usageRepo = new UsageRepository(db);
+  usageRepo = new UsageRepository(db, new Pricing(new PricingRepository(db)));
   agents = new AgentRepository(db);
   connections = new ConnectionRepository(db);
   connections.create({
@@ -295,16 +297,52 @@ describe('ConversationService: sending and streaming', () => {
         connectionId: 'c-api',
         agentId: 'a1',
         messageId: reply.id,
+        provider: 'anthropic',
         model: 'claude-sonnet-5',
         inputTokens: 12,
         outputTokens: 5,
         cacheReadTokens: 3,
         cacheWriteTokens: null,
         estimated: false,
-        estimatedCostUsd: null,
+        // Costed as it is written, from the table that ships with the runner:
+        // Sonnet 5 at $2/$10 per million, cache reads at $0.20.
+        estimatedCostUsd: (12 * 2 + 5 * 10 + 3 * 0.2) / 1_000_000,
+        costSource: 'table',
+        costEstimated: false,
         latencyMs: 1234,
       }),
     ]);
+  });
+
+  it('prefers the model the provider actually ran over the one configured', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, usage({ model: 'claude-sonnet-5-20260101' }));
+    runner.send(runId, done());
+    expect(usageRepo.listByConversation(conversation.id)[0]).toMatchObject({
+      model: 'claude-sonnet-5-20260101',
+      // Priced by the id it starts with, so a dated snapshot is not unpriced.
+      costSource: 'table',
+    });
+  });
+
+  it('takes a cost the harness reported over its own arithmetic', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, usage({ model: 'claude-opus-5', reportedCostUsd: 0.0042 }));
+    runner.send(runId, done());
+    expect(usageRepo.listByConversation(conversation.id)[0]).toMatchObject({
+      estimatedCostUsd: 0.0042,
+      costSource: 'harness',
+    });
+  });
+
+  it('marks the cost estimated when the tokens behind it were', async () => {
+    const { conversation, runId } = await started();
+    runner.send(runId, usage({ estimated: true }));
+    runner.send(runId, done());
+    expect(usageRepo.listByConversation(conversation.id)[0]).toMatchObject({
+      estimated: true,
+      costEstimated: true,
+    });
   });
 
   it('keeps two conversations streaming at once apart', async () => {
@@ -907,7 +945,15 @@ describe('TitleService', () => {
     runner.send(run.runId!, done());
     expect(await pending).toBe('Lisbon trip plan');
     expect(usageRepo.listByConversation(req.conversationId)).toEqual([
-      expect.objectContaining({ messageId: null, model: 'claude-haiku-4-5', outputTokens: 4 }),
+      // A title run costs tokens on its own cheap model, and is costed too.
+      expect.objectContaining({
+        messageId: null,
+        provider: 'anthropic',
+        model: 'claude-haiku-4-5',
+        outputTokens: 4,
+        estimatedCostUsd: (12 * 1 + 4 * 5) / 1_000_000,
+        costSource: 'table',
+      }),
     ]);
   });
 

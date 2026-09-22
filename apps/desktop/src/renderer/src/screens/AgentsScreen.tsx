@@ -42,6 +42,12 @@ export function AgentsScreen() {
   );
 
   const selected = agents.find((a) => a.id === selectedId) ?? null;
+  // The panel shows the open conversation's usage, so it needs its id too.
+  const openId = useConversations((s) =>
+    selectedId
+      ? openConversation(s.selectedByAgent[selectedId], s.idsByAgent[selectedId] ?? [])
+      : null,
+  );
   const editing = editor.mode === 'edit' ? (agents.find((a) => a.id === editor.id) ?? null) : null;
   const deleting = agents.find((a) => a.id === confirmDelete);
 
@@ -62,7 +68,7 @@ export function AgentsScreen() {
         {selected ? <SelectedAgent /> : <NoSelection />}
       </section>
 
-      {selected && <AgentPanel agent={selected} />}
+      {selected && <AgentPanel agent={selected} conversationId={openId} />}
 
       {editor.mode !== 'closed' && (
         <AgentForm

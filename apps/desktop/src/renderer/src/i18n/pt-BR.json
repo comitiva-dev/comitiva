@@ -14,7 +14,9 @@
     "cancel": "Cancelar",
     "save": "Salvar",
     "saving": "Salvando…",
-    "dismiss": "Fechar"
+    "dismiss": "Fechar",
+    "edit": "Editar",
+    "loading": "Carregando…"
   },
   "nav": {
     "label": "Principal",
@@ -31,7 +33,6 @@
     "awaiting": "Aprovar"
   },
   "placeholder": {
-    "usage": "Uso de tokens e custos por conexão e agente chegam em uma fase posterior.",
     "settings": "Idioma, tema e outras preferências chegam em uma fase posterior."
   },
   "secrets": {
@@ -456,6 +457,71 @@
         "clientSecretHint": "Guardada no chaveiro do sistema, nunca mais mostrada. Deixe em branco para manter a guardada.",
         "changesAccount": "Outro cliente desconecta a conta Google atual."
       }
+    }
+  },
+  "usage": {
+    "title": "Uso",
+    "subtitle": "Tokens e custo estimado por conexão, agente, modelo e dia.",
+    "empty": "Nada foi executado neste período.",
+    "equivalent": "Custo equivalente — seu plano pode cobrar de outra forma.",
+    "byConnection": "Por conexão",
+    "byAgent": "Por agente",
+    "byModel": "Por modelo",
+    "period": {
+      "label": "Período",
+      "today": "Hoje",
+      "last7": "Últimos 7 dias",
+      "last30": "Últimos 30 dias",
+      "thisMonth": "Este mês",
+      "custom": "Personalizado",
+      "from": "De",
+      "to": "Até"
+    },
+    "totals": {
+      "label": "Totais",
+      "cost": "Custo",
+      "costCli": "Harnesses CLI",
+      "tokens": "Tokens",
+      "runs": "Execuções",
+      "estimated": "Parte contada localmente",
+      "unpriced": "Alguns modelos sem preço"
+    },
+    "metric": {
+      "tokens": "Tokens",
+      "cost": "Custo"
+    },
+    "tokens": {
+      "input": "Entrada",
+      "output": "Saída",
+      "cacheRead": "Leitura de cache",
+      "cacheWrite": "Escrita de cache"
+    },
+    "chart": {
+      "label": "Uso por dia",
+      "title": "Por dia",
+      "metric": "O que mostrar",
+      "empty": "Sem uso neste período."
+    },
+    "table": {
+      "tokens": "tokens",
+      "deleted": "(excluído)",
+      "deletedShort": "excluído"
+    },
+    "export": {
+      "records": "Exportar execuções",
+      "summary": "Exportar resumo",
+      "saved": "Salvo em {{path}}"
+    },
+    "prices": {
+      "title": "Preços",
+      "hint": "Os preços vêm com o Comitiva. Corrigir um recalcula o custo já registrado desse modelo.",
+      "per1M": "Dólares por milhão de tokens",
+      "corrected": "corrigido",
+      "unknown": "sem preço",
+      "set": "Definir preço",
+      "reset": "Usar padrão",
+      "optional": "opcional",
+      "invalid": "Os preços de entrada e saída devem ser números maiores ou iguais a zero."
     }
   }
 }

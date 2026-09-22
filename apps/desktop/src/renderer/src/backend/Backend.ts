@@ -29,6 +29,13 @@ import type {
   ToolServerDraft,
   ToolServerPatch,
   UserContent,
+  ModelPrice,
+  ModelPrices,
+  ProviderId,
+  UsageBucket,
+  UsageRange,
+  UsageSummary,
+  UsageTotals,
 } from '@comitiva/contract';
 
 /**
@@ -125,6 +132,21 @@ export interface Backend {
     connect(): Promise<GoogleDriveStatus>;
     cancelConnect(): Promise<void>;
     disconnect(): Promise<GoogleDriveStatus>;
+  };
+  usage: {
+    /** Totals plus the tables by connection, agent and model, in one call. */
+    summary(range: UsageRange): Promise<UsageSummary>;
+    /** One point per day in the range, including the days nothing ran. */
+    timeseries(range: UsageRange): Promise<UsageBucket[]>;
+    /** What one conversation has used so far. */
+    conversation(conversationId: string): Promise<UsageTotals>;
+    /** Writes a CSV where the user picks; resolves null when they cancel. */
+    export(input: UsageRange & { shape?: 'records' | 'summary' }): Promise<string | null>;
+    /** Every model seen in the records, with the price in force for it. */
+    prices(): Promise<ModelPrice[]>;
+    /** Corrects a price and recosts that model's records. Returns the new list. */
+    setPrice(provider: ProviderId, model: string, prices: ModelPrices): Promise<ModelPrice[]>;
+    clearPrice(provider: ProviderId, model: string): Promise<ModelPrice[]>;
   };
   approvals: {
     /** Answers the conversation's pending tool call. */

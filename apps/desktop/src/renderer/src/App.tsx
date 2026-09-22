@@ -3,6 +3,7 @@ import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { PlaceholderScreen } from './screens/PlaceholderScreen';
 import { ToolsScreen } from './screens/ToolsScreen';
+import { UsageScreen } from './screens/UsageScreen';
 import { useApp } from './store/context';
 
 export function App() {
@@ -17,6 +18,8 @@ export function App() {
           <AgentsScreen />
         ) : section === 'tools' ? (
           <ToolsScreen />
+        ) : section === 'usage' ? (
+          <UsageScreen />
         ) : (
           <PlaceholderScreen section={section} />
         )}

@@ -12,6 +12,7 @@ import { createConversationsStore } from './store/conversations';
 import { createGoogleDriveStore } from './store/googleDrive';
 import { createMessagesStore } from './store/messages';
 import { createToolServersStore } from './store/toolServers';
+import { createUsageStore } from './store/usage';
 
 const backend = new LocalBackend();
 const stores = {
@@ -22,11 +23,16 @@ const stores = {
   messages: createMessagesStore(backend),
   toolServers: createToolServersStore(backend),
   googleDrive: createGoogleDriveStore(backend),
+  usage: createUsageStore(backend),
 };
 backend.onEvent((event) => {
   stores.app.getState().handleEvent(event);
   stores.conversations.getState().handleEvent(event);
   stores.messages.getState().handleEvent(event);
+  // A finished reply wrote a usage record; the right panel shows its totals.
+  if (event.type === 'message.updated' && event.message.status !== 'streaming') {
+    void stores.usage.getState().loadConversation(event.message.conversationId);
+  }
 });
 void stores.app.getState().init();
 void stores.agents.getState().load();

@@ -6,7 +6,7 @@ import type { Section } from '../store/app';
 export function PlaceholderScreen({
   section,
 }: {
-  section: Exclude<Section, 'connections' | 'agents' | 'tools'>;
+  section: Exclude<Section, 'connections' | 'agents' | 'tools' | 'usage'>;
 }) {
   const { t } = useTranslation();
   return (

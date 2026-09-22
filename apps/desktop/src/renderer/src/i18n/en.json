@@ -14,7 +14,9 @@
     "cancel": "Cancel",
     "save": "Save",
     "saving": "Saving…",
-    "dismiss": "Dismiss"
+    "dismiss": "Dismiss",
+    "edit": "Edit",
+    "loading": "Loading…"
   },
   "nav": {
     "label": "Main",
@@ -31,7 +33,6 @@
     "awaiting": "Approve"
   },
   "placeholder": {
-    "usage": "Token usage and costs per connection and agent arrive in a later phase.",
     "settings": "Language, theme and other preferences arrive in a later phase."
   },
   "secrets": {
@@ -456,6 +457,71 @@
         "clientSecretHint": "Stored in the system keyring, never shown again. Leave blank to keep the stored one.",
         "changesAccount": "A different client disconnects the current Google account."
       }
+    }
+  },
+  "usage": {
+    "title": "Usage",
+    "subtitle": "Tokens and estimated cost per connection, agent, model and day.",
+    "empty": "Nothing ran in this period.",
+    "equivalent": "Equivalent cost — your plan may bill differently.",
+    "byConnection": "By connection",
+    "byAgent": "By agent",
+    "byModel": "By model",
+    "period": {
+      "label": "Period",
+      "today": "Today",
+      "last7": "Last 7 days",
+      "last30": "Last 30 days",
+      "thisMonth": "This month",
+      "custom": "Custom",
+      "from": "From",
+      "to": "To"
+    },
+    "totals": {
+      "label": "Totals",
+      "cost": "Cost",
+      "costCli": "CLI harnesses",
+      "tokens": "Tokens",
+      "runs": "Runs",
+      "estimated": "Some counted locally",
+      "unpriced": "Some models have no price"
+    },
+    "metric": {
+      "tokens": "Tokens",
+      "cost": "Cost"
+    },
+    "tokens": {
+      "input": "Input",
+      "output": "Output",
+      "cacheRead": "Cache read",
+      "cacheWrite": "Cache write"
+    },
+    "chart": {
+      "label": "Usage by day",
+      "title": "By day",
+      "metric": "What to show",
+      "empty": "No usage in this period."
+    },
+    "table": {
+      "tokens": "tokens",
+      "deleted": "(deleted)",
+      "deletedShort": "deleted"
+    },
+    "export": {
+      "records": "Export runs",
+      "summary": "Export summary",
+      "saved": "Saved to {{path}}"
+    },
+    "prices": {
+      "title": "Prices",
+      "hint": "Prices ship with Comitiva. Correcting one recalculates that model's recorded cost.",
+      "per1M": "US dollars per million tokens",
+      "corrected": "corrected",
+      "unknown": "no price",
+      "set": "Set price",
+      "reset": "Use default",
+      "optional": "optional",
+      "invalid": "Input and output prices must be numbers of zero or more."
     }
   }
 }

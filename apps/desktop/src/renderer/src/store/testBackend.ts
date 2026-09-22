@@ -13,6 +13,14 @@ import type {
   ToolDef,
   ToolServer,
   ToolServerDraft,
+  ModelPrice,
+  ModelPrices,
+  ProviderId,
+  UsageBucket,
+  UsageRange,
+  UsageSummary,
+  UsageSummaryRow,
+  UsageTotals,
 } from '@comitiva/contract';
 import type { Backend } from '../backend/Backend';
 
@@ -110,6 +118,25 @@ export const message = (id: string, overrides: Partial<Message> = {}): Message =
   ...overrides,
 });
 
+export function usageTotals(over: Partial<UsageTotals> = {}): UsageTotals {
+  return {
+    runs: 0,
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheReadTokens: 0,
+    cacheWriteTokens: 0,
+    costUsd: 0,
+    costUsdCli: 0,
+    anyEstimated: false,
+    anyUnpriced: false,
+    ...over,
+  };
+}
+
+export function usageRow(over: Partial<UsageSummaryRow> = {}): UsageSummaryRow {
+  return { key: 'k', label: 'Row', provider: null, deleted: false, ...usageTotals(), ...over };
+}
+
 /** A Backend whose methods are vi.fn()s with sensible defaults. */
 export function fakeBackend() {
   const backend = {
@@ -182,6 +209,29 @@ export function fakeBackend() {
       ),
     },
     approvals: { decide: vi.fn(async () => {}) },
+    usage: {
+      summary: vi.fn(async (_range: UsageRange): Promise<UsageSummary> => ({
+        totals: usageTotals(),
+        byConnection: [],
+        byAgent: [],
+        byModel: [],
+      })),
+      timeseries: vi.fn(async (_range: UsageRange): Promise<UsageBucket[]> => []),
+      conversation: vi.fn(async (_conversationId: string): Promise<UsageTotals> => usageTotals()),
+      export: vi.fn(
+        async (_input: UsageRange & { shape?: 'records' | 'summary' }): Promise<string | null> =>
+          '/tmp/usage.csv',
+      ),
+      prices: vi.fn(async (): Promise<ModelPrice[]> => []),
+      setPrice: vi.fn(
+        async (
+          _provider: ProviderId,
+          _model: string,
+          _prices: ModelPrices,
+        ): Promise<ModelPrice[]> => [],
+      ),
+      clearPrice: vi.fn(async (_provider: ProviderId, _model: string): Promise<ModelPrice[]> => []),
+    },
     onEvent: vi.fn(() => () => {}),
   } satisfies Backend;
   return backend;

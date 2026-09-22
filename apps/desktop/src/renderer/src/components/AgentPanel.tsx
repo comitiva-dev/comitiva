@@ -4,13 +4,27 @@ import type { Agent } from '@comitiva/contract';
 import { errorCode } from '../backend/Backend';
 import { connectionState, defaultModelOf } from '../lib/agentForm';
 import { providerLabel } from '../lib/connectionForm';
+import { money, tokens } from '../lib/format';
 import { serverDisplayName } from '../lib/toolServerForm';
-import { useAgents, useConnections, useToolServers } from '../store/context';
+import { totalCost, totalTokens } from '../lib/usage';
+import {
+  useAgents,
+  useConnections,
+  useStoreApis,
+  useToolServers,
+  useUsage,
+} from '../store/context';
 import { AgentAvatar } from './AgentAvatar';
 import { ui } from './ui';
 
 /** Right panel: the selected agent's details, with its role editable in place. */
-export function AgentPanel({ agent }: { agent: Agent }) {
+export function AgentPanel({
+  agent,
+  conversationId,
+}: {
+  agent: Agent;
+  conversationId: string | null;
+}) {
   const { t } = useTranslation();
   const openEdit = useAgents((s) => s.openEdit);
   const duplicate = useAgents((s) => s.duplicate);
@@ -150,6 +164,8 @@ export function AgentPanel({ agent }: { agent: Agent }) {
         </dd>
       </dl>
 
+      {conversationId !== null && <ConversationUsage conversationId={conversationId} />}
+
       {/* Keyed by agent: selecting another agent drops an unsaved draft. */}
       <RoleEditor key={agent.id} agent={agent} />
     </aside>
@@ -253,6 +269,48 @@ function RoleEditor({ agent }: { agent: Agent }) {
           </div>
         </>
       )}
+    </section>
+  );
+}
+
+/** What the open conversation has used so far. Loaded when it is opened, and
+ *  refreshed by the store whenever one of its replies finishes. */
+function ConversationUsage({ conversationId }: { conversationId: string }) {
+  const { t, i18n } = useTranslation();
+  const { usage } = useStoreApis();
+  const totals = useUsage((s) => s.byConversation[conversationId]);
+  const locale = i18n.language;
+
+  useEffect(() => {
+    void usage.getState().loadConversation(conversationId);
+  }, [usage, conversationId]);
+
+  if (totals === undefined || totals.runs === 0) return null;
+  const cost = totalCost(totals);
+
+  return (
+    <section data-testid="panel-usage">
+      <h3 className={`${ui.muted} mb-1 text-xs font-medium uppercase tracking-wide`}>
+        {t('usage.title')}
+      </h3>
+      <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+        <dt className={ui.muted}>{t('usage.totals.tokens')}</dt>
+        <dd className="tabular-nums" data-testid="panel-usage-tokens">
+          {tokens(totalTokens(totals), locale)}
+          {totals.anyEstimated && (
+            <span className={`${ui.muted} ml-1 text-xs`}>({t('usage.totals.estimated')})</span>
+          )}
+        </dd>
+        <dt className={ui.muted}>{t('usage.totals.cost')}</dt>
+        <dd className="tabular-nums" data-testid="panel-usage-cost">
+          {totals.anyUnpriced && cost === 0 ? '—' : money(cost, locale)}
+          {totals.costUsdCli > 0 && (
+            <span className={`${ui.muted} ml-1 text-xs`} title={t('usage.equivalent')}>
+              *
+            </span>
+          )}
+        </dd>
+      </dl>
     </section>
   );
 }

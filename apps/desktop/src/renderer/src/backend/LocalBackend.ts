@@ -16,6 +16,9 @@ import type {
   ToolServerTestTarget,
   GoogleDriveConfigureInput,
   UserContent,
+  ModelPrices,
+  ProviderId,
+  UsageRange,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
 
@@ -113,6 +116,20 @@ export class LocalBackend implements Backend {
   approvals = {
     decide: (conversationId: string, toolUseId: string, decision: ApprovalDecision) =>
       this.api.invoke('approvals.decide', { conversationId, toolUseId, decision }),
+  };
+
+  usage = {
+    summary: (range: UsageRange) => this.api.invoke('usage.summary', range),
+    timeseries: (range: UsageRange) => this.api.invoke('usage.timeseries', range),
+    conversation: (conversationId: string) =>
+      this.api.invoke('usage.conversation', { conversationId }),
+    export: (input: UsageRange & { shape?: 'records' | 'summary' }) =>
+      this.api.invoke('usage.export', input),
+    prices: () => this.api.invoke('usage.prices', undefined),
+    setPrice: (provider: ProviderId, model: string, prices: ModelPrices) =>
+      this.api.invoke('usage.setPrice', { provider, model, prices }),
+    clearPrice: (provider: ProviderId, model: string) =>
+      this.api.invoke('usage.clearPrice', { provider, model }),
   };
 
   onEvent(handler: (event: BackendEvent) => void): () => void {

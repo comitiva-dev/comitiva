@@ -7,14 +7,21 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "comitiva-mcp-filesystem": "dist/filesystem.cjs"
+    "comitiva-mcp-filesystem": "dist/filesystem.cjs",
+    "comitiva-mcp-gdrive": "dist/google-drive.cjs"
   },
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./filesystem-bin": "./dist/filesystem.cjs"
+    "./testing": {
+      "types": "./dist/testing/index.d.ts",
+      "import": "./dist/testing/index.js",
+      "default": "./dist/testing/index.js"
+    },
+    "./filesystem-bin": "./dist/filesystem.cjs",
+    "./google-drive-bin": "./dist/google-drive.cjs"
   },
   "files": [
     "dist"

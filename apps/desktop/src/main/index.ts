@@ -10,12 +10,14 @@ import { ToolServerRepository } from './db/repositories/ToolServerRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { UsageRepository } from './db/repositories/UsageRepository';
 import { IpcRouter } from './ipc/IpcRouter';
+import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
 import { AgentService } from './services/AgentService';
 import { ConnectionService } from './services/ConnectionService';
 import { ConversationService } from './services/ConversationService';
+import { GoogleDriveService } from './services/GoogleDriveService';
 import { TitleService } from './services/TitleService';
 import { ToolServerService } from './services/ToolServerService';
 
@@ -100,6 +102,19 @@ async function bootstrap(): Promise<void> {
   const agents = new AgentService(agentRepo);
   const settings = new SettingsRepository(db);
 
+  // Google's endpoints; tests and CI point both at a fake server.
+  const googleApiBaseUrl = process.env.COMITIVA_GOOGLE_API_BASE_URL;
+  const googleDrive = new GoogleDriveService({
+    secrets,
+    runner: supervisor.client,
+    apiBaseUrl: googleApiBaseUrl ?? GOOGLE_API_BASE_URL,
+    oauth: new GoogleOAuth({
+      endpoints: googleEndpoints(process.env.COMITIVA_GOOGLE_OAUTH_BASE_URL),
+      // Looked up at call time, so e2e can stand in for the browser.
+      openExternal: (url) => shell.openExternal(url),
+    }),
+  });
+
   const toolServers = new ToolServerService({
     repo: new ToolServerRepository(db),
     secrets,
@@ -109,6 +124,15 @@ async function bootstrap(): Promise<void> {
       command: process.execPath,
       args: [paths.filesystemServer()],
       env: { ELECTRON_RUN_AS_NODE: '1' },
+    },
+    googleDrive: {
+      command: process.execPath,
+      args: [paths.googleDriveServer()],
+      env: {
+        ELECTRON_RUN_AS_NODE: '1',
+        ...(googleApiBaseUrl ? { GDRIVE_API_BASE_URL: googleApiBaseUrl } : {}),
+      },
+      accessToken: () => googleDrive.accessToken(),
     },
   });
 
@@ -166,7 +190,12 @@ async function bootstrap(): Promise<void> {
       'toolServers.create': (draft) => toolServers.create(draft),
       'toolServers.update': ({ id, patch }) => toolServers.update(id, patch),
       'toolServers.delete': ({ id }) => toolServers.delete(id),
-      'toolServers.test': ({ id }) => toolServers.test(id),
+      'toolServers.test': (target) => toolServers.test(target),
+      'googleDrive.getStatus': () => googleDrive.status(),
+      'googleDrive.configure': (input) => googleDrive.configure(input),
+      'googleDrive.connect': () => googleDrive.connect(),
+      'googleDrive.cancelConnect': () => googleDrive.cancelConnect(),
+      'googleDrive.disconnect': () => googleDrive.disconnect(),
       'approvals.decide': ({ conversationId, toolUseId, decision }) =>
         chat.decide(conversationId, toolUseId, decision),
     },

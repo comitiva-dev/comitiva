@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { FILESYSTEM_TOOL_SERVER_ID } from '@comitiva/contract';
+import { FILESYSTEM_TOOL_SERVER_ID, GOOGLE_DRIVE_TOOL_SERVER_ID } from '@comitiva/contract';
 import { Database } from '../Database';
 import { ToolApprovalRepository } from './ToolApprovalRepository';
 import { ToolServerRepository } from './ToolServerRepository';
@@ -29,9 +29,9 @@ const search = {
 };
 
 describe('ToolServerRepository', () => {
-  it('ships the built-in filesystem server, enabled, and lists built-ins first', () => {
+  it('ships the built-in filesystem and Google Drive servers, enabled, and lists built-ins first', () => {
     repo.create(search);
-    const [first, second] = repo.list();
+    const [first, second, third] = repo.list();
     expect(first).toMatchObject({
       id: FILESYSTEM_TOOL_SERVER_ID,
       builtin: true,
@@ -39,7 +39,17 @@ describe('ToolServerRepository', () => {
       transport: 'stdio',
       command: null,
     });
-    expect(second).toMatchObject({ id: '01S', builtin: false });
+    expect(second).toMatchObject({
+      id: GOOGLE_DRIVE_TOOL_SERVER_ID,
+      name: 'Google Drive',
+      builtin: true,
+      enabled: true,
+      transport: 'stdio',
+      command: null,
+      env: {},
+    });
+    expect(third).toMatchObject({ id: '01S', builtin: false });
+    expect(() => repo.delete(GOOGLE_DRIVE_TOOL_SERVER_ID)).toThrow();
   });
 
   it('round-trips env and headers as values or secret refs only', () => {

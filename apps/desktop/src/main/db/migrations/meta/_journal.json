@@ -36,6 +36,13 @@
       "when": 1790021382920,
       "tag": "0004_builtin_tool_servers",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1790083548100,
+      "tag": "0005_google_drive_tool_server",
+      "breakpoints": true
     }
   ]
 }

@@ -3,6 +3,7 @@ import { ulid } from 'ulid';
 import {
   AppError,
   FILESYSTEM_TOOL_SERVER_ID,
+  GOOGLE_DRIVE_TOOL_SERVER_ID,
   type Agent,
   type ToolDef,
   type ToolServer,
@@ -10,6 +11,7 @@ import {
   type ToolServerValueInput,
   type ValidToolServerDraft,
   type ValidToolServerPatch,
+  type ValidToolServerTestTarget,
   type ValueOrSecret,
 } from '@comitiva/contract';
 import type { RunnerClient } from '@comitiva/runner';
@@ -29,6 +31,12 @@ export interface ToolServerServiceDeps {
   runner: Pick<RunnerClient, 'startToolServer' | 'stopToolServer'>;
   /** The built-in filesystem server's launch (paths differ in dev and packaged builds). */
   filesystem: BuiltinLaunch;
+  /**
+   * The built-in Google Drive server's launch, plus a fresh access token per
+   * launch (GoogleDriveService.accessToken: refreshed before it expires;
+   * throws google_not_connected or google_reconnect_required).
+   */
+  googleDrive: BuiltinLaunch & { accessToken(): Promise<string> };
 }
 
 type Kind = 'env' | 'header';
@@ -136,23 +144,58 @@ export class ToolServerService {
   }
 
   /**
-   * Starts the server in the runner and lists its tools. The filesystem
-   * server gets a throwaway read-write root so every tool shows.
+   * Starts a server in the runner and lists its tools: a saved one (`{ id }`),
+   * or unsaved form settings (`{ spec }`, with `id` when editing so
+   * `keepSecret` reuses stored secrets). An unsaved spec runs under a
+   * throwaway id and is stopped afterwards. The filesystem server gets a
+   * throwaway read-write root so every tool shows.
    */
-  async test(id: string): Promise<ToolDef[]> {
-    const server = this.deps.repo.require(id);
-    const toolServer = await this.launch(server);
-    const roots =
-      server.id === FILESYSTEM_TOOL_SERVER_ID
-        ? [{ path: tmpdir(), mode: 'readwrite' as const }]
-        : [];
-    return this.deps.runner.startToolServer({ toolServer, roots });
+  async test(target: ValidToolServerTestTarget): Promise<ToolDef[]> {
+    if (!('spec' in target)) {
+      const server = this.deps.repo.require(target.id);
+      const toolServer = await this.launch(server);
+      const roots =
+        server.id === FILESYSTEM_TOOL_SERVER_ID
+          ? [{ path: tmpdir(), mode: 'readwrite' as const }]
+          : [];
+      return this.deps.runner.startToolServer({ toolServer, roots });
+    }
+    const current = target.id === undefined ? undefined : this.deps.repo.require(target.id);
+    if (current?.builtin) {
+      throw new AppError('invalid_request', 'Built-in servers are tested by id');
+    }
+    const id = `test-${ulid()}`;
+    const name = current?.name ?? 'Test';
+    const spec = target.spec;
+    const toolServer: ToolServerLaunch =
+      spec.transport === 'stdio'
+        ? {
+            id,
+            name,
+            transport: 'stdio',
+            command: spec.command,
+            args: spec.args,
+            env: await this.resolveInput(name, spec.env, current?.env ?? {}),
+          }
+        : {
+            id,
+            name,
+            transport: 'http',
+            url: spec.url,
+            headers: await this.resolveInput(name, spec.headers, current?.headers ?? {}),
+          };
+    try {
+      return await this.deps.runner.startToolServer({ toolServer });
+    } finally {
+      this.stopInRunner(id);
+    }
   }
 
   /**
    * The launches for a run: the agent's enabled servers, secrets resolved.
    * The filesystem server is skipped for an agent without roots (it would
-   * refuse every path). Throws `secret_missing` when a stored secret is gone.
+   * refuse every path). Throws `secret_missing` when a stored secret is gone, and
+   * google_not_connected / google_reconnect_required for Drive without a usable account.
    */
   async launchesFor(agent: Agent): Promise<ToolServerLaunch[]> {
     const launches: ToolServerLaunch[] = [];
@@ -173,6 +216,18 @@ export class ToolServerService {
         transport: 'stdio',
         builtin: 'filesystem',
         ...this.deps.filesystem,
+      };
+    }
+    if (server.id === GOOGLE_DRIVE_TOOL_SERVER_ID) {
+      const { accessToken, command, args, env } = this.deps.googleDrive;
+      return {
+        id: server.id,
+        name: server.name,
+        transport: 'stdio',
+        builtin: 'google-drive',
+        command,
+        args,
+        env: { ...env, GDRIVE_ACCESS_TOKEN: await accessToken() },
       };
     }
     if (server.transport === 'http') {
@@ -211,6 +266,31 @@ export class ToolServerService {
         throw new AppError('secret_missing', `${server.name}: the secret ${name} is missing`);
       }
       out[name] = secret;
+    }
+    return out;
+  }
+
+  /** Unsaved form values → plain values for a test launch (keepSecret reads the stored secret). */
+  private async resolveInput(
+    serverName: string,
+    input: Record<string, ToolServerValueInput>,
+    current: Record<string, ValueOrSecret>,
+  ): Promise<Record<string, string>> {
+    const out: Record<string, string> = {};
+    for (const [name, v] of Object.entries(input)) {
+      if ('value' in v) out[name] = v.value;
+      else if ('secret' in v) out[name] = v.secret;
+      else {
+        const kept = current[name];
+        if (!kept || !('secretRef' in kept)) {
+          throw new AppError('invalid_request', `There is no stored secret for ${name}`);
+        }
+        const secret = await this.deps.secrets.get(kept.secretRef);
+        if (secret === null) {
+          throw new AppError('secret_missing', `${serverName}: the secret ${name} is missing`);
+        }
+        out[name] = secret;
+      }
     }
     return out;
   }

@@ -81,6 +81,7 @@ let secretFor: ReturnType<typeof vi.fn>;
 let title: { generate: ReturnType<typeof vi.fn> };
 let service: ConversationService;
 let events: Emitted[];
+let driveToken: () => Promise<string> = () => Promise.resolve('ya29.fresh');
 
 function makeService(titleService: unknown = title) {
   const s = new ConversationService({
@@ -99,6 +100,12 @@ function makeService(titleService: unknown = title) {
       secrets: new MemorySecrets(),
       runner: { startToolServer: vi.fn(), stopToolServer: vi.fn() } as never,
       filesystem: { command: '/app/node', args: ['/app/filesystem.cjs'], env: {} },
+      googleDrive: {
+        command: '/app/node',
+        args: ['/app/google-drive.cjs'],
+        env: {},
+        accessToken: () => driveToken(),
+      },
     }),
     approvals: new ToolApprovalRepository(db),
   });
@@ -782,6 +789,31 @@ describe('ConversationService: tools and approvals', () => {
       code: 'secret_missing',
     });
     expect(messages.all(conversation.id)).toEqual([]);
+  });
+
+  it('starts Google Drive with a fresh token, and refuses to send without an account', async () => {
+    agents.update('a1', { toolServerIds: ['google-drive'], roots: [] });
+    await started();
+    expect(runner.started[0]).toMatchObject({
+      toolServers: [
+        {
+          id: 'google-drive',
+          builtin: 'google-drive',
+          args: ['/app/google-drive.cjs'],
+          env: { GDRIVE_ACCESS_TOKEN: 'ya29.fresh' },
+        },
+      ],
+    });
+
+    for (const code of ['google_not_connected', 'google_reconnect_required'] as const) {
+      driveToken = () => Promise.reject(new AppError(code, 'no'));
+      const conversation = service.create('a1');
+      await expect(service.sendMessage(conversation.id, text('hi'))).rejects.toMatchObject({
+        code,
+      });
+      expect(messages.all(conversation.id)).toEqual([]);
+    }
+    driveToken = () => Promise.resolve('ya29.fresh');
   });
 });
 

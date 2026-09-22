@@ -14,6 +14,12 @@ export const paths = {
       ? join(process.resourcesPath, 'mcp-servers', 'filesystem.cjs')
       : join(app.getAppPath(), '..', '..', 'packages', 'mcp-servers', 'dist', 'filesystem.cjs');
   },
+  /** The built-in Google Drive MCP server, run the same way. */
+  googleDriveServer(): string {
+    return app.isPackaged
+      ? join(process.resourcesPath, 'mcp-servers', 'google-drive.cjs')
+      : join(app.getAppPath(), '..', '..', 'packages', 'mcp-servers', 'dist', 'google-drive.cjs');
+  },
   migrations(): string {
     return app.isPackaged
       ? join(process.resourcesPath, 'migrations')

@@ -130,8 +130,8 @@ interface ProviderAdapter {
 - The runner keeps one MCP client per enabled `ToolServer` (per set of roots for the built-in `filesystem` server), started on demand, reused across runs and restarted after a crash. It is the only MCP client of every server, for API and CLI runs alike (ADR 0009).
 - Every tool call goes through the runner's permission gate: read-only tools run; others emit `run.tool_call` with `requiresApproval` and wait for `run.approval`, unless `allow-always` is recorded for that agent and tool or the policy is `allow-writes`; under `read-only` they are not offered at all.
 - Built-in **`filesystem`** server: receives the agent's roots and modes as arguments; exposes `list_dir`, `read_file`, `search`, `write_file`, `create_dir`, `move`, `delete`. Any path outside the roots is rejected in the server, not only in the UI, symlink escapes included. It exposes its write tools only when started by the runner, which asks before every write (`--gated-by-client`).
-- Built-in **`google-drive`** server: OAuth done by the desktop (loopback), tokens in `safeStorage`, injected via env when starting the server. Exposes `search`, `read` (with Google Docs/Sheets export to text), `create`, `update`, `move`. Writes follow the same approval policy.
-- Third-party servers: tools classified by `readOnlyHint`/`destructiveHint` (MCP annotations) to decide whether they ask for approval; without annotations, they ask.
+- Built-in **`google-drive`** server (our own, ADR 0010): OAuth done by the desktop (loopback + PKCE) with the user's own OAuth client, tokens in `safeStorage`, and a fresh access token injected via env each time the server starts (refreshed by the desktop). One Google account per app. Exposes `search`, `read` (Google Docs as Markdown, Sheets as CSV, Slides as text), `create`, `update`, `move`. Like the filesystem server, it registers write tools only when started by the runner, so writes follow the same approval policy.
+- Third-party servers: tools classified by `readOnlyHint`/`destructiveHint` (MCP annotations) to decide whether they ask for approval; without annotations, they ask. The Tools screen tests a server (saved or not yet saved) and lists its tools with those annotations.
 - In the UI: each tool call is a collapsible block with name, arguments, result and duration. An approval request is an inline card with **Allow**, **Deny**, **Always allow for this agent**. While waiting, the conversation is `awaiting-approval` and the sidebar flags it.
 
 #### 4.4 Boundaries
@@ -175,6 +175,6 @@ Resolved in Phase 1: on Linux without a keyring (Chromium's `basic_text` backend
 
 Resolved in Phase 5: tool approvals go through the runner for API and CLI runs alike; CLI harnesses reach the agent's tools through the runner's MCP proxy, and their native file tools are turned off or sandboxed read-only when the agent has the `filesystem` server (ADR 0009).
 
-Still open: implementation of the `google-drive` server (own vs community), decided in Phase 5b.
+Resolved in Phase 5b: the `google-drive` server is our own, not a community one; OAuth and token refresh live in the desktop, and the server gets a fresh access token via env per launch (ADR 0010).
 
 ---

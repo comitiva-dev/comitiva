@@ -2,11 +2,143 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals (done)
+## Current phase: 5b — Google Drive and third-party servers (done)
+
+Done when an agent reads a Google Doc and creates another one with approval: yes. The first test of `e2e/google-drive.spec.ts` covers it through the built app, against a fake Google (OAuth plus a Drive API subset):
+
+- The OAuth client is set up and the account connected from the Tools screen. `shell.openExternal` stands in for the browser.
+- The agent searches and reads the Doc on its own.
+- `create` waits on the approval card, which shows `name: Launch summary`.
+- After **Allow**, the fake Drive holds the new Google Doc with the Markdown content.
+
+**Not verified yet** against a real Google account: that needs the user's own OAuth client (below).
+
+### Done
+
+- **Decision (made with the user before implementing), ADR 0010:**
+  - We write our own server; the maintained community ones run their own OAuth, keep tokens in files under `~/.config`, and have 100+ tools.
+  - The scope is the full `drive` scope, and the user brings their own OAuth client ("Desktop app"). The client ID and secret are entered on the Drive row of the Tools screen.
+  - One Google account per app.
+- **Contract:**
+  - `BuiltinToolServer` gains `google-drive`, and `GOOGLE_DRIVE_TOOL_SERVER_ID` is new.
+  - `ToolDef` gains `title`, plus the `idempotentHint` and `openWorldHint` annotations (`ToolAnnotations`).
+  - `toolServers.test` takes `ToolServerTestTarget` (`{ id } | { spec, id? }`).
+  - New channels `googleDrive.getStatus | configure | connect | cancelConnect | disconnect`, with `GoogleDriveStatus` (no token or secret, only `hasClientSecret` and the email).
+  - New error codes `oauth_not_configured`, `oauth_failed`, `oauth_cancelled`, `google_not_connected` and `google_reconnect_required`.
+- **mcp-servers:**
+  - `google-drive` (`dist/google-drive.cjs`, bin `comitiva-mcp-gdrive`), with five tools:
+    - `search` (text, type, folder, pages)
+    - `read`: Docs as Markdown, Sheets as CSV (first sheet), Slides as text, text files up to 1 MB (Range beyond), images up to 5 MB
+    - `create`: a Doc from Markdown, a Sheet from CSV, a text file, or a folder
+    - `update`: replace content and/or rename
+    - `move`
+  - The tools are annotated, and the write tools exist only with `--gated-by-client`. Shared drives are included.
+  - The token comes from `GDRIVE_ACCESS_TOKEN` only, and is removed from `process.env` once read.
+  - `DriveApi` is a small fetch client, with no `googleapis`. HTTP errors map to stable codes.
+  - `startFakeGoogle` (`@comitiva/mcp-servers/testing`) is a real HTTP server. It fakes:
+    - OAuth: client, secret, redirect URI, single-use codes, PKCE S256, refresh, `invalid_grant`, revoke
+    - Drive v3: files in memory, a small query language, export, multipart and media uploads, parents, `about`, scripted failures
+- **Runner:**
+  - The `google-drive` built-in gets `--gated-by-client` and the `gdrive__` prefix.
+  - Idle built-in instances close after 10 min (`FILESYSTEM_IDLE_MS` → `BUILTIN_IDLE_MS`).
+  - `toToolDef` keeps the title and all four hints.
+- **Desktop main:**
+  - `oauth/GoogleOAuth.ts` is free of Electron imports. It covers:
+    - the loopback listener on `127.0.0.1:0`, which takes one request with the right `state` and ignores the rest
+    - PKCE S256, `access_type=offline` and `prompt=consent`
+    - a check that the scope was granted
+    - a 5 min timeout, and cancel
+    - refresh (`invalid_grant` → `google_reconnect_required`) and best-effort revoke
+    - a static, script-free page for the browser tab
+  - `GoogleDriveService`:
+    - The client and tokens live in the SecretStore (`google:oauthClient`, `google:tokens`).
+    - `connect`: one attempt at a time; it fetches the email; it stops the old server.
+    - `accessToken()` refreshes when fewer than 15 min are left, single-flight, and remembers `reconnect_required`.
+    - `disconnect` revokes and forgets. A new client ID disconnects.
+  - `ToolServerService` launches Drive with the bundled server, `ELECTRON_RUN_AS_NODE` and a fresh `GDRIVE_ACCESS_TOKEN` per launch. It tests unsaved settings under a throwaway id and stops them afterwards; `keepSecret` reads the stored secret.
+  - Migration `0005_google_drive_tool_server` seeds the built-in (custom SQL). `paths.googleDriveServer()`, and packaging ships `mcp-servers/google-drive.cjs`.
+  - `COMITIVA_GOOGLE_OAUTH_BASE_URL` and `COMITIVA_GOOGLE_API_BASE_URL` point at a fake, for tests only.
+- **Renderer:**
+  - `Backend.googleDrive`, the `googleDrive` store, and `toolServers.probe` / `clearTest`.
+  - Tools screen, Google Drive row. The account shows one of:
+    - not set up
+    - not connected
+    - "finish in your browser" with Cancel
+    - connected as …
+    - reconnect needed
+
+    Its buttons are Set up / OAuth client, Connect, Reconnect and Disconnect (confirmed).
+  - `GoogleDriveSetup`: the steps to create a client, a link to Google Cloud Console, and a masked secret that is never prefilled.
+  - `ToolList`: every Test result lists tools with their title, description and badges (Read-only, Asks first, Destructive, No annotations).
+  - `ToolServerForm` gets **Test**, which tests unsaved settings.
+  - The agent form flags Drive when it is not connected.
+  - The approval card shows Drive targets (`name`, `fileId`, `parentId`, `toFolderId`) and the full input under "Details".
+  - Strings in en and pt-BR.
+- **Docs:**
+  - `docs/tools.md`: Google Drive, step by step how to create the OAuth client, tokens, badges, tests.
+  - ADR 0010.
+  - SPEC §4.3 and §7, `design.md`, `architecture.md` and CLAUDE.md are synced.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 547 tests: contract 51, runner 228, desktop 228, mcp-servers 40 (Phase 5: 494). |
+| `pnpm contract:schema` / `pnpm --filter desktop db:generate` | `AppError.json`, `Message.json` and the runner protocol schemas regenerated. `0005_google_drive_tool_server.sql` is a custom migration (seed only). |
+| mcp-servers | Drive, 18 tests. Over the in-memory transport against the fake: tools and annotations, and no write tools without the flag; the bearer on every call; search by text (with the exact `q`), type, folder, pages and escaping; Doc → Markdown and Sheet → CSV exports; text files, the 1 MB cap with Range, images; folders, PDFs and unknown ids refused by code; create doc/sheet/text/folder; update content and rename; move; 401 / 403 / 429 / 500 / unreachable → codes, with no token in the message. The bundled binary over stdio: token from env, `HOME` left empty, exits 2 without a token. |
+| Runner | The Drive built-in gets only `--gated-by-client` (no roots), a refreshed token gives a new instance, the `gdrive__` prefix, `toToolDef` hints. |
+| Desktop main | `GoogleOAuth` (10), against the fake authorization server with a stub browser: tokens with PKCE the fake verifies, auth URL parameters, the secret never in the browser URL; a wrong-state request ignored (400) and a stray path 404; denied → `oauth_cancelled`; a missing scope and a wrong secret → `oauth_failed` (not echoed); a timeout, and a cancel through the signal, with the listener closed; refresh; `invalid_grant` → reconnect; revoke; unreachable → `provider_unavailable`. `GoogleDriveService` (10): the status never carries a secret; the client kept on re-save; "connecting" while the browser is open; cancel and one attempt at a time; deny; the token reused, then refreshed once for concurrent callers; reconnect remembered with no further calls, then reconnect; disconnect revokes, forgets and stops the server; a new client ID disconnects; no keyring. `ToolServerService` (4 new): the Drive launch with a fresh token per launch, and none in the list; `google_not_connected` from runs and tests, disabled → skipped; an unsaved spec under `test-…`, stopped; edited settings with `keepSecret`, stopped on failure, built-ins refused. `ConversationService`: Drive in `run.start` with the token, and both Google codes refuse the send before anything is written. The repository seeds both built-ins. |
+| Renderer logic | `store/googleDrive` (4), `store/toolServers` (probe, clearTest, `{ id }`), `toolBadges`, `approvalTargets` for Drive, i18n parity and error codes. |
+| `pnpm --filter desktop test:e2e` | 36/36 green (33 earlier + 3 new in `google-drive.spec.ts`): the exit criterion, with the client set up in the UI (required ID shown), Connect → "Connected as test@example.com", Test lists 5 tools with badges, the agent ticks Drive in its form, search and read run, `create` waits, then Allow creates the Doc, every Drive call carries the OAuth token, and neither the tokens nor the client secret are in `comitiva.db*` or IPC; disconnect (revoked at the fake), then a send refused with `google_not_connected`, reconnect, and it works; a third-party server tested from the form before saving, with badges, and nothing saved. `tools.spec.ts` and `connections.spec.ts` now expect two built-ins. |
+| UI | Screenshots of the setup form, the connected row with the tool list, and the approval card (`apps/desktop/test-results/drive-*.png`), in pt-BR. |
+| **Real Google account** | **Not done.** It needs a Google Cloud OAuth client from the user. Next step: follow `docs/tools.md` → Google Drive, connect, read a real Doc, create one with approval, and record the result here. This also confirms that Drive exports and imports Docs as Markdown (`text/markdown`). The fallback is `text/plain` for reading and HTML for creating. |
+| `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
+
+### Deviations from the plan and design (all reflected in the docs)
+
+1. The IPC is `googleDrive.*` (five channels) instead of design.md's `toolServers.connectGoogle`.
+2. `toolServers.test` takes `{ id } | { spec, id? }`, so the form can test before saving.
+3. The server's files are `server.ts` + `DriveApi.ts` + `bin.ts`, not `drive-api.ts` + `tools/*.ts`.
+4. The fake Google lives in `@comitiva/mcp-servers/testing`, so the server tests, the desktop tests and the e2e share it. It is a real HTTP server (msw cannot reach a spawned process), as for the runner's fake providers.
+5. Idle built-in instances close after 10 min. This applied only to the filesystem server before; the constant is renamed `BUILTIN_IDLE_MS`.
+6. `ToolDef` also carries `title`, `idempotentHint` and `openWorldHint`, for the tool list.
+
+### Decisions
+
+- **Token lifecycle:** refresh when fewer than 15 min are left, before each launch. The token goes into the launch env, and a new token makes a new runner instance (ADR 0010). Refresh tokens and the client secret never leave main.
+- **Scope:** full `drive`, since users run their own client in Testing or Internal status.
+- **Badges:** "Destructive" follows the MCP default (`destructiveHint` true unless it says false) for tools that are not read-only. A tool without annotations shows "No annotations" instead.
+- **A cancelled connect** is not shown as an error.
+
+### Open
+
+- **Real Google account check** (above).
+- A single run longer than about 15 min can see its Drive token expire (`auth_failed`); the next run is fine.
+- Sheets beyond the first tab (Drive's CSV export only covers the first one).
+- The browser tab's "you can close this tab" page is English only (it is served by main, outside the renderer's i18n).
+- One Google account per app. Several accounts, and OAuth for third-party http servers, are for later.
+- Carried over:
+  - allow-always decisions cannot be revoked from the UI
+  - image tool results for non-Anthropic providers
+  - `tools/list_changed`
+  - Windows and macOS runs of the bridge and the servers
+  - the real-provider check (Phase 1)
+  - the real CLIs in the UI and Windows (Phase 2)
+  - CI on GitHub (no remote)
+  - the Linux sandbox, signing and icon (Phase 7)
+
+## Next: Phase 6 — Usage
+
+1. Records per run already exist (`usage_records`). Add pricing (`pricing.json`), estimated cost, and the summary and time-series queries.
+2. The Usage screen: a dashboard by connection, agent and model over a range, plus export.
+3. The right panel shows usage per conversation.
+4. Done when the dashboard matches the records.
+
+## Phase 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals (done)
 
 Done when an agent reads and creates a file in an allowed directory, a write asks for approval, and a path outside the root is denied: yes. The first test of `e2e/tools.spec.ts` covers it through the built app. The agent is set up in the form (folder picker, Files, "Ask before changes"). It reads a file on its own. The write waits on the approval card, the sidebar says "Approve", and after **Allow** the file is on disk. A read outside the folder comes back `outside_roots` from the server. The same path is covered for both CLI harnesses through the runner's MCP proxy, and by hand with the real Claude Code and Codex.
 
-### Done
+#### Done
 
 - **Approval handshake (confirmed before implementing), ADR 0009:**
   - The runner is the only MCP client of every server.
@@ -76,7 +208,7 @@ Done when an agent reads and creates a file in an allowed directory, a write ask
   - Strings in en and pt-BR, including the Codex warning, which now explains the read-only sandbox.
 - **Docs:** `docs/tools.md` (new) and ADR 0009. SPEC §4.1–4.3 and §7, `design.md`, `architecture.md` and `providers.md` are synced.
 
-### Verification
+#### Verification
 
 | Check | Result |
 |---|---|
@@ -91,7 +223,7 @@ Done when an agent reads and creates a file in an allowed directory, a write ask
 | UI | Screenshots of the approval card, the finished tool blocks (with the `outside_roots` result expanded) and the Tools screen (`apps/desktop/test-results/tools-*.png`), in pt-BR. |
 | `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
 
-### Deviations from the plan and design (all reflected in the docs)
+#### Deviations from the plan and design (all reflected in the docs)
 
 1. **Handshake:** the runner's MCP proxy instead of the filesystem server asking over `--approval-socket` (ADR 0009, confirmed before implementing). Third-party servers are gated under harnesses too, and no secret goes into a temp file.
 2. `toolServer.start` takes a resolved `ToolServerLaunch` (secrets inside) instead of `toolServer` plus `secrets`. `run.start` gained `toolServers`.
@@ -104,7 +236,7 @@ Done when an agent reads and creates a file in an allowed directory, a write ask
 9. `ToolUseBlock.signature` was added for Gemini thought signatures.
 10. MCP client instances are keyed by server plus launch spec and roots. Idle filesystem instances close after 10 min.
 
-### Decisions
+#### Decisions
 
 - **New folders** are read-write (writes still ask under the default policy). The first folder turns on the Files tool.
 - **Allow always** applies to one server's tool for one agent, from that moment in the run and in every later run.
@@ -112,7 +244,7 @@ Done when an agent reads and creates a file in an allowed directory, a write ask
 - **Codex with Files:** a read-only sandbox (`apply_patch` cannot be turned off), and `default_tools_approval_mode="approve"` for the proxy (the runner is the gate).
 - **A server that cannot start** fails the run with `tool_server_failed`, instead of running without it.
 
-### Open
+#### Open
 
 - Allow-always decisions cannot be revoked from the UI yet. They are rows in `tool_approvals`.
 - Tool results with images reach Anthropic as images, but OpenAI-compatible, Gemini and Ollama get `[image not shown]` (their tool results are text here).
@@ -121,14 +253,6 @@ Done when an agent reads and creates a file in an allowed directory, a write ask
 - The bridge (named pipe), the proxy and the filesystem server have not run on Windows or macOS.
 - The real-provider check with tools: no API key on the dev machine (carried over from Phase 1).
 - Carried over: the real CLIs in the UI and Windows (Phase 2), CI on GitHub (no remote), the Google Drive server choice (5b), and the Linux sandbox, signing and icon (Phase 7).
-
-## Next: Phase 5b — Google Drive and third-party servers
-
-1. Decide the `google-drive` server: our own, or a community one (SPEC §7).
-2. OAuth (loopback) in main, with tokens in `safeStorage`, injected as env when the server starts, and refreshed.
-3. The server: `search`, `read` (Docs → text, Sheets → CSV), `create`, `update`, `move`, with the same annotations and approvals.
-4. Third-party servers: OAuth for http servers if needed, and revoking allow-always decisions.
-5. Done when an agent reads a Google Doc and creates another one with approval.
 
 ## Phase 4 — Full chat with parallelism, persistence, retry, auto-title (done)
 

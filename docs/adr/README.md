@@ -13,5 +13,5 @@ One file per decision that affects more than one package. Format: context, decis
 | [0007](0007-cli-harness-execution.md) | CLI harnesses: one process per turn, auto-accept, isolated, harness-kept history | Accepted |
 | [0008](0008-live-message-events.md) | Live message events: snapshots plus deltas, one revision counter per conversation | Accepted |
 | [0009](0009-tool-approvals-through-the-runner.md) | Tool approvals go through the runner; CLI harnesses reach tools through its MCP proxy | Accepted |
+| [0010](0010-google-drive-server-and-oauth.md) | Our own Google Drive server; OAuth and refresh in the desktop, the token handed over per launch | Accepted |
 
-Still open (see `docs/STATUS.md`): implementation of the `google-drive` MCP server (own vs community), decided in Phase 5b.

@@ -123,7 +123,7 @@ Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` re
 |---|---|---|
 | packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`; subpath `./ipc-channels` has no zod) |
 | packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`, with `dist/mcp-proxy.cjs` next to it (P5); subpaths `./bin`, `./testing`) |
-| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bin `comitiva-mcp-filesystem` = `dist/filesystem.cjs`, subpath `./filesystem-bin` (P5); `comitiva-mcp-gdrive` (P5b)) |
+| packages/mcp-servers | `@comitiva/mcp-servers` | yes (bin `comitiva-mcp-filesystem` = `dist/filesystem.cjs`, subpath `./filesystem-bin` (P5); bin `comitiva-mcp-gdrive` = `dist/google-drive.cjs`, subpath `./google-drive-bin`, and `./testing` (fake Google) (P5b)) |
 | apps/desktop | `desktop` | no |
 
 ### 1.5 Phase 0 exit checklist
@@ -179,35 +179,39 @@ packages/runner/test/fixtures/{claude-code,codex}/   recorded harness output (sc
 
 packages/mcp-servers/src/            index.ts
 ├── filesystem/        server.ts RootGuard.ts operations.ts bin.ts → dist/filesystem.cjs (P5)
-└── google-drive/      server.ts drive-api.ts tools/*.ts (P5b)
+├── google-drive/      server.ts DriveApi.ts bin.ts → dist/google-drive.cjs (P5b, ADR 0010)
+└── testing/           fakeGoogle.ts: OAuth + Drive v3 subset over HTTP (exported as @comitiva/mcp-servers/testing, P5b)
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
 ├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4) tools.spec.ts (P5)
+│       google-drive.spec.ts (P5b)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
-    │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5), meta/)
+    │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
+    │   │                            0005_google_drive_tool_server (P5b), meta/)
     │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
     │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4)
     │   │                            ToolServerRepository.ts ToolApprovalRepository.ts (P5)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
-    │   │                            ToolServerService.ts (P5; approvals live in ConversationService) UsageService.ts (P6)
+    │   │                            ToolServerService.ts (P5; approvals live in ConversationService)
+    │   │                            GoogleDriveService.ts (P5b) UsageService.ts (P6)
     │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
-    │   └── oauth/                   GoogleOAuth.ts (P5b)
+    │   └── oauth/                   GoogleOAuth.ts (P5b: loopback + PKCE, no Electron import)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
     └── renderer/
         ├── index.html               CSP
         └── src/
             ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
             ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4)
-            │                        toolServers.ts (P5)
+            │                        toolServers.ts (P5)   googleDrive.ts (P5b)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
             │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)   toolServerForm.ts (P5)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
@@ -215,7 +219,8 @@ apps/desktop/
             │                        AgentAvatar.tsx AgentPanel.tsx Sidebar/AgentList.tsx Forms/AgentForm.tsx (P3)
             │                        Chat/ (ChatView ConversationList MessageList MessageBubble Markdown StatusDot)
             │                        Composer/Composer.tsx ToolBlock/ToolCallBlock.tsx (P4)
-            │                        ApprovalCard/ApprovalCard.tsx Forms/ToolServerForm.tsx Switch.tsx (P5)   Settings/ (later)
+            │                        ApprovalCard/ApprovalCard.tsx Forms/ToolServerForm.tsx Switch.tsx (P5)
+            │                        ToolList.tsx Forms/GoogleDriveSetup.tsx (P5b)   Settings/ (later)
             ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)
             │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)
             └── i18n/                index.ts en.json pt-BR.json
@@ -691,9 +696,19 @@ class RootGuard {
 ```
 
 ```ts
-// mcp-servers/src/google-drive/server.ts — tokens via env GDRIVE_ACCESS_TOKEN (refreshed by the desktop)
-// tools: search, read (Docs → text/markdown, Sheets → CSV), create (doc/text), update, move
-// analogous annotations
+// mcp-servers/src/google-drive/server.ts (P5b, ADR 0010) — bin: comitiva-mcp-gdrive [--gated-by-client]
+// env: GDRIVE_ACCESS_TOKEN (required; the shell refreshes it and restarts the server; removed from process.env
+//      once read, never read from or written to disk), GDRIVE_API_BASE_URL (tests only)
+// DriveApi: Drive REST v3 over fetch (no googleapis); supportsAllDrives; HTTP errors → DriveError(code):
+//   401 auth_failed, 429 / 403 rateLimit rate_limited, 404 not_found, 400 invalid_request, else tool_failed
+// tools: search { query?, type?, folderId?, pageSize?, pageToken? }   read { fileId }        → readOnlyHint
+//        create { name, kind: doc|sheet|text|folder, content?, mimeType?, parentId? }        → destructiveHint:false
+//        update { fileId, content?, name? }   move { fileId, toFolderId, name? }             → destructiveHint:true
+//        (all openWorldHint:true; write tools only with --gated-by-client, like the filesystem server)
+// read: Docs → export text/markdown, Sheets → text/csv (first sheet), Slides → text/plain; text files ≤ 1 MB
+//       (Range when larger); images ≤ 5 MB as image content; other binaries → unsupported_content
+// create/update: multipart upload with conversion (Markdown → Doc, CSV → Sheet)
+// errors: isError results whose text starts with the stable code, like the filesystem server
 ```
 
 ---
@@ -831,12 +846,40 @@ class ConversationService extends EventEmitter<ConversationEvents> {
 // main/services/ToolServerService.ts (P5)
 class ToolServerService {
   constructor(deps: { repo; secrets: SecretStore; runner: Pick<RunnerClient, 'startToolServer' | 'stopToolServer'>;
-                      filesystem: { command; args; env } /* process.execPath + paths.filesystemServer() + ELECTRON_RUN_AS_NODE */ });
+                      filesystem: { command; args; env } /* process.execPath + paths.filesystemServer() + ELECTRON_RUN_AS_NODE */;
+                      googleDrive: { command; args; env; accessToken(): Promise<string> } /* (P5b) */ });
   list(); create(draft); update(id, patch); delete(id);   // secrets → SecretStore `toolServer:<id>:env|header:<NAME>`;
   // keepSecret keeps the stored one; unused secrets deleted; edits and deletes stop the server in the runner
-  test(id): Promise<ToolDef[]>;                          // toolServer.start (the filesystem server gets a scratch root)
+  test(target: { id } | { spec, id? }): Promise<ToolDef[]>;   // toolServer.start (the filesystem server gets a scratch
+  // root). (P5b) An unsaved spec runs under a throwaway id `test-<ulid>` (keepSecret reads the stored secret of `id`)
+  // and is stopped afterwards; built-ins are tested by id only.
   launchesFor(agent): Promise<ToolServerLaunch[]>;       // enabled servers, secrets resolved (secret_missing);
-                                                         // the filesystem server only when the agent has roots
+                                                         // the filesystem server only when the agent has roots;
+  // (P5b) google-drive: builtin 'google-drive', env GDRIVE_ACCESS_TOKEN = googleDrive.accessToken() per launch
+  // (google_not_connected | google_reconnect_required refuse the send before anything is written)
+}
+
+// main/oauth/GoogleOAuth.ts (P5b, ADR 0010) — no Electron import; openExternal, fetch, now, endpoints injected
+class GoogleOAuth {
+  authorize(client: { clientId; clientSecret? }, scopes, signal?): Promise<{ accessToken; refreshToken; expiresAt; scope }>;
+  // one-shot http listener on 127.0.0.1:0 (redirect_uri), PKCE S256, random state (other requests → 400/404, ignored),
+  // access_type=offline + prompt=consent; 5 min timeout; access_denied/abort → oauth_cancelled; missing scope or a
+  // refused exchange → oauth_failed; network → provider_unavailable
+  refresh(client, refreshToken);   // invalid_grant → google_reconnect_required
+  revoke(token);                   // best effort
+}
+// googleEndpoints(base?): Google's, or /o/oauth2/v2/auth, /token, /revoke under COMITIVA_GOOGLE_OAUTH_BASE_URL (tests)
+
+// main/services/GoogleDriveService.ts (P5b) — one Google account per app
+class GoogleDriveService {
+  constructor(deps: { secrets; oauth: GoogleOAuth; runner: Pick<RunnerClient, 'stopToolServer'>; apiBaseUrl; now? });
+  status(): GoogleDriveStatus;     // { clientConfigured, clientId, hasClientSecret, state, email }; never a token or secret
+  configure({ clientId, clientSecret?: { value } | { keepSecret } });   // SecretStore `google:oauthClient`;
+                                   // a different client id disconnects
+  connect();                       // one attempt at a time; tokens + email (drive/v3/about) → `google:tokens`;
+                                   // stops the running Drive server
+  cancelConnect(); disconnect();   // disconnect: delete tokens, stop the server, revoke (best effort); keeps the client
+  accessToken(): Promise<string>;  // refreshed when < 15 min left (single-flight); invalid_grant → reconnect_required
 }
 
 // main/services/TitleService.ts (P4)
@@ -868,7 +911,8 @@ runner.getStatus
 secrets.getStatus                                                    (P1)
 connections.list | create | update | delete | test | listModels     (P1)
 connections.detectBinary                                            (P2)
-toolServers.list | create | update | delete | test                  (P5; connectGoogle in 5b)
+toolServers.list | create | update | delete | test                  (P5; test takes { id } | { spec, id? } in 5b)
+googleDrive.getStatus | configure | connect | cancelConnect | disconnect   (P5b; replaces the sketched connectGoogle)
 agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
@@ -893,7 +937,8 @@ interface Backend {
   capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };   // (P2+)
   connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target); detectBinary(input) };
   dialogs: { pickFolder() };                                   // (P2) null when cancelled
-  toolServers: { list(); create(d); update(id, d); delete(id); test(id) };
+  toolServers: { list(); create(d); update(id, d); delete(id); test({ id } | { spec, id? }) };
+  googleDrive: { getStatus(); configure(input); connect(); cancelConnect(); disconnect() };   // (P5b)
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
   settings: { get(); update(patch) };                                               // (P3)
   conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id) };   // (P4)
@@ -923,6 +968,9 @@ conversationsStore (P5): + pending (PendingApproval per conversation, from main)
                         awaiting-approval > running > error > idle.
 toolServersStore (P5):  items, loaded, tests (per server: its tools or the error), editor, confirmDelete, notice;
                         load, save, setEnabled, test, delete.
+googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
+                        load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
+toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
 uiStore (later):        rightPanelOpen, theme, quickSwitcherOpen
 ```
 
@@ -962,6 +1010,14 @@ Phase 5 (pure logic in `lib/toolServerForm.ts`, `lib/agentForm.ts`, `lib/chat.ts
 - Sidebar: an agent awaiting approval shows an "Approve" flag and an amber dot.
 - `screens/ToolsScreen`: servers (built-in badged) with an enable `Switch`, Test (lists the tools, read-only marked), Edit/Delete for third-party ones; `Forms/ToolServerForm`: stdio (command, args per line, env) or http (URL, headers), rows marked Secret are masked and never prefilled.
 - `Forms/AgentForm`: Folders (native picker, read or read-write, reorder; the first folder turns on Files), a Tools checklist (enabled servers plus disabled ones still linked) and the permission policy. `AgentPanel` shows tools, folders and policy.
+
+Phase 5b (pure logic in `lib/toolServerForm.ts` `toolBadges`, `lib/chat.ts` `approvalTargets`; docs/tools.md):
+- `ToolList` (`ToolTestResult`): a Test result lists each tool with its title, description and badges (Read-only, Asks first, Destructive, No annotations), on the Tools screen and in the server form.
+- `Forms/ToolServerForm`: **Test** starts the unsaved settings and lists the tools, without saving.
+- `screens/ToolsScreen`: the Google Drive row shows the account (not set up, not connected, "finish in your browser" with Cancel, connected as, reconnect needed) with Set up / OAuth client, Connect, Reconnect and Disconnect (confirmed).
+- `Forms/GoogleDriveSetup`: the steps to create a "Desktop app" OAuth client, a link to Google Cloud Console, client id and a masked secret that is never prefilled.
+- `Forms/AgentForm`: the Drive checkbox says "not connected" or "reconnect needed".
+- `ApprovalCard`: targets also show `name`, `fileId`, `parentId`, `toFolderId`; the full input sits behind "Details".
 
 Later components: `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Settings/*`, `Usage/*`.
 

@@ -8,7 +8,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 - `docs/design.md` — how it is built: file layout, package names, data model, classes and methods, runner protocol, flows, commands. Follow it unless there is a reason to deviate; if you deviate, say so and update it in the same commit.
 - `docs/architecture.md` — processes, runner protocol, boundaries, data locations.
 - `docs/providers.md` — how to add a provider adapter (rules, shared helpers, conformance tests).
-- `docs/tools.md` — tools, roots, the permission gate and approvals, the CLI MCP proxy, adding MCP servers.
+- `docs/tools.md` — tools, roots, the permission gate and approvals, the CLI MCP proxy, Google Drive (OAuth client setup), adding MCP servers.
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
@@ -17,7 +17,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 ```
 packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
 packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs, dist/mcp-proxy.cjs) + RunnerClient + testing/ fakes
-packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (dist/filesystem.cjs; google-drive in 5b)
+packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (dist/filesystem.cjs, dist/google-drive.cjs) + testing/ fake Google
 apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
 ```
 
@@ -54,6 +54,6 @@ pnpm package                        # electron-builder for the current platform 
 echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs   # talk to the runner by hand
 ```
 
-Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`; without it the app refuses to store keys on a keyring-less Linux).
+Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`; without it the app refuses to store keys on a keyring-less Linux), `COMITIVA_GOOGLE_OAUTH_BASE_URL` / `COMITIVA_GOOGLE_API_BASE_URL` (tests/CI only: point Google OAuth and the Drive API at the fake server).
 
 More detail: `docs/design.md` §8.

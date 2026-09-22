@@ -2,7 +2,174 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 5b — Google Drive and third-party servers (done)
+## Current phase: 6 — Usage: records, pricing, dashboard, export (done)
+
+Done when the dashboard matches the records: yes. The first test of
+`e2e/usage.spec.ts` is the exit criterion, checked without trusting the screen:
+it runs real turns against the fake providers, reads the totals off the Usage
+screen, exports the raw records through the native save dialog, sums the
+exported rows itself, and compares.
+
+### Done
+
+- **Decision, ADR 0011** (the four questions the phase turns on):
+  - Prices ship with the runner as one versioned JSON, so the binary, the
+    desktop and the Phase 8 PHP hub read the same numbers.
+  - Cost is computed at write time and frozen into the row. A dashboard has to
+    match what was billed then, not what a provider charges today.
+  - A price correction recosts that model's records, so one model never shows
+    two prices in one window.
+  - CLI harness cost is an *equivalent* at list rates, summed separately and
+    labelled, because a subscription may bill none of it.
+- **Four recording defects fixed first.** The dashboard would otherwise have
+  displayed wrong numbers faithfully:
+  1. `streamTurn` yielded usage only on the success path, so a run that failed
+     mid-stream spent tokens the provider billed and Comitiva forgot.
+  2. `inputTokens` meant two things: OpenAI's `prompt_tokens` and Gemini's
+     `promptTokenCount` include cached tokens, Anthropic's and both harnesses'
+     do not. Costing input and cache read separately charged the cached tokens
+     twice for two of six adapters. Every adapter now reports input net of
+     cache, and the contract says so.
+  3. The model recorded was the configured one — the literal string `'default'`
+     for a harness with no model set. Adapters now report what actually ran,
+     and Claude Code's `modelUsage` names it even when Comitiva never did.
+  4. The estimate was seeded once from the first prompt, so a cancel late in a
+     tool loop was costed against the history before the tools ran.
+- **Contract:**
+  - `UsageRecord` gains `provider`, `costSource` (`table` | `override` |
+    `harness`) and `costEstimated`. `inputTokens` is documented as net of
+    `cacheReadTokens`.
+  - `run.usage` gains `model` and `reportedCostUsd`.
+  - Seven `usage.*` channels (design.md sketched three): `summary` returns the
+    totals and all three groupings in one call, because the screen shows them
+    together; `conversation`, `export` and the three price channels are new.
+  - New shapes `UsageRange`, `UsageTotals`, `UsageSummaryRow`, `UsageSummary`,
+    `UsageBucket`, `ModelPrice`, `ModelPrices`, `UsageExportInput`.
+- **Runner:**
+  - `usage/pricing.json`: versioned, with `updatedAt` and the provider pricing
+    pages the numbers were read from. `aliases` maps a CLI provider onto the
+    API it bills on. Anthropic, OpenAI, Google and a zero-priced `ollama`.
+  - `usage/Tokenizer.ts` replaces `estimateTokens`' chars/4. Word-,
+    punctuation- and CJK-aware; counts the tool-call and tool-result JSON that
+    `textLength` scored as zero; flat rate for images and documents. No BPE
+    dependency: `dist/bin.cjs` stays self-contained.
+  - `usage/UsageCalculator.ts`: exact id → longest listed prefix → provider
+    `*`. Nothing matching means no cost, never a guessed one.
+  - `UsageTracker` gains `seed()`, and carries `model` and `costUsd`.
+  - Claude Code's parser reads `modelUsage` (the busiest entry names the turn,
+    under its `canonicalModel`), `total_cost_usd`, and the `cache_creation`
+    TTL buckets. Codex's `reasoning_output_tokens` is deliberately left out —
+    the recordings show it nests breakdowns inside totals.
+  - `PRICING`, `UsageCalculator`, `PricingTable` and the tokenizer are exported
+    from `@comitiva/runner`, which exported only `RunnerClient` before.
+- **Desktop main:**
+  - Migration `0006_usage_reports`: the three columns, a backfill of `provider`
+    from each row's connection, `idx_usage_time`, `idx_usage_model_time`,
+    `idx_usage_conv`, and `model_prices`.
+  - Cost is computed in `UsageRepository.insert`, so replies and titles both
+    get it without either service knowing about pricing.
+  - `UsageRepository` aggregation in raw SQL: `totals`, `groupBy`,
+    `timeseries`, `listInRange`, `modelsSeen`, `reprice`,
+    `totalsForConversation`. No foreign keys, so the groupings LEFT JOIN and
+    mark what is gone. A day is the viewer's: the bucket shifts `created_at`
+    by their offset while the range predicate still compares indexed UTC text.
+  - `usage/Pricing.ts` wraps the calculator plus the SQLite corrections;
+    `usage/UsageService.ts` fills the gaps in the timeseries, recosts after a
+    correction and writes the CSV; `usage/csv.ts` is RFC 4180 with a BOM.
+  - `pickSaveFile` beside the existing `pickFolder`.
+- **Renderer:**
+  - `Backend.usage`, the `usage` store, `lib/usage.ts` (periods → windows,
+    sorting) and `lib/format.ts` (Intl for tokens, money, days, shares).
+  - `UsageScreen`: period selector, four totals cards, the chart, the three
+    tables, the Prices section and two export buttons.
+  - The chart shows tokens **or** cost, never both. Two y-axes would invite
+    reading a crossing as a relationship that is not there.
+  - Its four stacked series use a palette validated per mode: worst adjacent
+    pair ΔE 9.1 light / 8.4 dark under protanopia. Dark is its own steps
+    against the dark surface, not a flip. Two light slots fall under 3:1
+    contrast, which is why the legend and the tables under it are required.
+  - `AgentPanel` shows the open conversation's tokens and cost, refreshed when
+    one of its replies finishes.
+  - Strings in en and pt-BR; `placeholder.usage` is gone.
+- **Docs:** `docs/usage.md` (new), ADR 0011. SPEC §3 and §7, `design.md`,
+  `providers.md` and CLAUDE.md are synced.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 660 tests: contract 55, runner 259, desktop 306, mcp-servers 40 (Phase 5b: 547). |
+| `pnpm contract:schema` / `pnpm --filter desktop db:generate` | `UsageRecord.json` and `RunnerEvent.json` regenerated. `0006_usage_reports.sql` is generated plus a hand-written `provider` backfill. |
+| Pricing numbers | Read off the providers' pricing pages on 2026-09-22 (the URLs are in `pricing.json`), not from memory. |
+| Runner | Tokenizer (10): empty, English prose, punctuation-heavy code, CJK, emoji and surrogates, word length, tool-call JSON vs. a bare call, a bulky tool result, flat rates for images and documents. Calculator (11): each token kind at its own rate, sub-cent costs kept, an unknown cache rate billed as input, prefix fallback, a harness on the API behind it, a wildcard provider, an unknown model → null, an override winning by prefix; and, against the shipped table, every provider Comitiva runs plus `gpt-5` not swallowing `gpt-5-mini`. Tracker (4) and the tool loop re-seeding from the grown history. Conformance, for all four API adapters: the estimate's shape and neighbourhood rather than a hard-coded heuristic, and **usage emitted on the error path**. Per-provider: input reported net for OpenAI and Gemini, the model on the event. Parsers: Claude Code's `modelUsage`, `total_cost_usd` and the TTL buckets. |
+| Desktop main | `UsageRepository` (20, new file): cost from the shipped table at write time, an unknown model left uncosted, a harness priced on its API; the half-open window and its edges, CLI cost kept out of the billed total, the estimated and unpriced flags, zeroes for an empty window, names and the deleted marker, models grouped per provider, title runs under their own model, **every grouping summing back to the window total**, day buckets in Tokyo and Honolulu, export order, `modelsSeen`; repricing one model only, never a harness row, and pricing a model the table never knew. `UsageService` (13): CSV quoting, the BOM, empty cells; days with no runs filled in; a viewer's day; a backwards window; price sources; recost on correction and on reset; a cancelled save writing nothing; the records and summary shapes; a write failure as `internal`. `ConversationService` (4 new): the cost and `costSource` of a written record, the model the provider ran preferred over the configured one, a harness cost winning, an estimated cost flagged — and title runs costed on their own cheap model. |
+| Renderer logic | `lib/usage` (16: period windows against local midnight, a backwards custom range, month and year crossings, sorting by cost then tokens with CLI ranked by its equivalent), `lib/format` (11: sub-cent money, zero as `$0.00`, pt-BR grouping, a day bucket not re-shifted, shares without NaN), `store/usage` (10: the two dashboard calls settled independently, failures by code, per-conversation totals, a cancelled export not a failure, exporting the period on screen, refresh after a price change), price-form parsing (5), i18n parity. |
+| `pnpm --filter desktop test:e2e` | 44/44 green (36 earlier + 8 new in `usage.spec.ts`): the exit criterion; the breakdown by connection, agent and model; a failed run and a cancelled one both recorded, the cancelled one flagged; the period selector, including a window before anything ran; the chart toggling tokens/cost; a price correction changing costs already recorded and reverting; the grouped export and survival across a restart; the conversation's usage in the right panel. |
+| UI | Screenshots of the dashboard, the Prices section and the right panel (`apps/desktop/test-results/usage-*.png`), in light, in dark (`emulateMedia`) and in pt-BR. |
+| `pnpm dev` by hand | **Not done.** The UI path was verified through the built app in Playwright. |
+
+### Deviations from the plan and design (all reflected in the docs)
+
+1. **Seven IPC channels, not three.** `summary` returns the totals and the
+   three groupings in one call (the screen shows them together); `conversation`
+   feeds the right panel; `prices`/`setPrice`/`clearPrice` are the corrections.
+   `summary(range, groupBy)` from design.md is gone.
+2. **The chart has no second axis.** The plan said "stacked daily bars with
+   cost on a second axis". Two y-scales invite reading a crossing as a
+   relationship, so tokens and cost are one toggle instead.
+3. `UsageRecord` grew three fields, not the two the plan listed: `provider`,
+   `costSource` and `costEstimated`.
+4. The model grouping key joins provider and model with `/`, not a NUL — the
+   NUL broke SQLite's tokenizer. The row carries both fields separately anyway.
+5. `Pricing` and `UsageService` live in `main/usage/`, not beside the other
+   services, since `csv.ts` and the calculator wrapper belong with them.
+6. `rangeOf` returns its own `Window` type: the contract's `UsageRange` is an
+   input type whose offset is optional.
+
+### Decisions
+
+- **An unpriced model shows no cost**, not zero. Zero is a claim; a dash plus
+  "set a price" is the truth.
+- **Sub-cent costs keep six decimals.** A page of real spending rounded to
+  `$0.00` reads as free. Exactly zero still shows `$0.00`, because a local
+  model really is free.
+- **Title runs count**, under their own cheap model, in the agent's totals.
+  Naming a conversation costs tokens and hiding that would be a small lie.
+- **Opening the Usage screen always refetches.** The first version only loaded
+  when idle; an e2e caught it showing the totals from the previous visit.
+- **recharts** is a new dependency (~700 KB in the renderer bundle, now 2.5 MB).
+  A hand-rolled SVG chart was the alternative.
+
+### Open
+
+- A range straddling a daylight-saving change is bucketed with one fixed
+  offset, so one boundary can be an hour off.
+- Prices update with a release. Any model can be corrected immediately, and
+  `pricing.json` records how old it is.
+- If the runner never answers a cancel and main finalizes locally, no tokens
+  are known and no record is written.
+- The daily chart of a 30-day window with one busy day is mostly empty. Real
+  use fills it; a sparser bucket (weeks) could come later.
+- `@comitiva/runner`'s suite failed once with one unnamed test and passed on
+  every rerun, including under turbo. Worth watching for a flake in the
+  spawn-based tests.
+- Carried over:
+  - allow-always decisions cannot be revoked from the UI
+  - image tool results for non-Anthropic providers
+  - `tools/list_changed`
+  - Windows and macOS runs of the bridge and the servers
+  - the real-provider check (Phase 1)
+  - the real CLIs in the UI and Windows (Phase 2)
+  - the real Google account check (Phase 5b)
+  - CI on GitHub (no remote)
+  - the Linux sandbox, signing and icon (Phase 7)
+
+## Next: Phase 7 — Polish and v0.1.0
+
+Attachments, search, export/import, i18n, packaging and auto-update. Done when
+the release is published.
+
+## Phase 5b — Google Drive and third-party servers (done)
 
 Done when an agent reads a Google Doc and creates another one with approval: yes. The first test of `e2e/google-drive.spec.ts` covers it through the built app, against a fake Google (OAuth plus a Drive API subset):
 
@@ -126,13 +293,6 @@ Done when an agent reads a Google Doc and creates another one with approval: yes
   - the real CLIs in the UI and Windows (Phase 2)
   - CI on GitHub (no remote)
   - the Linux sandbox, signing and icon (Phase 7)
-
-## Next: Phase 6 — Usage
-
-1. Records per run already exist (`usage_records`). Add pricing (`pricing.json`), estimated cost, and the summary and time-series queries.
-2. The Usage screen: a dashboard by connection, agent and model over a range, plus export.
-3. The right panel shows usage per conversation.
-4. Done when the dashboard matches the records.
 
 ## Phase 5 — Tools: ToolServer, MCP client, tool loop, filesystem server with roots and approvals (done)
 

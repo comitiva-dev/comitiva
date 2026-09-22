@@ -44,7 +44,8 @@ Blocks follow the Anthropic Messages API format as canonical: `text`, `image`, `
 
 **ToolApproval** — approval record: `id`, `conversationId`, `toolUseId`, `toolServerId`, `toolName`, `input`, `decision` (`allow` | `deny` | `allow-always`), `decidedAt`.
 
-**UsageRecord** — `id`, `connectionId`, `agentId`, `conversationId`, `messageId`, `model`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `estimated` (bool), `estimatedCostUsd`, `latencyMs`, `createdAt`.
+**UsageRecord** — `id`, `connectionId`, `agentId`, `conversationId`, `messageId`, `provider`, `model`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `estimated` (bool), `estimatedCostUsd`, `costSource` (`table` | `override` | `harness`), `costEstimated` (bool), `latencyMs`, `createdAt`.
+`inputTokens` is always net of `cacheReadTokens`; adapters normalize, because providers disagree. Cost is computed when the row is written, from the versioned table in `packages/runner` plus the user's corrections, and a cost a CLI harness reported itself wins (ADR 0011).
 
 ### 4. Architecture
 
@@ -176,5 +177,7 @@ Resolved in Phase 1: on Linux without a keyring (Chromium's `basic_text` backend
 Resolved in Phase 5: tool approvals go through the runner for API and CLI runs alike; CLI harnesses reach the agent's tools through the runner's MCP proxy, and their native file tools are turned off or sandboxed read-only when the agent has the `filesystem` server (ADR 0009).
 
 Resolved in Phase 5b: the `google-drive` server is our own, not a community one; OAuth and token refresh live in the desktop, and the server gets a fresh access token via env per launch (ADR 0010).
+
+Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is frozen into the row at write time rather than computed on read, and a CLI harness's cost is shown as an *equivalent* that a subscription may not bill (ADR 0011).
 
 ---

@@ -85,7 +85,10 @@ The helpers in `providers/api/shared.ts` enforce the rules every adapter must fo
 |---|---|
 | Every turn ends with exactly one `run.usage`, then `run.done`. Failures are thrown as `AppError`, and `Run` turns them into `run.error`. | `streamTurn` |
 | Cancel is not an error. It yields the usage known so far (`estimated: true`) and `done { stopReason: 'cancelled' }` right away, even if the SDK keeps its stream open. | `streamTurn` (races every read against the signal) |
-| Usage the provider does not report is estimated: about 4 chars per token for output, and the prompt for input. | `UsageTracker` |
+| `inputTokens` is always **net of `cacheReadTokens`**. Providers disagree — OpenAI's `prompt_tokens` and Gemini's `promptTokenCount` include the cached tokens, Anthropic's and both harnesses' do not — so the adapter subtracts before reporting. Without this, cost charges the cached tokens twice. | each adapter |
+| Usage the provider does not report is estimated by `usage/Tokenizer.ts` (word, punctuation and CJK aware; tool-call and tool-result JSON counted; images and documents charged a flat rate). The tool loop re-seeds the prompt estimate before each model call. | `UsageTracker` |
+| A turn that **fails** still yields its usage before throwing: the tokens were spent and the provider bills them. | `streamTurn` |
+| Report `model` when the provider names what it ran, and `costUsd` when the harness computed one. | each adapter |
 | HTTP errors map to stable codes: 401/403 → `auth_failed`; 429 → `rate_limited` (retryable); 5xx → `provider_unavailable` (retryable); other 4xx → `provider_error`. | `httpError` |
 | No response (refused, DNS, reset) → `provider_unavailable` (retryable). A timeout → `timeout` (retryable). | `networkError`, `isFetchFailure` |
 | Test and list models give up after 15 s with `timeout`. `testConnection` never throws; it returns `{ ok: false, error }`. | `withDeadline`, `probe` |
@@ -163,7 +166,7 @@ Output lines (one JSON object each):
 | `{type:"stream_event", event:{…}}` | Anthropic SSE events. `content_block_delta` with `text_delta` → `run.text_delta`. `thinking_delta`, `input_json_delta` and the rest are ignored. |
 | `{type:"assistant", message:{content:[…]}, error?}` | The complete message. `tool_use` blocks → `run.block`. Its text is used only when that message streamed no deltas. `error: "authentication_failed"` → `not_logged_in`. |
 | `{type:"user", message:{content:[{type:"tool_result", tool_use_id, content}]}}` | `run.block` `tool_result` |
-| `{type:"result", subtype, is_error, stop_reason, session_id, usage, errors?, result?}` | Terminal. `usage` (input, output, cache_read_input_tokens, cache_creation_input_tokens) → `run.usage`. `is_error` → an error from `errors[]` or `result`. |
+| `{type:"result", subtype, is_error, stop_reason, session_id, usage, modelUsage, total_cost_usd, errors?, result?}` | Terminal. `usage` (input, output, cache_read_input_tokens, cache_creation_input_tokens, or `cache_creation`'s 5m/1h buckets summed) → `run.usage`. `modelUsage` is keyed by the model Claude Code really ran and gives its `canonicalModel`; the busiest entry names the turn, which is the only way to know the model when the connection names none. `total_cost_usd` is computed at list prices and is authoritative, so it wins over our table (`costSource: 'harness'`). `output_tokens` already includes `thinkingTokens`. `is_error` → an error from `errors[]` or `result`. |
 | `system/status`, `system/thinking_tokens`, `rate_limit_event` | Ignored |
 
 Observed failures:
@@ -198,7 +201,7 @@ Output lines:
 | … with `file_change {changes:[{path, kind}], status}` | `tool_use` `apply_patch {changes}`, then `tool_result` |
 | … with `mcp_tool_call {server, tool, arguments, result, error, status}` | `tool_use`, then `tool_result` |
 | `{type:"error", message}` and `item.type:"error"` | Reconnect notices; logged only |
-| `{type:"turn.completed", usage:{input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens}}` | `run.usage`: input = `input_tokens − cached_input_tokens`, cacheRead = cached, output = `output_tokens`. `done(end_turn)`. |
+| `{type:"turn.completed", usage:{input_tokens, cached_input_tokens, output_tokens, reasoning_output_tokens}}` | `run.usage`: input = `input_tokens − cached_input_tokens`, cacheRead = cached, output = `output_tokens`. Codex nests breakdowns inside totals (the recordings show 14282 input of which 11008 cached), so `reasoning_output_tokens` is already part of `output_tokens` and is **not** added. Codex names no model. `done(end_turn)`. |
 | `{type:"turn.failed", error:{message}}` | Terminal error. `message` is either JSON with `status` (e.g. 400 for an unsupported model → `provider_error`) or text such as "unexpected status 401 Unauthorized: Missing bearer…" (→ `not_logged_in`). |
 
 A cancelled run (SIGTERM) exits 143, having written only `thread.started` and `turn.started`.

@@ -9,6 +9,7 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 - `docs/architecture.md` — processes, runner protocol, boundaries, data locations.
 - `docs/providers.md` — how to add a provider adapter (rules, shared helpers, conformance tests).
 - `docs/tools.md` — tools, roots, the permission gate and approvals, the CLI MCP proxy, Google Drive (OAuth client setup), adding MCP servers.
+- `docs/usage.md` — how usage is recorded and costed, the pricing table, price corrections, the reports.
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
@@ -16,7 +17,8 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 
 ```
 packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
-packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs, dist/mcp-proxy.cjs) + RunnerClient + testing/ fakes
+packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs, dist/mcp-proxy.cjs) + RunnerClient
+                                            + usage/ (pricing.json, UsageCalculator, Tokenizer) + testing/ fakes
 packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (dist/filesystem.cjs, dist/google-drive.cjs) + testing/ fake Google
 apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
 ```
@@ -35,6 +37,7 @@ apps/desktop          desktop               Electron: main (SQLite, SecretStore,
 - TypeScript strict (TS 6.0), pnpm 10 workspaces (hoisted), Turborepo. Package names `@comitiva/*`. Toolchain pins and why: ADR 0006.
 - Conventional commits with package scope: `feat(runner): ...`, `fix(desktop): ...`, `docs: ...`. Small commits.
 - Errors carry stable codes (`AppError` in contract); the UI translates by code and never shows raw provider messages as titles.
+- `run.usage`'s `inputTokens` is always net of `cacheReadTokens`. Providers disagree; adapters normalize. Prices are read off the providers' pages, never from memory, and `pricing.json` records the date and the URLs.
 - Code, comments, commits and docs in English. UI strings go through i18n (`renderer/src/i18n/en.json`, `pt-BR.json`).
 - Contract changes: edit zod in `packages/contract/src`, run `pnpm contract:schema`, commit the JSON. New IPC channels also go in `ipc-channels.ts` (a test checks it).
 - DB changes: edit `apps/desktop/src/main/db/schema.ts`, run `pnpm --filter desktop db:generate`, commit the migration.

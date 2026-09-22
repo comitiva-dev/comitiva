@@ -14,4 +14,5 @@ One file per decision that affects more than one package. Format: context, decis
 | [0008](0008-live-message-events.md) | Live message events: snapshots plus deltas, one revision counter per conversation | Accepted |
 | [0009](0009-tool-approvals-through-the-runner.md) | Tool approvals go through the runner; CLI harnesses reach tools through its MCP proxy | Accepted |
 | [0010](0010-google-drive-server-and-oauth.md) | Our own Google Drive server; OAuth and refresh in the desktop, the token handed over per launch | Accepted |
+| [0011](0011-pricing-and-cost-at-write-time.md) | Prices ship with the runner as one versioned JSON; cost is computed at write time and a correction recosts | Accepted |
 

@@ -171,6 +171,8 @@ packages/runner/src/
 ├── mcp/               McpClientManager.ts McpConnection.ts ToolCatalog.ts ToolBridge.ts content.ts names.ts (P5)
 ├── proxy/             bin.ts → dist/mcp-proxy.cjs, the MCP server CLI harnesses launch (P5, ADR 0009)
 ├── usage/             UsageCalculator.ts pricing.json Tokenizer.ts (P6)
+│                      pricing.json is versioned and carries the date and pages it was read from;
+│                      CLI providers alias onto the API they bill on
 ├── client/            RunnerClient.ts        (embedded by shells)
 ├── testing/           fakeProviders.ts fixtures.ts  (exported as @comitiva/runner/testing)
 │                      fakeHarness.ts → dist/testing/bin/fake-claude, fake-codex (P2)   fakeMcpServer.ts (P5)
@@ -201,7 +203,8 @@ apps/desktop/
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
     │   │                            ToolServerService.ts (P5; approvals live in ConversationService)
-    │   │                            GoogleDriveService.ts (P5b) UsageService.ts (P6)
+    │   │                            GoogleDriveService.ts (P5b)
+    │   │            usage/           UsageService.ts Pricing.ts csv.ts (P6)
     │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b: loopback + PKCE, no Electron import)
@@ -252,7 +255,8 @@ erDiagram
     CONVERSATION { text id PK; text agent_id FK; text title; text status; text harness_session_id; int archived; text last_activity_at; text created_at }
     MESSAGE { text id PK; text conversation_id FK; text role; json content; text status; int seq; text created_at }
     TOOL_APPROVAL { text id PK; text conversation_id FK; text agent_id; text tool_server_id; text tool_name; text tool_use_id; json input; text decision; text decided_at }
-    USAGE_RECORD { text id PK; text connection_id FK; text agent_id; text conversation_id; text message_id; text model; int input_tokens; int output_tokens; int cache_read_tokens; int cache_write_tokens; int estimated; real cost_usd; int latency_ms; text created_at }
+    USAGE_RECORD { text id PK; text connection_id FK; text agent_id; text conversation_id; text message_id; text provider; text model; int input_tokens; int output_tokens; int cache_read_tokens; int cache_write_tokens; int estimated; real cost_usd; text cost_source; int cost_estimated; int latency_ms; text created_at }
+    MODEL_PRICE { text provider PK; text model PK; real input_per_1m; real output_per_1m; real cache_read_per_1m; real cache_write_per_1m; text updated_at }
     USAGE_POLICY { text connection_id PK; int max_tokens_day; real max_cost_day; int max_concurrent; text window_start; text window_end }
 ```
 
@@ -347,6 +351,21 @@ CREATE TABLE usage_records (
 );
 CREATE INDEX idx_usage_conn_time ON usage_records(connection_id, created_at);
 CREATE INDEX idx_usage_agent_time ON usage_records(agent_id, created_at);
+
+-- 0006_usage_reports (P6). No foreign keys here on purpose: usage outlives the
+-- agent or connection it belonged to, so the reports LEFT JOIN for names.
+ALTER TABLE usage_records ADD provider TEXT NOT NULL DEFAULT '';   -- backfilled from connections
+ALTER TABLE usage_records ADD cost_source TEXT;                    -- table | override | harness
+ALTER TABLE usage_records ADD cost_estimated INTEGER NOT NULL DEFAULT 0;
+CREATE INDEX idx_usage_time ON usage_records(created_at);                       -- every connection
+CREATE INDEX idx_usage_model_time ON usage_records(provider, model, created_at); -- by model, reprice
+CREATE INDEX idx_usage_conv ON usage_records(conversation_id);                   -- the right panel
+CREATE TABLE model_prices (                                        -- the user's corrections
+  provider TEXT NOT NULL, model TEXT NOT NULL,
+  input_per_1m REAL NOT NULL, output_per_1m REAL NOT NULL,
+  cache_read_per_1m REAL, cache_write_per_1m REAL, updated_at TEXT NOT NULL,
+  PRIMARY KEY (provider, model)
+);
 
 -- applied migrations are tracked by Drizzle in __drizzle_migrations
 ```
@@ -502,8 +521,12 @@ function createDefaultRegistry(): ProviderRegistry;            // four API adapt
 
 // providers/api/shared.ts — the rules every API adapter follows (CLI adapters reuse streamTurn, UsageTracker and httpError)
 function streamTurn(opts: { signal; usage: UsageTracker; toAppError; body: () => AsyncGenerator<AdapterEvent, StopReason> }): AsyncIterable<AdapterEvent>;
-// one run.usage then run.done; abort → usage so far (estimated) + done(cancelled) at once, even if the SDK hangs
-class UsageTracker { static for(input): UsageTracker; addText(t); report({ input?, output?, cacheRead?, cacheWrite?, final? }); event() }
+// one run.usage then run.done; abort → usage so far (estimated) + done(cancelled) at once, even if the SDK hangs;
+// a failure yields the usage so far too, before throwing: those tokens were spent and are billed (P6)
+class UsageTracker {   // report() takes input NET of cacheRead; see providers.md → usage
+  static for(input); addText(t); seed(messages) /* the tool loop grows the history (P6) */;
+  report({ input?, output?, cacheRead?, cacheWrite?, model?, costUsd?, final? }); event();
+}
 function httpError(status, message, cause?): AppError;        // 401/403 auth_failed, 429 rate_limited, 5xx provider_unavailable, 4xx provider_error
 function networkError(err): AppError;                          // refused/DNS → provider_unavailable, timeout → timeout (both retryable)
 function withDeadline<T>(fn: (signal) => Promise<T>, toAppError, ms = 15000): Promise<T>;   // listModels
@@ -594,12 +617,21 @@ class ToolBridge implements CliToolAccess {
 }
 // proxy/bin.ts (dist/mcp-proxy.cjs <bridge-file>): stdio MCP server that forwards tools/list and tools/call to the bridge.
 
+// usage/Tokenizer.ts — the fallback when a provider reports nothing (cancel, a server
+// without include_usage). Word/punctuation/CJK aware; counts tool_use and tool_result JSON and
+// charges images and documents a flat rate. No BPE table: dist/bin.cjs stays self-contained.
+function countText(text): number; function countBlocks(blocks): number;
+function countPrompt(system, messages): number;
+
 // usage/UsageCalculator.ts
 class UsageCalculator {
-  constructor(pricing: PricingTable, overrides?: PricingTable);
-  cost(model: string, usage: TokenUsage): number | null;
-  estimate(messages: Message[], output: string): TokenUsage;   // approximate fallback, estimated=true
+  constructor(pricing?: PricingTable, overrides?: Partial<Record<ProviderId, Record<string, ModelPricing>>>);
+  pricesFor(provider, model): { prices; source: 'table' | 'override'; matched } | null;
+  cost(provider, model, usage: TokenUsage): { usd; source; matched } | null;   // null = unpriced
 }
+// Lookup: exact id, then the longest listed id the model starts with (dated snapshots), then the
+// provider's `*`. `aliases` sends a CLI provider to the API it bills on. `usage.inputTokens` is
+// net of cacheRead, which every adapter now guarantees.
 
 // client/RunnerClient.ts — what shells embed
 class RunnerClient extends EventEmitter {
@@ -772,7 +804,15 @@ class MessageRepository {        // (P4)
   setContent(id, blocks) /* 250 ms checkpoints */; finish(id, status, blocks, error); reset(id) /* retry */;
   recoverInterrupted();   // at boot: streaming → error { interrupted }
 }
-class UsageRepository { insert(NewUsageRecord); listByConversation(id) }   // (P4; summary/timeseries in P6)
+class UsageRepository {          // (P6) cost is computed in insert(), so replies and titles share it
+  constructor(db, pricing?);     // a harness-reported cost wins and is marked 'harness'
+  insert(NewUsageRecord); listByConversation(id); totalsForConversation(id);
+  totals(range); groupBy('connection' | 'agent' | 'model', range); timeseries(range);
+  listInRange(range); modelsSeen(); reprice(provider, model, cost)  // skips cost_source='harness'
+}
+// Raw SQL over the new indexes. A day is the viewer's: the bucket shifts created_at by their
+// offset, while the range predicate still compares UTC text the index covers.
+class PricingRepository { all(); set(provider, model, prices); clear(provider, model) }   // (P6)
 class ToolServerRepository {    // (P5) built-ins first; rows validated by the ToolServer schema
   list(); get(id); require(id); create(NewToolServer); update(id, changes); delete(id) /* built-ins: invalid_request */;
 }
@@ -918,7 +958,7 @@ settings.get | update                                               (P3; AppSett
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
 messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
 approvals.decide                                                    (P5)
-usage.summary | timeseries | export
+usage.summary | timeseries | conversation | export | prices | setPrice | clearPrice   (P6)
 dialogs.pickFolder                                                  (P2)
 events: runner.status (P0); conversation.updated, message.updated, message.delta, message.block (P4, ADR 0008);
         conversation.updated carries the pending approval (P5; no separate approval event)
@@ -944,12 +984,13 @@ interface Backend {
   conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id) };   // (P4)
   messages: { list(convId, { beforeSeq?, limit? }?); send(convId, UserContent); cancel(convId); retry(convId) };   // (P4)
   approvals: { decide(convId, toolUseId, decision) };
-  usage: { summary(range, groupBy); timeseries(range) };
+  usage: { summary(range); timeseries(range); conversation(id); export(range & { shape });        // (P6)
+           prices(); setPrice(provider, model, prices); clearPrice(provider, model) };
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
 class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
 // Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings;
-// Phase 4 conversations, messages and their events; Phase 5 toolServers and approvals.
+// Phase 4 conversations, messages and their events; Phase 5 toolServers and approvals; Phase 6 usage.
 
 // renderer/src/store/*.ts (Zustand vanilla stores created with the Backend injected; StoresProvider + useApp/useConnections)
 appStore:               version, runnerStatus (pushed status wins over init), secretStatus, section (sidebar navigation)
@@ -957,6 +998,9 @@ connectionsStore:       items: ConnectionSummary[], testing, editor (closed | cr
 agentsStore (P3):       items, selectedId, editor (closed | create with prefill | edit id), confirmDelete, notice,
                         models per connection (fetched once per session; retry forces), settings;
                         createSample (model_required → opens the prefilled form), dismissSample.
+usageStore (P6):        period (today | last7 | last30 | thisMonth | custom), summary, series, prices,
+                        byConversation (the right panel), lastExport. Opening the screen always
+                        reloads: runs happen while it is closed.
 conversationsStore (P4): byId, idsByAgent / archivedIdsByAgent (newest activity first), selectedByAgent (undefined =
                         the most recent, null = "new conversation"), visibleId (on screen: its replies are read),
                         unread, notice; load, loadArchived, create, select, setVisible, rename, archive, forgetAgent.
@@ -1019,7 +1063,14 @@ Phase 5b (pure logic in `lib/toolServerForm.ts` `toolBadges`, `lib/chat.ts` `app
 - `Forms/AgentForm`: the Drive checkbox says "not connected" or "reconnect needed".
 - `ApprovalCard`: targets also show `name`, `fileId`, `parentId`, `toFolderId`; the full input sits behind "Details".
 
-Later components: `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Settings/*`, `Usage/*`.
+Phase 6 components: `screens/UsageScreen`, `Usage/PeriodSelector`, `Usage/UsageTotals`,
+`Usage/UsageChart` (recharts), `Usage/UsageTable`, `Usage/PriceOverrides`, `Usage/palette.ts`, and
+the usage section of `AgentPanel`. Pure logic is `lib/usage.ts` (periods → windows, sorting) and
+`lib/format.ts` (Intl for tokens, money, days). The chart shows tokens *or* cost, never both: two
+y-axes would invite reading a crossing as a relationship. Its palette is validated per mode
+(`Usage/palette.ts` says why the order is the safety mechanism).
+
+Later components: `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Settings/*`.
 
 ---
 

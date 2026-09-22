@@ -1,8 +1,14 @@
 import { createHash } from 'node:crypto';
-import type { ToolDef } from '@comitiva/contract';
+import type { BuiltinToolServer, ToolDef } from '@comitiva/contract';
 import type { ToolResult } from '../providers/ProviderAdapter.js';
 import { errorResult } from './content.js';
 import type { ServerHandle } from './McpClientManager.js';
+
+/** Fixed, short prefixes for the built-in servers. */
+const BUILTIN_SLUGS: Record<BuiltinToolServer, string> = {
+  filesystem: 'fs',
+  'google-drive': 'gdrive',
+};
 
 export interface CatalogEntry {
   /** What the model sees: `<slug>__<tool>` (≤ 64 chars, [A-Za-z0-9_-]). */
@@ -24,7 +30,10 @@ export class ToolCatalog {
   constructor(handles: readonly ServerHandle[], filter: (tool: ToolDef) => boolean = () => true) {
     const slugs = new Set<string>();
     for (const handle of handles) {
-      const slug = uniqueSlug(handle.builtin === 'filesystem' ? 'fs' : slugify(handle.name), slugs);
+      const slug = uniqueSlug(
+        handle.builtin ? BUILTIN_SLUGS[handle.builtin] : slugify(handle.name),
+        slugs,
+      );
       for (const tool of handle.tools) {
         if (!filter(tool)) continue;
         const name = prefixed(slug, tool.name);
@@ -47,7 +56,7 @@ export class ToolCatalog {
   }
 
   /** True when a built-in server (e.g. the filesystem) contributes tools. */
-  hasBuiltin(builtin: 'filesystem'): boolean {
+  hasBuiltin(builtin: BuiltinToolServer): boolean {
     return [...this.byName.values()].some((e) => e.handle.builtin === builtin);
   }
 

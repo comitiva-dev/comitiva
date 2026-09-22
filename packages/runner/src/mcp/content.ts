@@ -11,9 +11,13 @@ export function toToolDef(tool: Tool): ToolDef {
   const annotations = {
     ...(a?.readOnlyHint !== undefined ? { readOnlyHint: a.readOnlyHint } : {}),
     ...(a?.destructiveHint !== undefined ? { destructiveHint: a.destructiveHint } : {}),
+    ...(a?.idempotentHint !== undefined ? { idempotentHint: a.idempotentHint } : {}),
+    ...(a?.openWorldHint !== undefined ? { openWorldHint: a.openWorldHint } : {}),
   };
+  const title = tool.title ?? a?.title;
   return {
     name: tool.name,
+    ...(title ? { title } : {}),
     ...(tool.description ? { description: tool.description } : {}),
     inputSchema: tool.inputSchema as Record<string, unknown>,
     ...(Object.keys(annotations).length ? { annotations } : {}),

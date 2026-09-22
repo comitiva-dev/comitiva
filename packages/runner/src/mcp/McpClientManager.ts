@@ -42,10 +42,12 @@ interface Instance {
 
 const MAX_BACKOFF_MS = 30_000;
 /**
- * Filesystem instances are per set of roots; one nobody used for this long is
- * closed (an agent whose roots changed leaves its old instance behind).
+ * Built-in instances nobody used for this long are closed: filesystem
+ * instances are per set of roots (an agent whose roots changed leaves its old
+ * instance behind), and a Google Drive instance holds an access token that
+ * expires (the next run brings a fresh one).
  */
-export const FILESYSTEM_IDLE_MS = 10 * 60_000;
+export const BUILTIN_IDLE_MS = 10 * 60_000;
 
 /**
  * One MCP client per server launch, started on demand and reused across runs
@@ -228,8 +230,8 @@ export class McpClientManager {
     inst.refs = Math.max(0, inst.refs - 1);
     if (inst.refs > 0) return;
     if (inst.superseded) void this.close(inst);
-    else if (isFilesystem(inst.launch)) {
-      inst.idleTimer = setTimeout(() => void this.close(inst), FILESYSTEM_IDLE_MS);
+    else if (inst.launch.transport === 'stdio' && inst.launch.builtin) {
+      inst.idleTimer = setTimeout(() => void this.close(inst), BUILTIN_IDLE_MS);
       inst.idleTimer.unref();
     }
   }
@@ -258,9 +260,13 @@ export class McpClientManager {
 const isFilesystem = (launch: ToolServerLaunch): boolean =>
   launch.transport === 'stdio' && launch.builtin === 'filesystem';
 
-/** The built-in filesystem server gets the agent's roots and the approval flag. */
+/**
+ * Built-in servers get the approval flag (the runner asks before every write
+ * call); the filesystem server also gets the agent's roots.
+ */
 function builtinArgs(launch: ToolServerLaunch, roots: readonly AgentRoot[]): string[] {
-  if (!isFilesystem(launch)) return [];
+  if (launch.transport !== 'stdio' || !launch.builtin) return [];
+  if (launch.builtin === 'google-drive') return ['--gated-by-client'];
   return [...roots.flatMap((r) => ['--root', `${r.path}:${r.mode}`]), '--gated-by-client'];
 }
 

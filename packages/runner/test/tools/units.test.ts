@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Block, Message, ToolDef, ToolServerLaunch } from '@comitiva/contract';
-import { toToolResult } from '../../src/mcp/content.js';
+import { toToolDef, toToolResult } from '../../src/mcp/content.js';
 import { McpClientManager } from '../../src/mcp/McpClientManager.js';
 import { ToolCatalog } from '../../src/mcp/ToolCatalog.js';
 import { normalizeHistory } from '../../src/runs/history.js';
@@ -141,9 +141,45 @@ describe('toToolResult', () => {
   });
 });
 
+describe('toToolDef', () => {
+  it('keeps the title and the four MCP hints, and drops unknown fields', () => {
+    const def = toToolDef({
+      name: 'update',
+      title: 'Update file',
+      inputSchema: { type: 'object' },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+      _meta: { x: 1 },
+    });
+    expect(def).toEqual({
+      name: 'update',
+      title: 'Update file',
+      inputSchema: { type: 'object' },
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    });
+    expect(
+      toToolDef({ name: 'x', inputSchema: { type: 'object' }, annotations: { title: 'X' } }),
+    ).toEqual({ name: 'x', title: 'X', inputSchema: { type: 'object' } });
+  });
+});
+
 describe('ToolCatalog', () => {
   it('prefixes names, keeps them within provider limits and resolves them', () => {
-    const handle = (serverId: string, name: string, tools: ToolDef[], builtin?: 'filesystem') => ({
+    const handle = (
+      serverId: string,
+      name: string,
+      tools: ToolDef[],
+      builtin?: 'filesystem' | 'google-drive',
+    ) => ({
       serverId,
       name,
       builtin,
@@ -154,11 +190,14 @@ describe('ToolCatalog', () => {
     const c = new ToolCatalog([
       handle('filesystem', 'Files', [tool('read_file')], 'filesystem'),
       handle('gh', 'GitHub (work)', [tool('create.issue'), tool('x'.repeat(80))]),
+      handle('google-drive', 'Google Drive', [tool('read')], 'google-drive'),
     ]);
     const names = c.defs().map((d) => d.name);
     expect(names[0]).toBe('fs__read_file');
     expect(names[1]).toBe('github_work__create_issue');
     expect(names[2]!.length).toBe(64);
+    expect(names[3]).toBe('gdrive__read');
+    expect(c.hasBuiltin('google-drive')).toBe(true);
     expect(names.every((n) => /^[A-Za-z0-9_-]{1,64}$/.test(n))).toBe(true);
     expect(c.resolve('github_work__create_issue')).toMatchObject({
       serverId: 'gh',
@@ -194,6 +233,26 @@ describe('McpClientManager', () => {
       ['--root', '/b:read', '--gated-by-client'],
     ]);
     expect(mcp.liveInstances()).toHaveLength(2);
+  });
+
+  it('gives the Google Drive server only the gate flag, and a refreshed token a new instance', async () => {
+    const fake = createFakeMcp();
+    mcp = new McpClientManager(createLogger('silent'), { open: fake.open });
+    const drive: ToolServerLaunch = {
+      id: 'google-drive',
+      name: 'Google Drive',
+      transport: 'stdio',
+      command: 'node',
+      args: ['google-drive.cjs'],
+      env: { GDRIVE_ACCESS_TOKEN: 'old' },
+      builtin: 'google-drive',
+    };
+    // Roots are for the filesystem server only.
+    (await mcp.acquire(drive, [{ path: '/a', mode: 'readwrite' }])).release();
+    expect(fake.args).toEqual([['--gated-by-client']]);
+    (await mcp.acquire({ ...drive, env: { GDRIVE_ACCESS_TOKEN: 'new' } })).release();
+    expect(fake.opens()).toBe(2);
+    await expect.poll(() => mcp!.liveInstances().length).toBe(1);
   });
 
   it('replaces an edited server once nobody holds the old one, and stop closes it for good', async () => {

@@ -87,9 +87,9 @@ describe('tools through the runner binary and the real filesystem server', () =>
     expect(tools.map((t) => t.name).sort()).toEqual(
       ['create_dir', 'delete', 'list_dir', 'move', 'read_file', 'search', 'write_file'].sort(),
     );
-    expect(tools.find((t) => t.name === 'read_file')?.annotations).toEqual({
-      readOnlyHint: true,
-      destructiveHint: false,
+    expect(tools.find((t) => t.name === 'read_file')).toMatchObject({
+      title: 'Read file',
+      annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false },
     });
     await client.stopToolServer('filesystem');
   });

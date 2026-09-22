@@ -230,4 +230,43 @@ describe('tool server IPC', () => {
     });
     expect(e.pendingApproval).toBeNull();
   });
+
+  it('tests a saved server or unsaved settings', () => {
+    const test = ipcInvoke['toolServers.test'].input;
+    expect(test.parse({ id: 'srv' })).toEqual({ id: 'srv' });
+    const unsaved = test.parse({ spec: { transport: 'stdio', command: 'npx' } });
+    expect(unsaved).toEqual({ spec: { transport: 'stdio', command: 'npx', args: [], env: {} } });
+    expect(
+      test.safeParse({
+        id: 'srv',
+        spec: {
+          transport: 'http',
+          url: 'https://x.test/mcp',
+          headers: { A: { keepSecret: true } },
+        },
+      }).success,
+    ).toBe(true);
+    expect(test.safeParse({}).success).toBe(false);
+  });
+
+  it('validates the Google Drive client and never returns secrets in the status', () => {
+    const configure = ipcInvoke['googleDrive.configure'].input;
+    expect(configure.safeParse({ clientId: ' id.apps.googleusercontent.com ' }).success).toBe(true);
+    expect(configure.safeParse({ clientId: 'x', clientSecret: { value: 's' } }).success).toBe(true);
+    expect(configure.safeParse({ clientId: 'x', clientSecret: { keepSecret: true } }).success).toBe(
+      true,
+    );
+    expect(configure.safeParse({ clientId: ' ' }).success).toBe(false);
+    expect(configure.safeParse({ clientId: 'x', clientSecret: { value: '' } }).success).toBe(false);
+    const status = ipcInvoke['googleDrive.getStatus'].output.parse({
+      clientConfigured: true,
+      clientId: 'x',
+      hasClientSecret: true,
+      state: 'connected',
+      email: 'a@b.test',
+      accessToken: 'leak',
+      clientSecret: 'leak',
+    });
+    expect(JSON.stringify(status)).not.toContain('leak');
+  });
 });

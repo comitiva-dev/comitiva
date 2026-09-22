@@ -236,6 +236,57 @@ export type ToolServerPatch = z.input<typeof ToolServerPatch>;
 export type ValidToolServerPatch = z.output<typeof ToolServerPatch>;
 
 /**
+ * What `toolServers.test` starts: a saved server (`{ id }`), or the form's
+ * unsaved settings (`{ spec }`, plus `id` when editing so `keepSecret` values
+ * reuse the stored secrets).
+ */
+export const ToolServerTestTarget = z.union([
+  z.object({ spec: ToolServerSpec, id: Id.optional() }),
+  z.object({ id: Id }),
+]);
+export type ToolServerTestTarget = z.input<typeof ToolServerTestTarget>;
+export type ValidToolServerTestTarget = z.output<typeof ToolServerTestTarget>;
+
+/**
+ * The built-in Google Drive server's account, as the UI sees it. Tokens and
+ * the client secret never leave main; only the client id (not a secret) and
+ * the account email do.
+ */
+export const GoogleDriveState = z.enum([
+  'disconnected',
+  'connecting',
+  'connected',
+  'reconnect_required',
+]);
+export type GoogleDriveState = z.infer<typeof GoogleDriveState>;
+
+export const GoogleDriveStatus = z.object({
+  /** A client id is stored (the secret is optional for some client types). */
+  clientConfigured: z.boolean(),
+  clientId: z.string().nullable(),
+  hasClientSecret: z.boolean(),
+  state: GoogleDriveState,
+  email: z.string().nullable(),
+});
+export type GoogleDriveStatus = z.infer<typeof GoogleDriveStatus>;
+
+/**
+ * The user's own OAuth client (type "Desktop app"). `clientSecret` omitted or
+ * `{ keepSecret }` keeps the stored one; `{ value }` replaces it. A different
+ * client id disconnects the account.
+ */
+export const GoogleDriveConfigureInput = z.object({
+  clientId: z.string().trim().min(1),
+  clientSecret: z
+    .union([
+      z.object({ value: z.string().trim().min(1) }),
+      z.object({ keepSecret: z.literal(true) }),
+    ])
+    .optional(),
+});
+export type GoogleDriveConfigureInput = z.input<typeof GoogleDriveConfigureInput>;
+
+/**
  * A tool call waiting for the user's decision. At most one per conversation
  * (tools run one at a time). Live state: it lasts as long as the run.
  */
@@ -344,8 +395,20 @@ export const ipcInvoke = {
   'toolServers.update': { input: ById.extend({ patch: ToolServerPatch }), output: ToolServer },
   /** Built-in servers cannot be deleted (invalid_request); disable them instead. */
   'toolServers.delete': { input: ById, output: z.void() },
-  /** Starts the server in the runner and lists its tools. */
-  'toolServers.test': { input: ById, output: z.array(ToolDef) },
+  /** Starts the server in the runner and lists its tools (a saved server or unsaved settings). */
+  'toolServers.test': { input: ToolServerTestTarget, output: z.array(ToolDef) },
+  'googleDrive.getStatus': { input: z.undefined(), output: GoogleDriveStatus },
+  'googleDrive.configure': { input: GoogleDriveConfigureInput, output: GoogleDriveStatus },
+  /**
+   * Opens Google's consent page in the browser and waits (up to 5 min) for the
+   * loopback redirect. Rejects with oauth_not_configured, oauth_cancelled,
+   * oauth_failed or timeout.
+   */
+  'googleDrive.connect': { input: z.undefined(), output: GoogleDriveStatus },
+  /** Aborts a connect in progress (it then rejects with oauth_cancelled). */
+  'googleDrive.cancelConnect': { input: z.undefined(), output: z.void() },
+  /** Revokes the tokens at Google (best effort) and forgets them. Keeps the client. */
+  'googleDrive.disconnect': { input: z.undefined(), output: GoogleDriveStatus },
   /** The user's answer to a pending tool call. */
   'approvals.decide': {
     input: ByConversation.extend({ toolUseId: z.string(), decision: ApprovalDecision }),

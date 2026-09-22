@@ -37,6 +37,11 @@ export const ipcInvokeChannels = [
   'toolServers.update',
   'toolServers.delete',
   'toolServers.test',
+  'googleDrive.getStatus',
+  'googleDrive.configure',
+  'googleDrive.connect',
+  'googleDrive.cancelConnect',
+  'googleDrive.disconnect',
   'approvals.decide',
 ] as const;
 

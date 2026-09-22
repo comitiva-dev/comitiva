@@ -143,13 +143,21 @@ export const ModelInfo = z.object({
 });
 export type ModelInfo = z.infer<typeof ModelInfo>;
 
+/** MCP tool annotations (hints from the server; only `readOnlyHint` affects the permission gate). */
+export const ToolAnnotations = z.object({
+  readOnlyHint: z.boolean().optional(),
+  destructiveHint: z.boolean().optional(),
+  idempotentHint: z.boolean().optional(),
+  openWorldHint: z.boolean().optional(),
+});
+export type ToolAnnotations = z.infer<typeof ToolAnnotations>;
+
 export const ToolDef = z.object({
   name: z.string(),
+  title: z.string().optional(),
   description: z.string().optional(),
   inputSchema: z.record(z.string(), z.unknown()),
-  annotations: z
-    .object({ readOnlyHint: z.boolean().optional(), destructiveHint: z.boolean().optional() })
-    .optional(),
+  annotations: ToolAnnotations.optional(),
 });
 export type ToolDef = z.infer<typeof ToolDef>;
 

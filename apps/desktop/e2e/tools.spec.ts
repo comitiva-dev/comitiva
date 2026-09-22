@@ -288,6 +288,7 @@ test('the Tools screen lists the built-in server, tests it, and adds a server wi
   await shared.getByTestId('toggle-enabled').click();
   await expect(shared.getByTestId('toggle-enabled')).toHaveAttribute('aria-checked', 'false');
   await page.getByTestId('new-agent').click();
-  await expect(page.getByTestId('agent-form').getByTestId('agent-tool')).toHaveCount(1);
+  // Files and Google Drive (built-ins) are left.
+  await expect(page.getByTestId('agent-form').getByTestId('agent-tool')).toHaveCount(2);
   await page.getByTestId('agent-form').getByTestId('cancel').click();
 });

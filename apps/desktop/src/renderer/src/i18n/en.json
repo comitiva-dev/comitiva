@@ -147,7 +147,12 @@
     "connection_disabled": "That connection is disabled. Enable it or pick another one.",
     "model_required": "This connection has no default model. Pick a model for the agent.",
     "conversation_busy": "This conversation is still answering. Wait for it or stop it first.",
-    "interrupted": "The reply was interrupted when the app closed. You can retry."
+    "interrupted": "The reply was interrupted when the app closed. You can retry.",
+    "oauth_not_configured": "Add your Google OAuth client first (Tools → Google Drive → Set up).",
+    "oauth_failed": "Google did not complete the sign-in. Check the OAuth client and try again.",
+    "oauth_cancelled": "Connecting was cancelled.",
+    "google_not_connected": "Google Drive is not connected. Connect it on the Tools screen.",
+    "google_reconnect_required": "Google no longer accepts the saved sign-in. Connect Google Drive again on the Tools screen."
   },
   "agents": {
     "create": "Create agent",
@@ -237,6 +242,8 @@
       "rootsCliNote": "CLI harnesses work in the first read-write folder.",
       "tools": "Tools",
       "toolDisabled": "(disabled)",
+      "driveNotConnected": "not connected",
+      "driveReconnect": "reconnect needed",
       "rootsWithoutFiles": "Folders do nothing without the Files tool.",
       "policy": "Permissions",
       "policies": {
@@ -338,7 +345,8 @@
     "allow": "Allow",
     "deny": "Deny",
     "always": "Always allow for this agent",
-    "alwaysHint": "{{agent}} will use {{tool}} without asking from now on."
+    "alwaysHint": "{{agent}} will use {{tool}} without asking from now on.",
+    "details": "Details"
   },
   "tools": {
     "title": "Tools",
@@ -355,7 +363,16 @@
     "deleteBodyUsed_other": "{{count}} agents use it and will lose it. Its stored secrets are removed too. This cannot be undone.",
     "toolCount_one": "{{count}} tool",
     "toolCount_other": "{{count}} tools",
-    "readOnly": "read-only",
+    "badges": {
+      "readOnly": "Read-only",
+      "readOnlyHint": "Runs without asking.",
+      "asks": "Asks first",
+      "asksHint": "Asks for your approval before running (unless the agent is set to allow changes).",
+      "destructive": "Destructive",
+      "destructiveHint": "Can change or remove existing data.",
+      "noAnnotations": "No annotations",
+      "noAnnotationsHint": "The server does not say what this tool does, so it always asks first."
+    },
     "transport": {
       "stdio": "Local command",
       "http": "Remote (HTTP)"
@@ -365,6 +382,10 @@
       "filesystem": {
         "name": "Files",
         "description": "Reads, searches and changes files in the folders you give each agent. Nothing outside them."
+      },
+      "google-drive": {
+        "name": "Google Drive",
+        "description": "Searches, reads and creates Docs, Sheets and files in the Google account you connect. Changes ask first."
       }
     },
     "form": {
@@ -390,6 +411,8 @@
       "storedSecret": "Stored · type to replace",
       "removeRow": "Remove",
       "addRow": "Add",
+      "test": "Test",
+      "testHint": "Starts the server with these settings and lists its tools. Nothing is saved.",
       "problems": {
         "nameRequired": "Give the server a name.",
         "commandRequired": "Type the command to run.",
@@ -397,6 +420,41 @@
         "keyInvalid": "A name has characters that are not allowed.",
         "keyRepeated": "A name is listed twice.",
         "secretRequired": "Type a value for each new secret."
+      }
+    },
+    "drive": {
+      "setUp": "Set up",
+      "editClient": "OAuth client",
+      "connect": "Connect Google Drive",
+      "reconnect": "Reconnect",
+      "disconnect": "Disconnect",
+      "connectedAs": "Connected as {{email}}",
+      "unknownAccount": "your Google account",
+      "state": {
+        "unconfigured": "Not set up: Comitiva needs your own Google OAuth client.",
+        "disconnected": "Not connected.",
+        "connecting": "Finish signing in in your browser…",
+        "reconnect_required": "Google no longer accepts the saved sign-in."
+      },
+      "disconnectTitle": "Disconnect Google Drive?",
+      "disconnectBody": "Comitiva forgets the sign-in and asks Google to revoke it. Agents that use Drive stop until you connect again. Your files are not touched.",
+      "setup": {
+        "title": "Google OAuth client",
+        "intro": "Comitiva does not ship Google credentials: you create your own OAuth client once, and it stays on this computer.",
+        "steps": {
+          "project": "In Google Cloud Console, create a project (or pick one).",
+          "api": "Enable the Google Drive API for it.",
+          "consent": "Configure the OAuth consent screen: “External” in Testing with yourself as a test user (or “Internal” on Google Workspace), with the …/auth/drive scope.",
+          "client": "Create an OAuth client ID of type “Desktop app”.",
+          "paste": "Paste its client ID and secret here, save, then Connect."
+        },
+        "openConsole": "Open Google Cloud Console",
+        "guide": "Step-by-step guide: docs/tools.md → Google Drive. In Testing, Google asks you to sign in again every 7 days.",
+        "clientId": "Client ID",
+        "clientIdRequired": "Paste the client ID.",
+        "clientSecret": "Client secret",
+        "clientSecretHint": "Stored in the system keyring, never shown again. Leave blank to keep the stored one.",
+        "changesAccount": "A different client disconnects the current Google account."
       }
     }
   }

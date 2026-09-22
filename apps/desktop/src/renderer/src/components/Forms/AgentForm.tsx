@@ -1,6 +1,6 @@
 import { useEffect, useId, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Agent, PermissionPolicy } from '@comitiva/contract';
+import { GOOGLE_DRIVE_TOOL_SERVER_ID, type Agent, type PermissionPolicy } from '@comitiva/contract';
 import { errorCode } from '../../backend/Backend';
 import {
   addRoot,
@@ -28,7 +28,7 @@ import {
 import type { Async } from '../../lib/async';
 import { roleTemplateIds, type RoleTemplateId } from '../../lib/roleTemplates';
 import { serverDisplayName } from '../../lib/toolServerForm';
-import { useAgents, useConnections, useToolServers } from '../../store/context';
+import { useAgents, useConnections, useGoogleDrive, useToolServers } from '../../store/context';
 import { AgentAvatar, avatarSwatchClasses } from '../AgentAvatar';
 import { ui } from '../ui';
 import { FormShell } from './FormShell';
@@ -51,6 +51,7 @@ export function AgentForm({
   const fetchModels = useAgents((s) => s.fetchModels);
   const pickFolder = useConnections((s) => s.pickFolder);
   const toolServers = useToolServers((s) => s.items);
+  const driveState = useGoogleDrive((s) => s.status?.state ?? null);
 
   const [form, setForm] = useState<AgentFormState>(() =>
     editing ? agentFormFor(editing) : newAgentForm(connections, prefill),
@@ -464,6 +465,18 @@ export function AgentForm({
             {!server.enabled && (
               <span className={`text-xs ${ui.muted}`}>{t('agents.form.toolDisabled')}</span>
             )}
+            {server.enabled &&
+              server.id === GOOGLE_DRIVE_TOOL_SERVER_ID &&
+              driveState !== null &&
+              driveState !== 'connected' && (
+                <span data-testid="drive-not-connected" className={`text-xs ${ui.bad}`}>
+                  {t(
+                    driveState === 'reconnect_required'
+                      ? 'agents.form.driveReconnect'
+                      : 'agents.form.driveNotConnected',
+                  )}
+                </span>
+              )}
           </label>
         ))}
         {rootsWithoutFiles(form) && (

@@ -16,6 +16,7 @@ describe('toolServers store', () => {
     expect(store.getState().items[0]!.enabled).toBe(false);
 
     await store.getState().test('s1');
+    expect(backend.toolServers.test).toHaveBeenCalledWith({ id: 's1' });
     expect(store.getState().tests.s1).toEqual({
       state: 'done',
       value: [{ name: 'read_file', inputSchema: {} }],
@@ -50,5 +51,17 @@ describe('toolServers store', () => {
       code: 'secret_store_unavailable',
     });
     expect(store.getState().editor).toEqual({ mode: 'edit', id: 'new' });
+  });
+
+  it('probes unsaved settings without touching the list, and clears a test', async () => {
+    const backend = fakeBackend();
+    const store = createToolServersStore(backend);
+    const spec = { transport: 'stdio' as const, command: 'npx' };
+    await expect(store.getState().probe({ spec, id: 's1' })).resolves.toHaveLength(1);
+    expect(backend.toolServers.test).toHaveBeenCalledWith({ spec, id: 's1' });
+    expect(store.getState().tests).toEqual({});
+    await store.getState().test('google-drive');
+    store.getState().clearTest('google-drive');
+    expect(store.getState().tests['google-drive']).toEqual({ state: 'idle' });
   });
 });

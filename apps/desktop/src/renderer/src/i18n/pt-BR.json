@@ -147,7 +147,12 @@
     "connection_disabled": "Essa conexão está desativada. Ative-a ou escolha outra.",
     "model_required": "Esta conexão não tem modelo padrão. Escolha um modelo para o agente.",
     "conversation_busy": "Esta conversa ainda está respondendo. Aguarde ou pare antes.",
-    "interrupted": "A resposta foi interrompida quando o app fechou. Você pode tentar de novo."
+    "interrupted": "A resposta foi interrompida quando o app fechou. Você pode tentar de novo.",
+    "oauth_not_configured": "Adicione antes o seu cliente OAuth do Google (Ferramentas → Google Drive → Configurar).",
+    "oauth_failed": "O Google não concluiu o login. Confira o cliente OAuth e tente de novo.",
+    "oauth_cancelled": "A conexão foi cancelada.",
+    "google_not_connected": "O Google Drive não está conectado. Conecte na tela Ferramentas.",
+    "google_reconnect_required": "O Google não aceita mais o login salvo. Conecte o Google Drive de novo na tela Ferramentas."
   },
   "agents": {
     "create": "Criar agente",
@@ -237,6 +242,8 @@
       "rootsCliNote": "Harnesses de CLI trabalham na primeira pasta de leitura e escrita.",
       "tools": "Ferramentas",
       "toolDisabled": "(desativado)",
+      "driveNotConnected": "não conectado",
+      "driveReconnect": "precisa reconectar",
       "rootsWithoutFiles": "Pastas não têm efeito sem a ferramenta Arquivos.",
       "policy": "Permissões",
       "policies": {
@@ -338,7 +345,8 @@
     "allow": "Permitir",
     "deny": "Negar",
     "always": "Sempre permitir para este agente",
-    "alwaysHint": "{{agent}} vai usar {{tool}} sem perguntar daqui em diante."
+    "alwaysHint": "{{agent}} vai usar {{tool}} sem perguntar daqui em diante.",
+    "details": "Detalhes"
   },
   "tools": {
     "title": "Ferramentas",
@@ -355,7 +363,16 @@
     "deleteBodyUsed_other": "{{count}} agentes usam este servidor e vão perdê-lo. Os segredos guardados também são removidos. Isso não pode ser desfeito.",
     "toolCount_one": "{{count}} ferramenta",
     "toolCount_other": "{{count}} ferramentas",
-    "readOnly": "somente leitura",
+    "badges": {
+      "readOnly": "Somente leitura",
+      "readOnlyHint": "Roda sem perguntar.",
+      "asks": "Pergunta antes",
+      "asksHint": "Pede sua aprovação antes de rodar (a não ser que o agente permita alterações).",
+      "destructive": "Destrutiva",
+      "destructiveHint": "Pode alterar ou apagar dados existentes.",
+      "noAnnotations": "Sem anotações",
+      "noAnnotationsHint": "O servidor não diz o que esta ferramenta faz, então ela sempre pergunta antes."
+    },
     "transport": {
       "stdio": "Comando local",
       "http": "Remoto (HTTP)"
@@ -365,6 +382,10 @@
       "filesystem": {
         "name": "Arquivos",
         "description": "Lê, busca e altera arquivos nas pastas que você dá a cada agente. Nada fora delas."
+      },
+      "google-drive": {
+        "name": "Google Drive",
+        "description": "Busca, lê e cria Documentos, Planilhas e arquivos na conta Google que você conectar. Alterações perguntam antes."
       }
     },
     "form": {
@@ -390,6 +411,8 @@
       "storedSecret": "Guardado · digite para trocar",
       "removeRow": "Remover",
       "addRow": "Adicionar",
+      "test": "Testar",
+      "testHint": "Inicia o servidor com estas configurações e lista as ferramentas. Nada é salvo.",
       "problems": {
         "nameRequired": "Dê um nome ao servidor.",
         "commandRequired": "Digite o comando a executar.",
@@ -397,6 +420,41 @@
         "keyInvalid": "Um nome tem caracteres não permitidos.",
         "keyRepeated": "Um nome aparece duas vezes.",
         "secretRequired": "Digite um valor para cada segredo novo."
+      }
+    },
+    "drive": {
+      "setUp": "Configurar",
+      "editClient": "Cliente OAuth",
+      "connect": "Conectar Google Drive",
+      "reconnect": "Reconectar",
+      "disconnect": "Desconectar",
+      "connectedAs": "Conectado como {{email}}",
+      "unknownAccount": "sua conta Google",
+      "state": {
+        "unconfigured": "Não configurado: o Comitiva precisa do seu próprio cliente OAuth do Google.",
+        "disconnected": "Não conectado.",
+        "connecting": "Termine o login no navegador…",
+        "reconnect_required": "O Google não aceita mais o login salvo."
+      },
+      "disconnectTitle": "Desconectar o Google Drive?",
+      "disconnectBody": "O Comitiva esquece o login e pede ao Google para revogá-lo. Agentes que usam o Drive param até você conectar de novo. Seus arquivos não são tocados.",
+      "setup": {
+        "title": "Cliente OAuth do Google",
+        "intro": "O Comitiva não vem com credenciais do Google: você cria seu próprio cliente OAuth uma vez, e ele fica neste computador.",
+        "steps": {
+          "project": "No Google Cloud Console, crie um projeto (ou escolha um).",
+          "api": "Ative a Google Drive API nele.",
+          "consent": "Configure a tela de consentimento OAuth: “Externo” em Teste, com você como usuário de teste (ou “Interno” no Google Workspace), com o escopo …/auth/drive.",
+          "client": "Crie um ID do cliente OAuth do tipo “App para computador”.",
+          "paste": "Cole aqui o ID e a chave secreta do cliente, salve e clique em Conectar."
+        },
+        "openConsole": "Abrir o Google Cloud Console",
+        "guide": "Passo a passo: docs/tools.md → Google Drive. Em Teste, o Google pede um novo login a cada 7 dias.",
+        "clientId": "ID do cliente",
+        "clientIdRequired": "Cole o ID do cliente.",
+        "clientSecret": "Chave secreta do cliente",
+        "clientSecretHint": "Guardada no chaveiro do sistema, nunca mais mostrada. Deixe em branco para manter a guardada.",
+        "changesAccount": "Outro cliente desconecta a conta Google atual."
       }
     }
   }

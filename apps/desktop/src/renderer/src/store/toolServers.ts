@@ -5,6 +5,7 @@ import type {
   ToolServer,
   ToolServerDraft,
   ToolServerPatch,
+  ToolServerTestTarget,
 } from '@comitiva/contract';
 import { errorCode, type Backend } from '../backend/Backend';
 import type { Async } from '../lib/async';
@@ -29,6 +30,10 @@ export interface ToolServersState {
   save(input: { draft: ToolServerDraft } | { id: string; patch: ToolServerPatch }): Promise<void>;
   setEnabled(id: string, enabled: boolean): Promise<void>;
   test(id: string): Promise<void>;
+  /** Tests unsaved form settings; resolves with the tools or rejects with the backend error. */
+  probe(target: ToolServerTestTarget): Promise<ToolDef[]>;
+  /** Forgets a server's last test (its account or settings changed). */
+  clearTest(id: string): void;
   askDelete(id: string): void;
   cancelDelete(): void;
   confirmDeletion(): Promise<void>;
@@ -94,11 +99,15 @@ export function createToolServersStore(backend: Backend) {
           set((s) => ({ tests: { ...s.tests, [id]: value } }));
         mark({ state: 'busy' });
         try {
-          mark({ state: 'done', value: await backend.toolServers.test(id) });
+          mark({ state: 'done', value: await backend.toolServers.test({ id }) });
         } catch (err) {
           mark({ state: 'failed', code: errorCode(err) });
         }
       },
+
+      probe: (target) => backend.toolServers.test(target),
+
+      clearTest: (id) => set((s) => ({ tests: { ...s.tests, [id]: { state: 'idle' } } })),
 
       askDelete: (id) => set({ confirmDelete: id }),
       cancelDelete: () => set({ confirmDelete: null }),

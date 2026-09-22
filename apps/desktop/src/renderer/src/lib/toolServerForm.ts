@@ -1,4 +1,5 @@
 import type {
+  ToolDef,
   ToolServer,
   ToolServerDraft,
   ToolServerPatch,
@@ -151,4 +152,22 @@ export function describeServer(server: ToolServer): string {
 /** A server's name as the UI shows it: built-ins are translated. */
 export function serverDisplayName(server: ToolServer, t: (key: string) => string): string {
   return server.builtin ? t(`tools.builtin.${server.id}.name`) : server.name;
+}
+
+export type ToolBadge = 'readOnly' | 'asks' | 'destructive' | 'noAnnotations';
+
+/**
+ * How the Tools screen labels a tool, from its MCP annotations: read-only
+ * tools run freely; anything else asks first under the `ask` policy.
+ * `destructiveHint` defaults to true for tools that are not read-only (MCP),
+ * so it is flagged unless the server says false. A tool without annotations
+ * is flagged as such instead.
+ */
+export function toolBadges(tool: ToolDef): ToolBadge[] {
+  const a = tool.annotations;
+  if (a?.readOnlyHint === true) return ['readOnly'];
+  if (!a || (a.readOnlyHint === undefined && a.destructiveHint === undefined)) {
+    return ['asks', 'noAnnotations'];
+  }
+  return a.destructiveHint === false ? ['asks'] : ['asks', 'destructive'];
 }

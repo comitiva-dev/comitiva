@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { ToolServer } from '@comitiva/contract';
+import type { ToolDef, ToolServer } from '@comitiva/contract';
 import { errorCode } from '../../backend/Backend';
 import {
   emptyForm,
@@ -9,10 +9,12 @@ import {
   formProblems,
   formToDraft,
   formToPatch,
+  formToSpec,
   type ToolServerForm as Form,
   type ValueRow,
 } from '../../lib/toolServerForm';
 import { useApp, useToolServers } from '../../store/context';
+import { ToolTestResult } from '../ToolList';
 import { ui } from '../ui';
 import { FormShell, type Async } from './FormShell';
 
@@ -26,12 +28,18 @@ export function ToolServerForm({ editing }: { editing: ToolServer | null }) {
   const { t } = useTranslation();
   const save = useToolServers((s) => s.save);
   const close = useToolServers((s) => s.closeEditor);
+  const probe = useToolServers((s) => s.probe);
+  const [test, setTest] = useState<Async<ToolDef[]>>({ state: 'idle' });
   const secretStatus = useApp((s) => s.secretStatus);
   const [form, setForm] = useState<Form>(() => (editing ? formFromServer(editing) : emptyForm()));
   const [saving, setSaving] = useState<Async<void>>({ state: 'idle' });
   const [touched, setTouched] = useState(false);
   const problems = formProblems(form);
-  const patch = (p: Partial<Form>) => setForm((f) => ({ ...f, ...p }));
+  const patch = (p: Partial<Form>) => {
+    setForm((f) => ({ ...f, ...p }));
+    // A result for other settings would mislead.
+    setTest({ state: 'idle' });
+  };
   const rowsKey = form.transport === 'stdio' ? 'env' : 'headers';
   const usesSecrets = form[rowsKey].some((r) => r.secret && r.value !== '');
 
@@ -45,6 +53,19 @@ export function ToolServerForm({ editing }: { editing: ToolServer | null }) {
       );
     } catch (err) {
       setSaving({ state: 'failed', code: errorCode(err) });
+    }
+  };
+
+  /** Starts the unsaved settings in the runner and lists the tools, without saving. */
+  const runTest = async () => {
+    setTouched(true);
+    if (problems.length > 0) return;
+    setTest({ state: 'busy' });
+    try {
+      const spec = formToSpec(form);
+      setTest({ state: 'done', value: await probe(editing ? { spec, id: editing.id } : { spec }) });
+    } catch (err) {
+      setTest({ state: 'failed', code: errorCode(err) });
     }
   };
 
@@ -144,6 +165,19 @@ export function ToolServerForm({ editing }: { editing: ToolServer | null }) {
       {show('keyInvalid')}
       {show('keyRepeated')}
       {show('secretRequired')}
+      <div className="flex flex-col gap-1">
+        <button
+          type="button"
+          data-testid="form-test"
+          className={`${ui.button} self-start`}
+          disabled={test.state === 'busy'}
+          onClick={() => void runTest()}
+        >
+          {t('tools.form.test')}
+        </button>
+        <span className={ui.hint}>{t('tools.form.testHint')}</span>
+        <ToolTestResult test={test} />
+      </div>
       {usesSecrets && secretStatus && !secretStatus.available && (
         <p role="alert" className={`text-xs ${ui.bad}`}>
           {t('secrets.unavailableTitle')}

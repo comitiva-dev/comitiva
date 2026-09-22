@@ -13,6 +13,8 @@ import type {
   IpcOutput,
   ToolServerDraft,
   ToolServerPatch,
+  ToolServerTestTarget,
+  GoogleDriveConfigureInput,
   UserContent,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
@@ -96,7 +98,16 @@ export class LocalBackend implements Backend {
     update: (id: string, patch: ToolServerPatch) =>
       this.api.invoke('toolServers.update', { id, patch }),
     delete: (id: string) => this.api.invoke('toolServers.delete', { id }),
-    test: (id: string) => this.api.invoke('toolServers.test', { id }),
+    test: (target: ToolServerTestTarget) => this.api.invoke('toolServers.test', target),
+  };
+
+  googleDrive = {
+    getStatus: () => this.api.invoke('googleDrive.getStatus', undefined),
+    configure: (input: GoogleDriveConfigureInput) =>
+      this.api.invoke('googleDrive.configure', input),
+    connect: () => this.api.invoke('googleDrive.connect', undefined),
+    cancelConnect: () => this.api.invoke('googleDrive.cancelConnect', undefined),
+    disconnect: () => this.api.invoke('googleDrive.disconnect', undefined),
   };
 
   approvals = {

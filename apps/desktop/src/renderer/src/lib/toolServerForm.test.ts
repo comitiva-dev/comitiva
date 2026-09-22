@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ipcInvoke } from '@comitiva/contract';
+import { ipcInvoke, type ToolDef } from '@comitiva/contract';
 import { toolServer } from '../store/testBackend';
 import {
   describeServer,
@@ -8,6 +8,7 @@ import {
   formProblems,
   formToDraft,
   formToPatch,
+  toolBadges,
 } from './toolServerForm';
 
 describe('toolServerForm', () => {
@@ -80,5 +81,21 @@ describe('toolServerForm', () => {
         toolServer('h', { transport: 'http', command: null, url: 'https://x.dev/mcp' }),
       ),
     ).toBe('https://x.dev/mcp');
+  });
+
+  it('labels tools by their annotations', () => {
+    const def = (annotations?: ToolDef['annotations']): ToolDef => ({
+      name: 't',
+      inputSchema: {},
+      ...(annotations ? { annotations } : {}),
+    });
+    expect(toolBadges(def({ readOnlyHint: true }))).toEqual(['readOnly']);
+    expect(toolBadges(def({ readOnlyHint: true, destructiveHint: true }))).toEqual(['readOnly']);
+    expect(toolBadges(def({ readOnlyHint: false, destructiveHint: false }))).toEqual(['asks']);
+    expect(toolBadges(def({ destructiveHint: true }))).toEqual(['asks', 'destructive']);
+    // MCP: destructiveHint defaults to true for tools that are not read-only.
+    expect(toolBadges(def({ readOnlyHint: false }))).toEqual(['asks', 'destructive']);
+    expect(toolBadges(def())).toEqual(['asks', 'noAnnotations']);
+    expect(toolBadges(def({ openWorldHint: true }))).toEqual(['asks', 'noAnnotations']);
   });
 });

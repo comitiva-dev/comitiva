@@ -158,5 +158,12 @@ describe('tool blocks', () => {
     expect(approvalTargets({ path: '/w/a.txt', content: 'x' })).toEqual(['/w/a.txt']);
     expect(approvalTargets({ from: '/w/a', to: '/w/b' })).toEqual(['/w/a', '/w/b']);
     expect(approvalTargets('x')).toEqual([]);
+    expect(
+      approvalTargets({ name: 'Summary', kind: 'doc', parentId: 'f1', content: '# x' }),
+    ).toEqual(['name: Summary', 'parentId: f1']);
+    expect(approvalTargets({ fileId: 'd1', toFolderId: 'f2' })).toEqual([
+      'fileId: d1',
+      'toFolderId: f2',
+    ]);
   });
 });

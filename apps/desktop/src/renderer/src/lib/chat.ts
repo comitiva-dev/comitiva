@@ -125,11 +125,18 @@ export function toolState(
   return opts.streaming ? 'running' : 'none';
 }
 
-/** The paths a tool call touches (`path`, `from`, `to`), shown on the approval card. */
+/**
+ * What a tool call touches, shown on the approval card: paths (`path`,
+ * `from`, `to`) as they are, and Drive-style names and ids as `key: value`.
+ */
 export function approvalTargets(input: unknown): string[] {
   if (typeof input !== 'object' || input === null) return [];
   const record = input as Record<string, unknown>;
-  return ['path', 'from', 'to'].flatMap((k) =>
-    typeof record[k] === 'string' && record[k] !== '' ? [record[k]] : [],
-  );
+  const present = (k: string) => typeof record[k] === 'string' && record[k] !== '';
+  return [
+    ...['path', 'from', 'to'].filter(present).map((k) => record[k] as string),
+    ...['name', 'fileId', 'parentId', 'toFolderId']
+      .filter(present)
+      .map((k) => `${k}: ${record[k] as string}`),
+  ];
 }

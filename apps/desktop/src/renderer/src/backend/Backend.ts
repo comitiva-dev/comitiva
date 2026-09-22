@@ -22,6 +22,9 @@ import type {
   SecretStorageStatus,
   TestResult,
   ToolDef,
+  ToolServerTestTarget,
+  GoogleDriveConfigureInput,
+  GoogleDriveStatus,
   ToolServer,
   ToolServerDraft,
   ToolServerPatch,
@@ -102,8 +105,26 @@ export interface Backend {
     /** Built-ins accept only `enabled`. */
     update(id: string, patch: ToolServerPatch): Promise<ToolServer>;
     delete(id: string): Promise<void>;
-    /** Starts the server and lists its tools; rejects with tool_server_failed or secret_missing. */
-    test(id: string): Promise<ToolDef[]>;
+    /**
+     * Starts a saved server (`{ id }`) or unsaved form settings (`{ spec, id? }`)
+     * and lists its tools; rejects with tool_server_failed, secret_missing or,
+     * for Google Drive, google_not_connected / google_reconnect_required.
+     */
+    test(target: ToolServerTestTarget): Promise<ToolDef[]>;
+  };
+  /** The Google account behind the built-in Drive server. Tokens never reach the UI. */
+  googleDrive: {
+    getStatus(): Promise<GoogleDriveStatus>;
+    /** The user's own OAuth client; a different client id disconnects. */
+    configure(input: GoogleDriveConfigureInput): Promise<GoogleDriveStatus>;
+    /**
+     * Opens Google's consent page in the browser and resolves once the account
+     * is connected. Rejects with oauth_not_configured, oauth_cancelled,
+     * oauth_failed or timeout.
+     */
+    connect(): Promise<GoogleDriveStatus>;
+    cancelConnect(): Promise<void>;
+    disconnect(): Promise<GoogleDriveStatus>;
   };
   approvals: {
     /** Answers the conversation's pending tool call. */

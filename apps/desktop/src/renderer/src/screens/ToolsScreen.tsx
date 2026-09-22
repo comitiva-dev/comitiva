@@ -1,13 +1,15 @@
 import { useTranslation } from 'react-i18next';
-import type { ToolServer } from '@comitiva/contract';
+import { GOOGLE_DRIVE_TOOL_SERVER_ID, type ToolServer } from '@comitiva/contract';
 import { ConfirmDialog } from '../components/ConfirmDialog';
+import { GoogleDriveSetup } from '../components/Forms/GoogleDriveSetup';
 import { ToolServerForm } from '../components/Forms/ToolServerForm';
 import { Switch } from '../components/Switch';
+import { ToolTestResult } from '../components/ToolList';
 import { ui } from '../components/ui';
 import { describeServer, serverDisplayName } from '../lib/toolServerForm';
-import { useAgents, useToolServers } from '../store/context';
+import { useAgents, useGoogleDrive, useToolServers } from '../store/context';
 
-/** MCP servers: the built-in Files server and the ones the user adds. */
+/** MCP servers: the built-in Files and Google Drive servers and the ones the user adds. */
 export function ToolsScreen() {
   const { t } = useTranslation();
   const items = useToolServers((s) => s.items);
@@ -19,6 +21,11 @@ export function ToolsScreen() {
   const cancelDelete = useToolServers((s) => s.cancelDelete);
   const confirmDeletion = useToolServers((s) => s.confirmDeletion);
   const agents = useAgents((s) => s.items);
+  const driveSetupOpen = useGoogleDrive((s) => s.setupOpen);
+  const confirmDisconnect = useGoogleDrive((s) => s.confirmDisconnect);
+  const cancelDisconnect = useGoogleDrive((s) => s.cancelDisconnect);
+  const disconnect = useGoogleDrive((s) => s.disconnect);
+  const clearTest = useToolServers((s) => s.clearTest);
 
   const editing = editor.mode === 'edit' ? (items.find((i) => i.id === editor.id) ?? null) : null;
   const deleting = items.find((i) => i.id === confirmDelete);
@@ -61,6 +68,21 @@ export function ToolsScreen() {
 
       {editor.mode !== 'closed' && (
         <ToolServerForm key={editor.mode === 'edit' ? editor.id : 'new'} editing={editing} />
+      )}
+
+      {driveSetupOpen && <GoogleDriveSetup />}
+
+      {confirmDisconnect && (
+        <ConfirmDialog
+          title={t('tools.drive.disconnectTitle')}
+          body={t('tools.drive.disconnectBody')}
+          confirmLabel={t('tools.drive.disconnect')}
+          onConfirm={() => {
+            clearTest(GOOGLE_DRIVE_TOOL_SERVER_ID);
+            void disconnect();
+          }}
+          onCancel={cancelDisconnect}
+        />
       )}
 
       {deleting && (
@@ -142,34 +164,108 @@ function ToolServerRow({ server }: { server: ToolServer }) {
           )}
         </div>
       </div>
-      {test && test.state !== 'idle' && (
-        <div data-testid="test-result" data-state={test.state} className="mt-2 text-xs">
-          {test.state === 'busy' ? (
-            <span className={ui.muted}>{t('tools.testing')}</span>
-          ) : test.state === 'failed' ? (
-            <span className={ui.bad}>{t(`errors.${test.code}`)}</span>
-          ) : (
-            <>
-              <p className={ui.ok}>{t('tools.toolCount', { count: test.value.length })}</p>
-              <ul className="mt-1 flex flex-wrap gap-1">
-                {test.value.map((tool) => (
-                  <li
-                    key={tool.name}
-                    data-testid="tool-name"
-                    title={tool.description}
-                    className="rounded bg-neutral-100 px-1.5 py-0.5 font-mono dark:bg-neutral-800"
-                  >
-                    {tool.name}
-                    {tool.annotations?.readOnlyHint && (
-                      <span className={`ml-1 ${ui.muted}`}>{t('tools.readOnly')}</span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </div>
-      )}
+      {server.id === GOOGLE_DRIVE_TOOL_SERVER_ID && <GoogleDriveAccount />}
+      {test && <ToolTestResult test={test} />}
     </li>
+  );
+}
+
+/** The Drive row's account: set up the OAuth client, connect, reconnect or disconnect. */
+function GoogleDriveAccount() {
+  const { t } = useTranslation();
+  const status = useGoogleDrive((s) => s.status);
+  const busy = useGoogleDrive((s) => s.busy);
+  const notice = useGoogleDrive((s) => s.notice);
+  const openSetup = useGoogleDrive((s) => s.openSetup);
+  const connect = useGoogleDrive((s) => s.connect);
+  const cancelConnect = useGoogleDrive((s) => s.cancelConnect);
+  const askDisconnect = useGoogleDrive((s) => s.askDisconnect);
+  const dismissNotice = useGoogleDrive((s) => s.dismissNotice);
+  const clearTest = useToolServers((s) => s.clearTest);
+  if (!status) return null;
+
+  const state = !status.clientConfigured ? 'unconfigured' : status.state;
+  const onConnect = () => {
+    clearTest(GOOGLE_DRIVE_TOOL_SERVER_ID);
+    void connect();
+  };
+  const clientButton = (
+    <button data-testid="drive-setup" className={ui.ghost} onClick={openSetup}>
+      {t(status.clientConfigured ? 'tools.drive.editClient' : 'tools.drive.setUp')}
+    </button>
+  );
+
+  return (
+    <div
+      data-testid="drive-account"
+      data-state={state}
+      className="mt-2 flex flex-col gap-2 rounded-md bg-neutral-50 px-3 py-2 text-sm dark:bg-neutral-800/50"
+    >
+      <div className="flex flex-wrap items-center gap-2">
+        <p
+          data-testid="drive-status"
+          className={`min-w-0 flex-1 ${state === 'reconnect_required' ? ui.bad : ''}`}
+        >
+          {state === 'connected'
+            ? t('tools.drive.connectedAs', {
+                email: status.email ?? t('tools.drive.unknownAccount'),
+              })
+            : t(`tools.drive.state.${state}`)}
+        </p>
+        {state === 'unconfigured' && (
+          <button data-testid="drive-setup" className={ui.primary} onClick={openSetup}>
+            {t('tools.drive.setUp')}
+          </button>
+        )}
+        {state === 'disconnected' && (
+          <>
+            {clientButton}
+            <button data-testid="drive-connect" className={ui.primary} onClick={onConnect}>
+              {t('tools.drive.connect')}
+            </button>
+          </>
+        )}
+        {state === 'connecting' && (
+          <button
+            data-testid="drive-cancel"
+            className={ui.button}
+            onClick={() => void cancelConnect()}
+          >
+            {t('common.cancel')}
+          </button>
+        )}
+        {(state === 'connected' || state === 'reconnect_required') && (
+          <>
+            {clientButton}
+            {state === 'reconnect_required' && (
+              <button data-testid="drive-connect" className={ui.primary} onClick={onConnect}>
+                {t('tools.drive.reconnect')}
+              </button>
+            )}
+            <button
+              data-testid="drive-disconnect"
+              className={ui.button}
+              disabled={busy === 'disconnect'}
+              onClick={askDisconnect}
+            >
+              {t('tools.drive.disconnect')}
+            </button>
+          </>
+        )}
+      </div>
+      {notice && (
+        <p
+          role="alert"
+          data-testid="drive-notice"
+          data-code={notice}
+          className={`text-xs ${ui.bad}`}
+        >
+          {t(`errors.${notice}`)}{' '}
+          <button className="underline" onClick={dismissNotice}>
+            {t('common.dismiss')}
+          </button>
+        </p>
+      )}
+    </div>
   );
 }

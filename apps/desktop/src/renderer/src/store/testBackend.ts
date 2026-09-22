@@ -6,6 +6,8 @@ import type {
   ConnectionSummary,
   Conversation,
   ConversationSummary,
+  GoogleDriveConfigureInput,
+  GoogleDriveStatus,
   Message,
   MessagePage,
   ToolDef,
@@ -84,6 +86,18 @@ export const toolServer = (id: string, overrides: Partial<ToolServer> = {}): Too
 export const filesystemServer = (overrides: Partial<ToolServer> = {}) =>
   toolServer('filesystem', { name: 'Files', command: null, builtin: true, ...overrides });
 
+export const googleDriveServer = (overrides: Partial<ToolServer> = {}) =>
+  toolServer('google-drive', { name: 'Google Drive', command: null, builtin: true, ...overrides });
+
+export const driveStatus = (overrides: Partial<GoogleDriveStatus> = {}): GoogleDriveStatus => ({
+  clientConfigured: false,
+  clientId: null,
+  hasClientSecret: false,
+  state: 'disconnected',
+  email: null,
+  ...overrides,
+});
+
 export const message = (id: string, overrides: Partial<Message> = {}): Message => ({
   id,
   conversationId: 'k1',
@@ -144,6 +158,28 @@ export function fakeBackend() {
       update: vi.fn(async (id: string) => toolServer(id)),
       delete: vi.fn(async () => {}),
       test: vi.fn(async (): Promise<ToolDef[]> => [{ name: 'read_file', inputSchema: {} }]),
+    },
+    googleDrive: {
+      getStatus: vi.fn(async (): Promise<GoogleDriveStatus> => driveStatus()),
+      configure: vi.fn(async (input: GoogleDriveConfigureInput): Promise<GoogleDriveStatus> =>
+        driveStatus({
+          clientConfigured: true,
+          clientId: input.clientId,
+          hasClientSecret: !!input.clientSecret,
+        }),
+      ),
+      connect: vi.fn(async (): Promise<GoogleDriveStatus> =>
+        driveStatus({
+          clientConfigured: true,
+          clientId: 'id',
+          state: 'connected',
+          email: 'ana@example.com',
+        }),
+      ),
+      cancelConnect: vi.fn(async () => {}),
+      disconnect: vi.fn(async (): Promise<GoogleDriveStatus> =>
+        driveStatus({ clientConfigured: true, clientId: 'id' }),
+      ),
     },
     approvals: { decide: vi.fn(async () => {}) },
     onEvent: vi.fn(() => () => {}),

@@ -25,6 +25,11 @@ export function ApprovalCard({
   const { t } = useTranslation();
   const { tool } = toolLabel(use);
   const targets = approvalTargets(use.input);
+  const input = (
+    <pre className="max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs whitespace-pre-wrap dark:bg-amber-900/40">
+      {formatInput(use.input)}
+    </pre>
+  );
   return (
     <div
       role="group"
@@ -34,17 +39,21 @@ export function ApprovalCard({
     >
       <p>{t('approval.question', { agent: agentName, tool, server: serverName })}</p>
       {targets.length > 0 ? (
-        <ul className="flex flex-col gap-0.5">
-          {targets.map((path) => (
-            <li key={path} className="font-mono text-xs break-all">
-              {path}
-            </li>
-          ))}
-        </ul>
+        <>
+          <ul className="flex flex-col gap-0.5" data-testid="approval-targets">
+            {targets.map((target) => (
+              <li key={target} className="font-mono text-xs break-all">
+                {target}
+              </li>
+            ))}
+          </ul>
+          <details className="text-xs">
+            <summary className="cursor-pointer select-none">{t('approval.details')}</summary>
+            {input}
+          </details>
+        </>
       ) : (
-        <pre className="max-h-40 overflow-auto rounded bg-amber-100/60 p-2 font-mono text-xs whitespace-pre-wrap dark:bg-amber-900/40">
-          {formatInput(use.input)}
-        </pre>
+        input
       )}
       <div className="flex flex-wrap gap-2">
         <button

@@ -22,6 +22,7 @@ import {
   GoogleConfig,
   OllamaConfig,
   OpenAICompatibleConfig,
+  ProviderId,
 } from './provider-config.js';
 import { CliDetectResult, ModelInfo, TestResult, ToolDef } from './runner-protocol.js';
 
@@ -343,6 +344,90 @@ export type MessagePage = z.infer<typeof MessagePage>;
 
 const ByConversation = z.object({ conversationId: Id });
 
+// ------------------------------------------------------------------- usage
+
+/**
+ * A closed-open window of time, plus the viewer's offset from UTC in minutes
+ * (`-new Date().getTimezoneOffset()`), so days are bucketed on the user's
+ * calendar and not on UTC's.
+ */
+export const UsageRange = z.object({
+  from: IsoDate,
+  to: IsoDate,
+  tzOffsetMinutes: z.number().int().min(-840).max(840).default(0),
+});
+export type UsageRange = z.input<typeof UsageRange>;
+
+/**
+ * Summed usage. `costUsd` is what API connections cost; `costUsdCli` is the
+ * *equivalent* API cost of CLI harness runs, which a subscription may not
+ * bill at all, so the two are never added together for the user.
+ */
+export const UsageTotals = z.object({
+  runs: z.number().int().nonnegative(),
+  inputTokens: z.number().int().nonnegative(),
+  outputTokens: z.number().int().nonnegative(),
+  cacheReadTokens: z.number().int().nonnegative(),
+  cacheWriteTokens: z.number().int().nonnegative(),
+  costUsd: z.number().nonnegative(),
+  costUsdCli: z.number().nonnegative(),
+  /** Some rows counted tokens locally instead of taking the provider's number. */
+  anyEstimated: z.boolean(),
+  /** Some rows have no price for their model, so the cost is short. */
+  anyUnpriced: z.boolean(),
+});
+export type UsageTotals = z.infer<typeof UsageTotals>;
+
+/** One row of a grouped table. `label` is resolved by main; ids may be gone. */
+export const UsageSummaryRow = UsageTotals.extend({
+  key: z.string(),
+  label: z.string(),
+  /** Set for the by-model grouping; the provider the model ran on. */
+  provider: ProviderId.nullable().default(null),
+  /** True when the subject (agent, connection) no longer exists. */
+  deleted: z.boolean().default(false),
+});
+export type UsageSummaryRow = z.infer<typeof UsageSummaryRow>;
+
+export const UsageSummary = z.object({
+  totals: UsageTotals,
+  byConnection: z.array(UsageSummaryRow),
+  byAgent: z.array(UsageSummaryRow),
+  byModel: z.array(UsageSummaryRow),
+});
+export type UsageSummary = z.infer<typeof UsageSummary>;
+
+/** One day on the viewer's calendar, `YYYY-MM-DD`. */
+export const UsageBucket = UsageTotals.extend({ day: z.string() });
+export type UsageBucket = z.infer<typeof UsageBucket>;
+
+/** Prices in US dollars per million tokens. */
+export const ModelPrices = z.object({
+  inputPer1M: z.number().nonnegative(),
+  outputPer1M: z.number().nonnegative(),
+  cacheReadPer1M: z.number().nonnegative().nullable().default(null),
+  cacheWritePer1M: z.number().nonnegative().nullable().default(null),
+});
+export type ModelPrices = z.infer<typeof ModelPrices>;
+
+/** A model seen in the records, with the prices in force for it. */
+export const ModelPrice = z.object({
+  provider: ProviderId,
+  model: z.string(),
+  prices: ModelPrices.nullable(),
+  source: z.enum(['table', 'override', 'none']),
+  runs: z.number().int().nonnegative(),
+});
+export type ModelPrice = z.infer<typeof ModelPrice>;
+
+export const UsageExportInput = UsageRange.extend({
+  /** `records`: one row per run. `summary`: the grouped tables. */
+  shape: z.enum(['records', 'summary']).default('records'),
+});
+export type UsageExportInput = z.input<typeof UsageExportInput>;
+
+const ByModel = z.object({ provider: ProviderId, model: z.string().min(1) });
+
 export const ipcInvoke = {
   'app.getVersion': { input: z.undefined(), output: z.string() },
   'runner.getStatus': { input: z.undefined(), output: z.object({ status: RunnerStatus }) },
@@ -414,6 +499,20 @@ export const ipcInvoke = {
     input: ByConversation.extend({ toolUseId: z.string(), decision: ApprovalDecision }),
     output: z.void(),
   },
+  /** Totals and the tables by connection, agent and model, for one window. */
+  'usage.summary': { input: UsageRange, output: UsageSummary },
+  /** One point per day on the viewer's calendar, days without runs included. */
+  'usage.timeseries': { input: UsageRange, output: z.array(UsageBucket) },
+  /** What one conversation has used so far (the right panel). */
+  'usage.conversation': { input: ByConversation, output: UsageTotals },
+  /** Writes a CSV through a native save dialog; null when cancelled. */
+  'usage.export': { input: UsageExportInput, output: z.string().nullable() },
+  /** Every model seen in the records, with the price in force for it. */
+  'usage.prices': { input: z.undefined(), output: z.array(ModelPrice) },
+  /** Corrects a model's price and reprices its records (never harness costs). */
+  'usage.setPrice': { input: ByModel.extend({ prices: ModelPrices }), output: z.array(ModelPrice) },
+  /** Drops the correction and reprices from the built-in table. */
+  'usage.clearPrice': { input: ByModel, output: z.array(ModelPrice) },
 } as const;
 
 export type IpcInvokeChannel = keyof typeof ipcInvoke;

@@ -242,11 +242,16 @@ export const RunToolResultEvent = z.object({
 export const RunUsageEvent = z.object({
   ...run,
   type: z.literal('run.usage'),
+  /** Net of `cacheReadTokens`: every adapter normalizes to that. */
   inputTokens: z.number().int().nonnegative(),
   outputTokens: z.number().int().nonnegative(),
   cacheReadTokens: z.number().int().nonnegative().optional(),
   cacheWriteTokens: z.number().int().nonnegative().optional(),
   estimated: z.boolean(),
+  /** What the provider or harness actually ran; the shell's model is a fallback. */
+  model: z.string().optional(),
+  /** Cost the harness computed itself (Claude Code); authoritative when present. */
+  reportedCostUsd: z.number().nonnegative().optional(),
 });
 export const RunDoneEvent = z.object({
   ...run,

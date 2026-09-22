@@ -748,6 +748,13 @@
             },
             "estimated": {
               "type": "boolean"
+            },
+            "model": {
+              "type": "string"
+            },
+            "reportedCostUsd": {
+              "type": "number",
+              "minimum": 0
             }
           },
           "required": [

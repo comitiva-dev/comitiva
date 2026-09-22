@@ -270,3 +270,41 @@ describe('tool server IPC', () => {
     expect(JSON.stringify(status)).not.toContain('leak');
   });
 });
+
+describe('usage IPC', () => {
+  const range = { from: '2026-09-01T00:00:00.000Z', to: '2026-09-22T00:00:00.000Z' };
+
+  it('defaults the timezone offset to UTC', () => {
+    const parsed = ipcInvoke['usage.summary'].input.parse(range);
+    expect(parsed.tzOffsetMinutes).toBe(0);
+  });
+
+  it('refuses an offset beyond the real ones and a blank model', () => {
+    expect(
+      ipcInvoke['usage.summary'].input.safeParse({ ...range, tzOffsetMinutes: 900 }).success,
+    ).toBe(false);
+    expect(
+      ipcInvoke['usage.clearPrice'].input.safeParse({ provider: 'anthropic', model: '' }).success,
+    ).toBe(false);
+  });
+
+  it('exports records unless the summary is asked for', () => {
+    expect(ipcInvoke['usage.export'].input.parse(range).shape).toBe('records');
+    expect(ipcInvoke['usage.export'].input.parse({ ...range, shape: 'summary' }).shape).toBe(
+      'summary',
+    );
+  });
+
+  it('keeps cache prices optional but the token ones required', () => {
+    const prices = ipcInvoke['usage.setPrice'].input;
+    const ok = prices.parse({
+      provider: 'anthropic',
+      model: 'claude-sonnet-5',
+      prices: { inputPer1M: 3, outputPer1M: 15 },
+    });
+    expect(ok.prices.cacheReadPer1M).toBeNull();
+    expect(
+      prices.safeParse({ provider: 'anthropic', model: 'm', prices: { inputPer1M: 3 } }).success,
+    ).toBe(false);
+  });
+});

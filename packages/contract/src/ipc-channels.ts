@@ -43,6 +43,13 @@ export const ipcInvokeChannels = [
   'googleDrive.cancelConnect',
   'googleDrive.disconnect',
   'approvals.decide',
+  'usage.summary',
+  'usage.timeseries',
+  'usage.conversation',
+  'usage.export',
+  'usage.prices',
+  'usage.setPrice',
+  'usage.clearPrice',
 ] as const;
 
 export const ipcEventChannels = [

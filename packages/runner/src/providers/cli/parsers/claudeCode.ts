@@ -48,7 +48,7 @@ export class ClaudeCodeParser implements HarnessParser {
         return this.user(line);
       case 'result':
         this.result = line;
-        this.reportUsage(line.usage);
+        this.reportUsage(line.usage, line.modelUsage, line.total_cost_usd);
         return [];
       default:
         return []; // rate_limit_event, hook events, …
@@ -151,13 +151,31 @@ export class ClaudeCodeParser implements HarnessParser {
     return events;
   }
 
-  private reportUsage(usage: unknown): void {
+  /**
+   * The `result` line is the whole turn's usage. Beyond the token counts it
+   * carries two things nothing else gives us: `modelUsage`, keyed by the model
+   * Claude Code really ran (the connection may not name one), and
+   * `total_cost_usd`, which the harness computes at list prices. That cost is
+   * authoritative for the tokens it covers, so it wins over our own table.
+   *
+   * `output_tokens` already includes the thinking tokens `modelUsage` breaks
+   * out, and `input_tokens` already excludes the cache counters, so neither is
+   * adjusted here.
+   */
+  private reportUsage(usage: unknown, modelUsage: unknown, totalCostUsd: unknown): void {
     if (!isObject(usage)) return;
+    // `cache_creation` splits the write by TTL; the flat counter is their sum.
+    const creation = isObject(usage.cache_creation)
+      ? (num(usage.cache_creation.ephemeral_5m_input_tokens) ?? 0) +
+        (num(usage.cache_creation.ephemeral_1h_input_tokens) ?? 0)
+      : undefined;
     this.opts.usage.report({
       input: num(usage.input_tokens),
       output: num(usage.output_tokens),
       cacheRead: num(usage.cache_read_input_tokens),
-      cacheWrite: num(usage.cache_creation_input_tokens),
+      cacheWrite: num(usage.cache_creation_input_tokens) ?? creation,
+      model: dominantModel(modelUsage),
+      costUsd: num(totalCostUsd),
       final: true,
     });
   }
@@ -225,4 +243,23 @@ function toolResultContent(content: unknown): ToolResultContentBlock[] {
     }
   }
   return out;
+}
+
+/**
+ * The model of a turn, out of Claude Code's per-model breakdown. Subagents can
+ * put several models in one turn; the one that did the most work names it.
+ */
+function dominantModel(modelUsage: unknown): string | undefined {
+  if (!isObject(modelUsage)) return undefined;
+  let best: { model: string; tokens: number } | undefined;
+  for (const [model, stats] of Object.entries(modelUsage)) {
+    if (!isObject(stats)) continue;
+    const tokens =
+      (num(stats.inputTokens) ?? 0) +
+      (num(stats.outputTokens) ?? 0) +
+      (num(stats.cacheReadInputTokens) ?? 0) +
+      (num(stats.cacheCreationInputTokens) ?? 0);
+    if (!best || tokens > best.tokens) best = { model: str(stats.canonicalModel) ?? model, tokens };
+  }
+  return best?.model;
 }

@@ -145,13 +145,19 @@ export class GoogleAdapter implements ProviderAdapter {
       const u = chunk.usageMetadata;
       if (u) {
         usage.report({
-          input: u.promptTokenCount,
+          // `promptTokenCount` counts the cached tokens too; the contract
+          // wants input net of them (they are priced at the cache rate).
+          input:
+            u.promptTokenCount === undefined
+              ? undefined
+              : Math.max(0, u.promptTokenCount - (u.cachedContentTokenCount ?? 0)),
           // Thinking tokens are billed as output.
           output:
             u.candidatesTokenCount !== undefined || u.thoughtsTokenCount !== undefined
               ? (u.candidatesTokenCount ?? 0) + (u.thoughtsTokenCount ?? 0)
               : undefined,
           cacheRead: u.cachedContentTokenCount,
+          model: chunk.modelVersion,
           // Usage is cumulative per chunk; it is complete once the candidate finishes.
           final: candidate?.finishReason !== undefined,
         });

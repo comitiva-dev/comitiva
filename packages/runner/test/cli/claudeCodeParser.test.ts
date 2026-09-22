@@ -27,7 +27,61 @@ describe('ClaudeCodeParser (recorded fixtures)', () => {
       cacheReadTokens: 518,
       cacheWriteTokens: 2085,
       estimated: false,
+      // The harness knows which model it ran and what that cost at list
+      // price; the connection may name no model at all, so both are kept.
+      model: 'claude-sonnet-5',
+      reportedCostUsd: 0.008497600000000001,
     });
+  });
+
+  it('names the model that did most of the work when a turn used several', () => {
+    // Subagents put more than one model in a turn; the biggest one names it,
+    // under its canonical id rather than the alias Claude Code was called with.
+    const { usage } = replay(
+      (o) => new ClaudeCodeParser(o),
+      [
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          stop_reason: 'end_turn',
+          session_id: 's1',
+          usage: { input_tokens: 9, output_tokens: 300 },
+          total_cost_usd: 0.5,
+          modelUsage: {
+            'claude-haiku-4-5': { inputTokens: 5, outputTokens: 20, costUSD: 0.01 },
+            sonnet: {
+              inputTokens: 4,
+              outputTokens: 280,
+              cacheReadInputTokens: 900,
+              canonicalModel: 'claude-sonnet-5',
+              costUSD: 0.49,
+            },
+          },
+        },
+      ],
+    );
+    expect(usage.event()).toMatchObject({ model: 'claude-sonnet-5', reportedCostUsd: 0.5 });
+  });
+
+  it('sums the cache-write TTL buckets when only the split is reported', () => {
+    const { usage } = replay(
+      (o) => new ClaudeCodeParser(o),
+      [
+        {
+          type: 'result',
+          subtype: 'success',
+          is_error: false,
+          session_id: 's1',
+          usage: {
+            input_tokens: 1,
+            output_tokens: 1,
+            cache_creation: { ephemeral_5m_input_tokens: 40, ephemeral_1h_input_tokens: 2 },
+          },
+        },
+      ],
+    );
+    expect(usage.event()).toMatchObject({ cacheWriteTokens: 42 });
   });
 
   it('reports the tool calls the harness ran, and separates text around them', () => {

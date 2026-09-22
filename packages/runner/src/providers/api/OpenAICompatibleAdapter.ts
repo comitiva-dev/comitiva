@@ -113,10 +113,14 @@ export class OpenAICompatibleAdapter implements ProviderAdapter {
       }
       if (choice?.finish_reason) stopReason = mapStopReason(choice.finish_reason);
       if (chunk.usage) {
+        // `prompt_tokens` counts the cached tokens too; the contract wants
+        // input net of them, so they are priced at the cache rate once.
+        const cacheRead = chunk.usage.prompt_tokens_details?.cached_tokens ?? undefined;
         usage.report({
-          input: chunk.usage.prompt_tokens,
+          input: Math.max(0, chunk.usage.prompt_tokens - (cacheRead ?? 0)),
           output: chunk.usage.completion_tokens,
-          cacheRead: chunk.usage.prompt_tokens_details?.cached_tokens ?? undefined,
+          cacheRead,
+          model: chunk.model,
           final: true,
         });
       }

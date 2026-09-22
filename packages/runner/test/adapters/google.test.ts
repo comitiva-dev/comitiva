@@ -210,7 +210,8 @@ describe('GoogleAdapter specifics', () => {
     ]);
     expect(events.at(-2)).toEqual({
       type: 'run.usage',
-      inputTokens: 4,
+      // promptTokenCount 4 includes the 1 cached token; input is reported net.
+      inputTokens: 3,
       outputTokens: 32,
       cacheReadTokens: 1,
       estimated: false,

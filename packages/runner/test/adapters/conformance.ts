@@ -10,6 +10,7 @@ import type {
   RunInput,
 } from '../../src/providers/ProviderAdapter.js';
 import { userText } from '../../src/testing/index.js';
+import { countText } from '../../src/usage/Tokenizer.js';
 
 /**
  * Conformance suite every API adapter runs against msw: streaming order,
@@ -221,9 +222,15 @@ export function describeAdapterConformance(w: Wire): void {
         ),
       );
       const usage = events.find((e) => e.type === 'run.usage');
-      // 11 streamed chars ≈ 3 tokens.
-      expect(usage).toMatchObject({ outputTokens: 3, estimated: true });
-      expect(usage && 'inputTokens' in usage && usage.inputTokens).toBeGreaterThan(0);
+      // The count is a local approximation, so assert the shape and the
+      // neighbourhood, not a number that moves whenever the tokenizer improves.
+      expect(usage).toMatchObject({ estimated: true });
+      const out = usage && 'outputTokens' in usage ? usage.outputTokens : 0;
+      const input = usage && 'inputTokens' in usage ? usage.inputTokens : 0;
+      expect(out).toBeGreaterThan(0);
+      expect(out).toBeLessThanOrEqual(countText(TEXTS.join('')));
+      // The 40-character prompt has to weigh more than the 11 streamed chars.
+      expect(input).toBeGreaterThan(out);
     });
 
     it('maps the length stop to max_tokens', async () => {
@@ -272,6 +279,30 @@ export function describeAdapterConformance(w: Wire): void {
       const test = await w.adapter.testConnection(conn(), w.secret);
       expect(test).toMatchObject({ ok: false, error: { code, retryable } });
       await expect(w.adapter.listModels!(conn(), w.secret)).rejects.toMatchObject({ code });
+    });
+
+    it('still reports the usage of a run that fails', async () => {
+      // Tokens spent before the failure are billed by the provider, so the
+      // shell has to hear about them or the record is silently short.
+      mountError(500);
+      const events: AdapterEvent[] = [];
+      await expect(
+        (async () => {
+          for await (const e of w.adapter.run(
+            runInput(conn(), w.secret, 'x'.repeat(200)),
+            ctx,
+            new AbortController().signal,
+          )) {
+            events.push(e);
+          }
+        })(),
+      ).rejects.toBeInstanceOf(AppError);
+      const usage = events.filter((e) => e.type === 'run.usage');
+      expect(usage).toHaveLength(1);
+      expect(usage[0]).toMatchObject({ estimated: true });
+      expect(usage[0] && 'inputTokens' in usage[0] && usage[0].inputTokens).toBeGreaterThan(0);
+      // A failure is still not a `run.done`; the Run turns it into run.error.
+      expect(events.filter((e) => e.type === 'run.done')).toHaveLength(0);
     });
 
     it('maps a refused connection to provider_unavailable (retryable)', async () => {

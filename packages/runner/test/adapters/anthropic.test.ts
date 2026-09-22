@@ -225,11 +225,13 @@ describe('AnthropicAdapter specifics', () => {
     );
     expect(events.at(-2)).toEqual({
       type: 'run.usage',
+      // Anthropic's input_tokens already excludes both cache counters.
       inputTokens: 5,
       outputTokens: 3,
       cacheReadTokens: 100,
       cacheWriteTokens: 7,
       estimated: false,
+      model: 'x',
     });
   });
 

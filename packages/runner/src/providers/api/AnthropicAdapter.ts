@@ -107,10 +107,12 @@ export class AnthropicAdapter implements ProviderAdapter {
         case 'message_start': {
           const u = event.message.usage;
           usage.report({
+            // Anthropic already reports input net of the cache counters.
             input: u.input_tokens,
             output: u.output_tokens,
             cacheRead: u.cache_read_input_tokens ?? 0,
             cacheWrite: u.cache_creation_input_tokens ?? 0,
+            model: event.message.model,
           });
           break;
         }

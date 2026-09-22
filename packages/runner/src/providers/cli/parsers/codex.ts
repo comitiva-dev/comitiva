@@ -108,6 +108,14 @@ export class CodexParser implements HarnessParser {
     ];
   }
 
+  /**
+   * Codex reports totals with the breakdowns nested inside them, the way the
+   * OpenAI Responses API does: `cached_input_tokens` is part of
+   * `input_tokens` (the recordings confirm it — 14282 in, 11008 of them
+   * cached), and `reasoning_output_tokens` is likewise part of
+   * `output_tokens`, so reasoning is billed but never added on top.
+   * Only the cached part is split out, because it is priced differently.
+   */
   private reportUsage(usage: unknown): void {
     if (!isObject(usage)) return;
     const input = num(usage.input_tokens);

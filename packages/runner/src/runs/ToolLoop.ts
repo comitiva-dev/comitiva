@@ -39,6 +39,9 @@ export async function* toolLoop(opts: {
   let messages = [...opts.messages];
   for (let i = 0; ; i++) {
     if (i > 0) usage.nextCall();
+    // The history grew with the last turn's tool results; re-estimate from it,
+    // so a cancel in a late iteration is not costed against the first prompt.
+    usage.seed(messages);
     let content: Block[] = [];
     const it = opts.call(messages, ctx.tools);
     let next = await it.next();

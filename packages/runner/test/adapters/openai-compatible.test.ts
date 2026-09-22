@@ -205,10 +205,13 @@ describe('OpenAICompatibleAdapter specifics', () => {
     );
     expect(events.at(-2)).toEqual({
       type: 'run.usage',
-      inputTokens: 10,
+      // prompt_tokens 10 includes the 8 cached ones; input is reported net,
+      // so pricing charges the cache rate for them exactly once.
+      inputTokens: 2,
       outputTokens: 2,
       cacheReadTokens: 8,
       estimated: false,
+      model: 'm',
     });
   });
 

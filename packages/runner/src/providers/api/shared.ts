@@ -8,6 +8,7 @@ import {
   type ToolResultBlock,
 } from '@comitiva/contract';
 import type { AdapterEvent, RunInput } from '../ProviderAdapter.js';
+import { countPrompt, countText } from '../../usage/Tokenizer.js';
 
 /**
  * Pieces every API adapter shares: error mapping, usage accounting, the
@@ -93,9 +94,6 @@ export async function probe(
 
 // ------------------------------------------------------------------- usage
 
-/** ~4 characters per token: the fallback when a provider does not report usage. */
-export const estimateTokens = (chars: number): number => Math.ceil(chars / 4);
-
 /**
  * Collects what the provider reports and fills the gaps with estimates, so a
  * turn always ends with one `run.usage` (with `estimated: true` when any part
@@ -109,33 +107,56 @@ export class UsageTracker {
   private cacheRead: number | undefined;
   private cacheWrite: number | undefined;
   private final = false;
-  private streamedChars = 0;
+  private streamedText = '';
+  private model: string | undefined;
+  private reportedCostUsd: number | undefined;
   /** Sums of the calls already closed by `nextCall()`. */
   private done: UsageSum | null = null;
 
-  constructor(private readonly estimatedInput: number) {}
+  constructor(
+    private estimatedInput: number,
+    private readonly system: string = '',
+  ) {}
 
   static for(input: RunInput): UsageTracker {
-    const chars = input.system.length + input.messages.reduce((n, m) => n + textLength(m), 0);
-    return new UsageTracker(estimateTokens(chars));
+    return new UsageTracker(countPrompt(input.system, input.messages), input.system);
+  }
+
+  /**
+   * Re-reads the prompt before another model call. The tool loop grows the
+   * history every iteration, so an estimate taken once at the start would
+   * describe only the first call.
+   */
+  seed(messages: readonly Message[]): void {
+    this.estimatedInput = countPrompt(this.system, messages);
   }
 
   addText(text: string): void {
-    this.streamedChars += text.length;
+    this.streamedText += text;
   }
 
-  /** Records provider-reported counts; `final` marks the complete usage of the call. */
+  /**
+   * Records provider-reported counts; `final` marks the complete usage of the
+   * call. `input` must be net of `cacheRead`: providers disagree (OpenAI and
+   * Gemini include cached tokens in their prompt count, Anthropic does not),
+   * so each adapter subtracts before reporting and every consumer can price
+   * the two at their own rates.
+   */
   report(u: {
     input?: number | undefined;
     output?: number | undefined;
     cacheRead?: number | undefined;
     cacheWrite?: number | undefined;
+    model?: string | undefined;
+    costUsd?: number | undefined;
     final?: boolean;
   }): void {
     if (u.input !== undefined) this.input = u.input;
     if (u.output !== undefined) this.output = u.output;
     if (u.cacheRead !== undefined) this.cacheRead = u.cacheRead;
     if (u.cacheWrite !== undefined) this.cacheWrite = u.cacheWrite;
+    if (u.model !== undefined && u.model !== '') this.model = u.model;
+    if (u.costUsd !== undefined) this.reportedCostUsd = u.costUsd;
     if (u.final) this.final = true;
   }
 
@@ -144,7 +165,7 @@ export class UsageTracker {
     this.done = this.sum();
     this.input = this.output = this.cacheRead = this.cacheWrite = undefined;
     this.final = false;
-    this.streamedChars = 0;
+    this.streamedText = '';
   }
 
   event(): AdapterEvent {
@@ -156,6 +177,8 @@ export class UsageTracker {
       ...(s.cacheRead !== undefined ? { cacheReadTokens: s.cacheRead } : {}),
       ...(s.cacheWrite !== undefined ? { cacheWriteTokens: s.cacheWrite } : {}),
       estimated: s.estimated,
+      ...(this.model !== undefined ? { model: this.model } : {}),
+      ...(this.reportedCostUsd !== undefined ? { reportedCostUsd: this.reportedCostUsd } : {}),
     };
   }
 
@@ -164,9 +187,7 @@ export class UsageTracker {
     const complete = this.final && this.input !== undefined && this.output !== undefined;
     const current: UsageSum = {
       input: this.input ?? this.estimatedInput,
-      output: complete
-        ? this.output!
-        : Math.max(this.output ?? 0, estimateTokens(this.streamedChars)),
+      output: complete ? this.output! : Math.max(this.output ?? 0, countText(this.streamedText)),
       cacheRead: this.cacheRead,
       cacheWrite: this.cacheWrite,
       estimated: !complete,
@@ -191,10 +212,6 @@ interface UsageSum {
   cacheRead: number | undefined;
   cacheWrite: number | undefined;
   estimated: boolean;
-}
-
-function textLength(m: Message): number {
-  return m.content.reduce((n, b) => n + (b.type === 'text' ? b.text.length : 0), 0);
 }
 
 // -------------------------------------------------------------------- turn
@@ -236,7 +253,12 @@ export async function* streamTurn(opts: {
       yield next.value;
     }
   } catch (err) {
-    if (!signal.aborted) throw opts.toAppError(err);
+    if (!signal.aborted) {
+      // A failed turn still spent tokens, and the shell has to record them:
+      // without this the run is billed by the provider and forgotten here.
+      yield usage.event();
+      throw opts.toAppError(err);
+    }
     // Let the body run its cleanup (closing the stream) in the background.
     it.return(stopReason).catch(() => {});
   }

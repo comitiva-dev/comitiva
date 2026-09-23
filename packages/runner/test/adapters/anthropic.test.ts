@@ -305,14 +305,14 @@ describe('toProviderMessages', () => {
     ]);
   });
 
-  it('rejects file-sourced images for now', () => {
+  it('refuses file sources: the shell resolves them before a run', () => {
     expect(() =>
       toProviderMessages([
         {
           ...userText('c', ''),
-          content: [{ type: 'image', source: { kind: 'file', path: '/x.png' } }],
+          content: [{ type: 'image', source: { kind: 'file', path: 'x.png' } }],
         },
       ]),
-    ).toThrow(/file sources/);
+    ).toThrow(/resolved by the shell/);
   });
 });

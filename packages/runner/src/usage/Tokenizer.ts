@@ -1,4 +1,4 @@
-import type { Block, Message } from '@comitiva/contract';
+import { isTextMediaType, type Block, type DocumentBlock, type Message } from '@comitiva/contract';
 
 /**
  * A rough token count, used only when a provider reports none (a cancelled
@@ -13,14 +13,15 @@ import type { Block, Message } from '@comitiva/contract';
  *   four characters (long words break into several BPE pieces).
  * - Punctuation and symbols are a token each: they rarely merge.
  * - CJK, Hangul and Kana are about one token per character.
- * - Images and documents are charged a flat rate, being nowhere near free.
+ * - Images and binary documents are charged a flat rate, being nowhere near
+ *   free. A text document with its bytes at hand is counted as text.
  */
 
 /** A conservative middle between Anthropic's and Gemini's per-image counts. */
 export const IMAGE_TOKENS = 1_200;
 
 /**
- * A document's body never travels as text we can measure (a PDF is pages, not
+ * A binary document's body is not text we can measure (a PDF is pages, not
  * characters), so it gets one flat charge, roughly a handful of pages.
  */
 export const DOCUMENT_TOKENS = 3_000;
@@ -62,7 +63,7 @@ export function countBlock(block: Block): number {
     case 'image':
       return IMAGE_TOKENS;
     case 'document':
-      return countText(block.name) + DOCUMENT_TOKENS;
+      return countText(block.name) + documentTokens(block);
     case 'tool_use':
       return countText(block.name) + countText(JSON.stringify(block.input ?? {}));
     case 'tool_result':
@@ -71,6 +72,13 @@ export function countBlock(block: Block): number {
         0,
       );
   }
+}
+
+function documentTokens(block: DocumentBlock): number {
+  if (block.source.kind === 'base64' && isTextMediaType(block.mediaType)) {
+    return countText(Buffer.from(block.source.data, 'base64').toString('utf8'));
+  }
+  return DOCUMENT_TOKENS;
 }
 
 /** Tokens in a list of blocks. */

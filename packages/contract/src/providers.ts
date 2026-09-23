@@ -46,13 +46,13 @@ export interface ProviderDescriptor {
   titleModel?: string;
 }
 
-const textOnly: Capabilities = {
+const api: Capabilities = {
   streaming: true,
-  tools: false,
+  tools: true,
   resume: false,
   listModels: true,
   usage: true,
-  images: false,
+  images: true,
 };
 
 export const providerDescriptors = {
@@ -60,7 +60,7 @@ export const providerDescriptors = {
     id: 'anthropic',
     kind: 'api',
     label: 'Anthropic',
-    capabilities: { ...textOnly, images: true },
+    capabilities: api,
     secret: 'required',
     baseUrl: { mode: 'advanced', default: 'https://api.anthropic.com' },
     titleModel: 'claude-haiku-4-5',
@@ -69,7 +69,7 @@ export const providerDescriptors = {
     id: 'openai-compatible',
     kind: 'api',
     label: 'OpenAI-compatible',
-    capabilities: textOnly,
+    capabilities: api,
     secret: 'optional',
     baseUrl: { mode: 'required', default: 'https://api.openai.com/v1' },
     presets: [
@@ -106,7 +106,7 @@ export const providerDescriptors = {
     id: 'google',
     kind: 'api',
     label: 'Google Gemini',
-    capabilities: textOnly,
+    capabilities: api,
     secret: 'required',
     baseUrl: { mode: 'advanced', default: 'https://generativelanguage.googleapis.com' },
     titleModel: 'gemini-2.5-flash-lite',
@@ -115,7 +115,7 @@ export const providerDescriptors = {
     id: 'ollama',
     kind: 'api',
     label: 'Ollama',
-    capabilities: textOnly,
+    capabilities: api,
     secret: 'optional',
     baseUrl: { mode: 'required', default: 'http://localhost:11434' },
     // Local models cost nothing: titles use the agent's own model.
@@ -178,9 +178,11 @@ export interface CliProviderDescriptor {
   sandbox?: boolean;
 }
 
+// Harnesses reach the agent's tools through the runner's MCP proxy (ADR 0009).
+// Images are not passed to them: attachments fall back to a text note.
 const harness: Capabilities = {
   streaming: true,
-  tools: false,
+  tools: true,
   resume: true,
   listModels: false,
   usage: true,

@@ -212,7 +212,7 @@ export abstract class CliHarnessAdapter implements ProviderAdapter {
         const proc = spawnHarness(bin, this.buildArgs(spec), {
           cwd,
           env: { ...this.env(), ...this.turnEnv(spec) },
-          stdin: buildPrompt(input.messages, resume !== undefined),
+          stdin: buildPrompt(input.messages, resume !== undefined, this.label),
           signal,
           idleTimeoutMs: this.options.idleTimeoutMs ?? 10 * 60_000,
         });

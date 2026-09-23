@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { Agent, Block, Connection, Message, UsagePolicy, appendText } from '../src/index.js';
+import {
+  Agent,
+  Block,
+  Connection,
+  ImageBlock,
+  Message,
+  UsagePolicy,
+  UserContent,
+  appendText,
+  isTextMediaType,
+} from '../src/index.js';
 import { agent, anthropicConnection, userMessage } from './fixtures.js';
 
 describe('Connection', () => {
@@ -122,5 +132,37 @@ describe('appendText', () => {
       { type: 'text', text: 'x' },
     ]);
     expect(start).toEqual([{ type: 'text', text: 'Hel' }]);
+  });
+});
+
+describe('attachments', () => {
+  it('keeps a file source relative, with an optional media type and image name', () => {
+    const image = ImageBlock.parse({
+      type: 'image',
+      name: 'chart.png',
+      source: { kind: 'file', path: '01J.png', mediaType: 'image/png' },
+    });
+    expect(image.source).toEqual({ kind: 'file', path: '01J.png', mediaType: 'image/png' });
+    expect(image.name).toBe('chart.png');
+  });
+
+  it('tells text documents from binary ones', () => {
+    expect(isTextMediaType('text/markdown')).toBe(true);
+    expect(isTextMediaType('text/plain; charset=utf-8')).toBe(true);
+    expect(isTextMediaType('application/json')).toBe(true);
+    expect(isTextMediaType('application/pdf')).toBe(false);
+    expect(isTextMediaType('image/png')).toBe(false);
+  });
+
+  it('limits a message to ten attachments, and allows one with no text', () => {
+    const doc = {
+      type: 'document',
+      name: 'a.md',
+      mediaType: 'text/markdown',
+      source: { kind: 'file', path: 'a.md' },
+    };
+    expect(UserContent.safeParse([doc]).success).toBe(true);
+    expect(UserContent.safeParse(Array.from({ length: 10 }, () => doc)).success).toBe(true);
+    expect(UserContent.safeParse(Array.from({ length: 11 }, () => doc)).success).toBe(false);
   });
 });

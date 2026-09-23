@@ -1,17 +1,24 @@
-import { AppError, type Block, type Message } from '@comitiva/contract';
+import { AppError, isTextMediaType, type Block, type Message } from '@comitiva/contract';
+import { documentText, textOf } from '../media.js';
 
 /**
  * What a harness receives on stdin. With a session to resume, the harness
  * already has the history, so only the new user message goes. Without one
  * (first turn, or a conversation that started elsewhere), earlier messages
- * are replayed as a transcript ahead of the new message.
+ * are replayed as a transcript ahead of the new message. Attachments: text
+ * documents are inlined and images become a note, since harnesses do not
+ * take images here (providers/media.ts).
  */
-export function buildPrompt(messages: Message[], resume: boolean): string {
+export function buildPrompt(
+  messages: Message[],
+  resume: boolean,
+  harness = 'this harness',
+): string {
   const last = messages.at(-1);
   if (!last || last.role !== 'user') {
     throw new AppError('invalid_request', 'A CLI turn needs a user message last');
   }
-  const current = userText(last);
+  const current = textOf(last.content, harness);
   const earlier = messages.slice(0, -1);
   if (resume || earlier.length === 0) return current;
 
@@ -29,19 +36,6 @@ export function buildPrompt(messages: Message[], resume: boolean): string {
   ].join('\n');
 }
 
-/** The new message: text only (harness connections do not take images yet). */
-function userText(m: Message): string {
-  return m.content
-    .map((b) => {
-      if (b.type === 'text') return b.text;
-      throw new AppError(
-        'unsupported_content',
-        `${b.type} blocks are not supported by CLI harnesses yet`,
-      );
-    })
-    .join('\n');
-}
-
 /** History is best effort: non-text blocks become short markers. */
 function historyText(blocks: Block[]): string {
   return blocks
@@ -54,9 +48,11 @@ function historyText(blocks: Block[]): string {
         case 'tool_result':
           return `[tool result${b.isError ? ' (error)' : ''}]`;
         case 'image':
-          return '[image]';
+          return b.name ? `[image ${b.name}]` : '[image]';
         case 'document':
-          return `[document ${b.name}]`;
+          return isTextMediaType(b.mediaType) && b.source.kind === 'base64'
+            ? documentText(b)
+            : `[document ${b.name}]`;
       }
     })
     .join('\n');

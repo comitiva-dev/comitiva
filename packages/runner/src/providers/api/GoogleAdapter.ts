@@ -11,6 +11,7 @@ import {
 } from '@comitiva/contract';
 import { toolLoop } from '../../runs/ToolLoop.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import { userParts } from '../media.js';
 import {
   UsageTracker,
   httpError,
@@ -222,7 +223,14 @@ export function toProviderContents(messages: readonly Message[]): Content[] {
       }
       return { role: 'model', parts };
     }
-    return { role: 'user', parts: [{ text: plainText(m.content, where) }] };
+    return {
+      role: 'user',
+      parts: userParts(m.content, { images: true, provider: where }).map((p): Part =>
+        p.kind === 'text'
+          ? { text: p.text }
+          : { inlineData: { mimeType: p.mediaType, data: p.data } },
+      ),
+    };
   });
 }
 

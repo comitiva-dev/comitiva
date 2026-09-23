@@ -1,6 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import {
   AppError,
+  isTextMediaType,
   providerDescriptors,
   type Block,
   type Connection,
@@ -13,6 +14,7 @@ import {
 } from '@comitiva/contract';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
 import { toolLoop } from '../../runs/ToolLoop.js';
+import { base64Of, documentNote } from '../media.js';
 import {
   UsageTracker,
   httpError,
@@ -252,32 +254,34 @@ function toToolResultContent(
   block: ToolResultContentBlock,
 ): Anthropic.TextBlockParam | Anthropic.ImageBlockParam | Anthropic.DocumentBlockParam {
   if (block.type === 'text') return { type: 'text', text: block.text };
-  if (block.source.kind !== 'base64') {
-    // File sources are resolved by the shell before a run (later phase).
-    throw new AppError(
-      'unsupported_content',
-      `${block.type} blocks with file sources are not supported yet`,
-    );
-  }
+  const source = base64Of(block);
   if (block.type === 'image') {
     return {
       type: 'image',
       source: {
         type: 'base64',
-        media_type: block.source.mediaType as Anthropic.Base64ImageSource['media_type'],
-        data: block.source.data,
+        media_type: source.mediaType as Anthropic.Base64ImageSource['media_type'],
+        data: source.data,
+      },
+    };
+  }
+  if (isTextMediaType(block.mediaType)) {
+    return {
+      type: 'document',
+      title: block.name,
+      source: {
+        type: 'text',
+        media_type: 'text/plain',
+        data: Buffer.from(source.data, 'base64').toString('utf8'),
       },
     };
   }
   if (block.mediaType !== 'application/pdf') {
-    throw new AppError(
-      'unsupported_content',
-      `document type ${block.mediaType} is not supported yet`,
-    );
+    return { type: 'text', text: documentNote(block, 'Anthropic') };
   }
   return {
     type: 'document',
     title: block.name,
-    source: { type: 'base64', media_type: 'application/pdf', data: block.source.data },
+    source: { type: 'base64', media_type: 'application/pdf', data: source.data },
   };
 }

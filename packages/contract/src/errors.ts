@@ -22,6 +22,8 @@ export const ErrorCode = z.enum([
   'unknown_provider',
   'not_found',
   'unsupported_content',
+  'attachment_too_large',
+  'unsupported_attachment',
   'connection_in_use',
   'connection_disabled',
   'model_required',

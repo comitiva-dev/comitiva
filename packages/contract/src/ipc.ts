@@ -13,7 +13,7 @@ import { Conversation } from './entities/conversation.js';
 import { Message } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
-import { Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
+import { ATTACHMENT_LIMITS, Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import {
   AnthropicConfig,
@@ -319,6 +319,10 @@ export const UserContent = z
   .refine(
     (blocks) => blocks.some((b) => b.type !== 'text' || b.text.trim() !== ''),
     'message is empty',
+  )
+  .refine(
+    (blocks) => blocks.filter((b) => b.type !== 'text').length <= ATTACHMENT_LIMITS.perMessage,
+    `at most ${ATTACHMENT_LIMITS.perMessage} attachments per message`,
   );
 export type UserContent = z.infer<typeof UserContent>;
 
@@ -426,6 +430,21 @@ export const UsageExportInput = UsageRange.extend({
 });
 export type UsageExportInput = z.input<typeof UsageExportInput>;
 
+/**
+ * A file the user attaches in the composer. `dataBase64` is the file's bytes;
+ * main checks the size and the type (sniffing images) and stores it.
+ */
+export const AttachmentInput = z.object({
+  name: z.string().trim().min(1).max(255),
+  mediaType: z.string().max(255),
+  dataBase64: z.string(),
+});
+export type AttachmentInput = z.infer<typeof AttachmentInput>;
+
+/** A stored attachment, ready to go into a message. */
+export const AttachmentBlock = z.discriminatedUnion('type', [ImageBlock, DocumentBlock]);
+export type AttachmentBlock = z.infer<typeof AttachmentBlock>;
+
 const ByModel = z.object({ provider: ProviderId, model: z.string().min(1) });
 
 export const ipcInvoke = {
@@ -473,6 +492,12 @@ export const ipcInvoke = {
   'messages.cancel': { input: ByConversation, output: z.void() },
   /** Runs the last errored reply again, in the same message. */
   'messages.retry': { input: ByConversation, output: z.void() },
+  /**
+   * Stores a file for the composer and returns its block (a file source under
+   * the attachment store). Rejects with attachment_too_large or
+   * unsupported_attachment.
+   */
+  'attachments.add': { input: AttachmentInput, output: AttachmentBlock },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
   'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },

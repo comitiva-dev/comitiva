@@ -11,6 +11,7 @@ import {
 import { toolLoop } from '../../runs/ToolLoop.js';
 import { LineSplitter } from '../../util/jsonl.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import { userParts } from '../media.js';
 import {
   UsageTracker,
   httpError,
@@ -193,7 +194,8 @@ async function* ndjson(body: ReadableStream<Uint8Array>): AsyncGenerator<ChatChu
 }
 
 type OllamaMessage =
-  | { role: 'system' | 'user'; content: string }
+  | { role: 'system'; content: string }
+  | { role: 'user'; content: string; images?: string[] }
   | { role: 'assistant'; content: string; tool_calls?: OllamaToolCall[] }
   | { role: 'tool'; content: string; tool_name: string };
 
@@ -202,8 +204,15 @@ export function toProviderMessages(system: string, messages: readonly Message[])
   const names = new Map<string, string>();
   const where = 'Ollama connections';
   for (const m of messages) {
-    if (m.role === 'user') out.push({ role: 'user', content: plainText(m.content, where) });
-    else if (m.role === 'assistant') {
+    if (m.role === 'user') {
+      const parts = userParts(m.content, { images: true, provider: where });
+      const images = parts.flatMap((p) => (p.kind === 'image' ? [p.data] : []));
+      out.push({
+        role: 'user',
+        content: parts.flatMap((p) => (p.kind === 'text' ? [p.text] : [])).join('\n'),
+        ...(images.length > 0 ? { images } : {}),
+      });
+    } else if (m.role === 'assistant') {
       const calls: OllamaToolCall[] = [];
       for (const b of m.content) {
         if (b.type !== 'tool_use') continue;

@@ -6,7 +6,6 @@ import {
   ctx,
   describeAdapterConformance,
   drain,
-  runError,
   runInput,
   server,
   streamed,
@@ -213,13 +212,5 @@ describe('OpenAICompatibleAdapter specifics', () => {
       estimated: false,
       model: 'm',
     });
-  });
-
-  it('rejects images until they are wired', async () => {
-    const input = runInput(openaiConnection(BASE), 'k');
-    input.messages[0]!.content = [
-      { type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'AA==' } },
-    ];
-    expect((await runError(adapter, input)).code).toBe('unsupported_content');
   });
 });

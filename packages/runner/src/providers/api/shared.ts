@@ -9,6 +9,7 @@ import {
 } from '@comitiva/contract';
 import type { AdapterEvent, RunInput } from '../ProviderAdapter.js';
 import { countPrompt, countText } from '../../usage/Tokenizer.js';
+import { textOf } from '../media.js';
 
 /**
  * Pieces every API adapter shares: error mapping, usage accounting, the
@@ -269,19 +270,12 @@ export async function* streamTurn(opts: {
 // --------------------------------------------------------------- messages
 
 /**
- * Text of a message's text blocks, for providers without image or document
- * support yet (tool blocks are translated by each adapter).
+ * Text of a message's blocks for providers whose messages are text: text
+ * documents become text and images become notes (providers/media.ts). Tool
+ * blocks are translated by each adapter.
  */
 export function plainText(blocks: readonly Block[], provider: string): string {
-  return blocks
-    .map((b) => {
-      if (b.type === 'text') return b.text;
-      throw new AppError(
-        'unsupported_content',
-        `${b.type} blocks are not supported by ${provider} yet`,
-      );
-    })
-    .join('\n');
+  return textOf(blocks, provider);
 }
 
 /** A tool result as one string, for providers whose tool messages are text only. */

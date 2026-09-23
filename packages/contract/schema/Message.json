@@ -78,6 +78,9 @@
                       },
                       "path": {
                         "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
                       }
                     },
                     "required": [
@@ -86,6 +89,9 @@
                     ]
                   }
                 ]
+              },
+              "name": {
+                "type": "string"
               }
             },
             "required": [
@@ -136,6 +142,9 @@
                         "const": "file"
                       },
                       "path": {
+                        "type": "string"
+                      },
+                      "mediaType": {
                         "type": "string"
                       }
                     },
@@ -251,6 +260,9 @@
                                 },
                                 "path": {
                                   "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
                                 }
                               },
                               "required": [
@@ -259,6 +271,9 @@
                               ]
                             }
                           ]
+                        },
+                        "name": {
+                          "type": "string"
                         }
                       },
                       "required": [
@@ -309,6 +324,9 @@
                                   "const": "file"
                                 },
                                 "path": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
                                   "type": "string"
                                 }
                               },
@@ -393,6 +411,8 @@
                 "unknown_provider",
                 "not_found",
                 "unsupported_content",
+                "attachment_too_large",
+                "unsupported_attachment",
                 "connection_in_use",
                 "connection_disabled",
                 "model_required",

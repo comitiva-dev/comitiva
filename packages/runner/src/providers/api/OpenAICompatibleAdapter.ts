@@ -11,6 +11,7 @@ import {
 } from '@comitiva/contract';
 import { toolLoop } from '../../runs/ToolLoop.js';
 import type { AdapterEvent, ProviderAdapter, RunContext, RunInput } from '../ProviderAdapter.js';
+import { userParts } from '../media.js';
 import {
   UsageTracker,
   httpError,
@@ -179,7 +180,17 @@ export function toProviderMessages(
   const where = 'OpenAI-compatible connections';
   for (const m of messages) {
     if (m.role === 'user') {
-      out.push({ role: 'user', content: plainText(m.content, where) });
+      const parts = userParts(m.content, { images: true, provider: where });
+      out.push({
+        role: 'user',
+        content: parts.every((p) => p.kind === 'text')
+          ? parts.map((p) => p.text).join('\n')
+          : parts.map((p): OpenAI.ChatCompletionContentPart =>
+              p.kind === 'text'
+                ? { type: 'text', text: p.text }
+                : { type: 'image_url', image_url: { url: `data:${p.mediaType};base64,${p.data}` } },
+            ),
+      });
     } else if (m.role === 'assistant') {
       const text = plainText(
         m.content.filter((b) => b.type !== 'tool_use'),

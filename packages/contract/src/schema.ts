@@ -11,6 +11,7 @@ import {
   UsageRecord,
 } from './entities/index.js';
 import { AppErrorShape } from './errors.js';
+import { PortableBundle } from './portable.js';
 import { RunnerEvent, RunnerRequest } from './runner-protocol.js';
 
 /** Schemas published as JSON Schema for non-TypeScript consumers (the Laravel hub). */
@@ -21,6 +22,7 @@ export const publishedSchemas = {
   Connection,
   Conversation,
   Message,
+  PortableBundle,
   RunnerEvent,
   RunnerRequest,
   ToolApproval,

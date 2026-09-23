@@ -15,6 +15,7 @@ import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
 import { ATTACHMENT_LIMITS, Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
+import { ImportReport } from './portable.js';
 import {
   AnthropicConfig,
   CliConfig,
@@ -519,6 +520,8 @@ export const ipcInvoke = {
   'conversations.archive': { input: ById.extend({ archived: z.boolean() }), output: Conversation },
   /** Marks every reply so far as read. */
   'conversations.markRead': { input: ById, output: z.void() },
+  /** Writes the conversation as Markdown through a native save dialog; null when cancelled. */
+  'conversations.exportMarkdown': { input: ById, output: z.string().nullable() },
   'messages.list': { input: MessageListInput, output: MessagePage },
   /**
    * Persists the user message and starts a run. Rejects before persisting
@@ -538,6 +541,20 @@ export const ipcInvoke = {
   'attachments.add': { input: AttachmentInput, output: AttachmentBlock },
   /** Conversations by title and messages by content (full-text), best first. */
   'search.query': { input: SearchInput, output: SearchResult },
+  /**
+   * Writes agents (all, or those listed) with their connections and tool
+   * servers as a portable bundle (no secrets) through a save dialog; null
+   * when cancelled.
+   */
+  'bundle.export': {
+    input: z.object({ agentIds: z.array(Id).optional() }).default({}),
+    output: z.string().nullable(),
+  },
+  /**
+   * Picks a bundle file and imports it as new objects; null when cancelled.
+   * Rejects with invalid_request when the file is not a bundle this version reads.
+   */
+  'bundle.import': { input: z.undefined(), output: ImportReport.nullable() },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
   'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },

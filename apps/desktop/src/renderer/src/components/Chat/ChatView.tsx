@@ -5,7 +5,13 @@ import { connectionState } from '../../lib/agentForm';
 import { acceptsImages, canSendDraft } from '../../lib/attachments';
 import { newDraftKey } from '../../lib/chat';
 import { providerLabel } from '../../lib/connectionForm';
-import { useConnections, useConversations, useMessages, useStoreApis } from '../../store/context';
+import {
+  useConnections,
+  useConversations,
+  useMessages,
+  useStoreApis,
+  useTransfer,
+} from '../../store/context';
 import { isRunning } from '../../store/conversations';
 import { AgentAvatar } from '../AgentAvatar';
 import { Composer } from '../Composer/Composer';
@@ -45,6 +51,8 @@ export function ChatView({
     (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
   );
   const state = connectionState(connection);
+  const exportConversation = useTransfer((s) => s.exportConversation);
+  const exporting = useTransfer((s) => s.busy !== null);
   // Creating the conversation for a first send (before the store's `sending` applies).
   const creating = useRef(false);
   const [isCreating, setCreating] = useState(false);
@@ -106,6 +114,17 @@ export function ChatView({
             )}
           </p>
         </div>
+        {conversationId && (
+          <button
+            data-testid="export-conversation"
+            className={ui.ghost}
+            disabled={exporting}
+            onClick={() => void exportConversation(conversationId)}
+            title={t('chat.exportMarkdown')}
+          >
+            {t('chat.export')}
+          </button>
+        )}
       </header>
 
       {conversationId ? (

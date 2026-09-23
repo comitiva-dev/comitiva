@@ -16,7 +16,8 @@
     "saving": "Saving…",
     "dismiss": "Dismiss",
     "edit": "Edit",
-    "loading": "Loading…"
+    "loading": "Loading…",
+    "close": "Close"
   },
   "nav": {
     "label": "Main",
@@ -31,9 +32,6 @@
     "unread_one": "{{count}} unread reply",
     "unread_other": "{{count}} unread replies",
     "awaiting": "Approve"
-  },
-  "placeholder": {
-    "settings": "Language, theme and other preferences arrive in a later phase."
   },
   "secrets": {
     "unavailableTitle": "API keys cannot be stored securely on this system",
@@ -300,7 +298,9 @@
       }
     },
     "deleteBodyConversations_one": "Its settings and its conversation are removed. This cannot be undone.",
-    "deleteBodyConversations_other": "Its settings and its {{count}} conversations are removed. This cannot be undone."
+    "deleteBodyConversations_other": "Its settings and its {{count}} conversations are removed. This cannot be undone.",
+    "export": "Export",
+    "exportHint": "Save this agent, its connection and tools as a file (no keys)"
   },
   "chat": {
     "conversations": "Conversations",
@@ -345,7 +345,9 @@
     "uploading": "Adding…",
     "noImages": "{{name}} cannot see images: it gets only their names. Text files are sent as text.",
     "dropHere": "Drop files to attach them",
-    "openAttachment": "Open {{name}}"
+    "openAttachment": "Open {{name}}",
+    "export": "Export",
+    "exportMarkdown": "Save this conversation as Markdown"
   },
   "approval": {
     "label": "Approval needed",
@@ -540,6 +542,31 @@
       "agent": "Agent",
       "conversation": "Conversation",
       "message": "Message"
+    }
+  },
+  "settings": {
+    "data": {
+      "title": "Agents and connections",
+      "body": "Export your agents with their connections and tool servers to a file, or import one. Keys and secrets are never written to the file: after an import, enter them again.",
+      "exportAll": "Export all…",
+      "import": "Import…",
+      "imported": "Import finished",
+      "counts": "Added {{agents}}, {{connections}} and {{toolServers}}.",
+      "todo": "Left to do:",
+      "saved": "Saved to {{path}}",
+      "warning": {
+        "key_needed": "{{subject}}: enter its API key (Connections).",
+        "secret_needed": "{{subject}}: enter the secret {{detail}} (Tools).",
+        "root_missing": "{{subject}}: the folder {{detail}} does not exist on this computer.",
+        "binary_not_found": "{{subject}}: {{detail}} was not found on this computer.",
+        "agent_skipped": "{{subject}} was not imported: {{error}}"
+      },
+      "nAgents_one": "{{count}} agent",
+      "nAgents_other": "{{count}} agents",
+      "nConnections_one": "{{count}} connection",
+      "nConnections_other": "{{count}} connections",
+      "nToolServers_one": "{{count}} tool server",
+      "nToolServers_other": "{{count}} tool servers"
     }
   }
 }

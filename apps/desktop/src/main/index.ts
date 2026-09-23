@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
@@ -16,11 +16,14 @@ import { UsageService } from './usage/UsageService';
 import { IpcRouter } from './ipc/IpcRouter';
 import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
 import { handleAttachments, registerAttachmentScheme } from './attachmentProtocol';
+import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
 import { AgentService } from './services/AgentService';
 import { AttachmentService } from './services/AttachmentService';
+import { BundleService } from './services/BundleService';
+import { ExportService } from './services/ExportService';
 import { ConnectionService } from './services/ConnectionService';
 import { ConversationService } from './services/ConversationService';
 import { GoogleDriveService } from './services/GoogleDriveService';
@@ -39,25 +42,6 @@ const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 function isTrustedUrl(url: string): boolean {
   if (devServerUrl && url.startsWith(devServerUrl)) return true;
   return url.startsWith('file://');
-}
-
-/** Native directory picker, attached to the focused window. */
-async function pickFolder(): Promise<string | null> {
-  const opts = { properties: ['openDirectory', 'createDirectory'] } as Electron.OpenDialogOptions;
-  const win = BrowserWindow.getFocusedWindow();
-  const r = win ? await dialog.showOpenDialog(win, opts) : await dialog.showOpenDialog(opts);
-  return r.canceled ? null : (r.filePaths[0] ?? null);
-}
-
-/** Native save dialog, attached to the focused window. */
-async function pickSaveFile(suggestedName: string): Promise<string | null> {
-  const opts: Electron.SaveDialogOptions = {
-    defaultPath: suggestedName,
-    filters: [{ name: 'CSV', extensions: ['csv'] }],
-  };
-  const win = BrowserWindow.getFocusedWindow();
-  const r = win ? await dialog.showSaveDialog(win, opts) : await dialog.showSaveDialog(opts);
-  return r.canceled ? null : (r.filePath ?? null);
 }
 
 function createWindow(): BrowserWindow {
@@ -111,6 +95,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const connectionRepo = new ConnectionRepository(db);
+  const toolServerRepo = new ToolServerRepository(db);
   const connections = new ConnectionService({
     repo: connectionRepo,
     secrets,
@@ -135,7 +120,7 @@ async function bootstrap(): Promise<void> {
   });
 
   const toolServers = new ToolServerService({
-    repo: new ToolServerRepository(db),
+    repo: toolServerRepo,
     secrets,
     runner: supervisor.client,
     // The app's own binary in Node mode, like the runner (ADR 0002).
@@ -163,16 +148,32 @@ async function bootstrap(): Promise<void> {
     usage,
     prices,
     pricing,
-    saveFile: (name) => pickSaveFile(name),
+    saveFile: (name) => pickSaveFile(name, { name: 'CSV', extensions: ['csv'] }),
   });
   const attachments = new AttachmentService(paths.attachments());
   handleAttachments((name) => attachments.locate(name));
   const messageRepo = new MessageRepository(db);
   const search = new SearchRepository(db);
   const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
+  const conversationRepo = new ConversationRepository(db);
+  const exports = new ExportService({
+    conversations: conversationRepo,
+    messages: messageRepo,
+    agents: agentRepo,
+    connections: connectionRepo,
+    bundle: new BundleService({
+      db,
+      connections: connectionRepo,
+      toolServers: toolServerRepo,
+      agents: agentRepo,
+      appVersion: app.getVersion(),
+    }),
+    saveFile: pickSaveFile,
+    openFile: pickOpenFile,
+  });
   const chat = new ConversationService({
     db,
-    conversations: new ConversationRepository(db),
+    conversations: conversationRepo,
     messages: messageRepo,
     usage,
     agents: agentRepo,
@@ -218,12 +219,15 @@ async function bootstrap(): Promise<void> {
       'conversations.rename': ({ id, title }) => chat.rename(id, title),
       'conversations.archive': ({ id, archived }) => chat.archive(id, archived),
       'conversations.markRead': ({ id }) => chat.markRead(id),
+      'conversations.exportMarkdown': ({ id }) => exports.conversationMarkdown(id),
       'messages.list': (input) => chat.listMessages(input),
       'messages.send': ({ conversationId, content }) => chat.sendMessage(conversationId, content),
       'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
       'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
       'attachments.add': (input) => attachments.add(input),
       'search.query': ({ query, limit }) => search.search(query, limit),
+      'bundle.export': ({ agentIds }) => exports.exportBundle(agentIds),
+      'bundle.import': () => exports.importBundle(),
       'dialogs.pickFolder': () => pickFolder(),
       'toolServers.list': () => toolServers.list(),
       'toolServers.create': (draft) => toolServers.create(draft),

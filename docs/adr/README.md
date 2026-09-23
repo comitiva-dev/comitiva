@@ -16,3 +16,4 @@ One file per decision that affects more than one package. Format: context, decis
 | [0010](0010-google-drive-server-and-oauth.md) | Our own Google Drive server; OAuth and refresh in the desktop, the token handed over per launch | Accepted |
 | [0011](0011-pricing-and-cost-at-write-time.md) | Prices ship with the runner as one versioned JSON; cost is computed at write time and a correction recosts | Accepted |
 | [0012](0012-attachments-as-stored-file-blocks.md) | Attachments are stored file blocks, resolved to base64 by the shell before a run; providers without images get a note | Accepted |
+| [0013](0013-portable-bundle.md) | Agents, connections and tool servers travel as a versioned portable bundle in the contract, with no secrets and file-local refs | Accepted |

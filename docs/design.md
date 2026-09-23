@@ -156,6 +156,7 @@ packages/contract/src/
 ├── ipc.ts             desktop IPC contract (channels + input/output schemas, DesktopApi, IpcResult;
 │                      ConnectionDraft/Probe/Patch/Target/Summary, SecretStorageStatus)
 ├── ipc-channels.ts    channel names only (no zod) for the sandboxed preload
+├── portable.ts        PortableBundle, ImportReport: export/import of agents (P7, ADR 0013)
 └── schema.ts          zod → JSON Schema; scripts/write-schema.ts writes ../schema/*.json
 
 packages/runner/src/
@@ -194,6 +195,7 @@ apps/desktop/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── attachmentProtocol.ts    comitiva-attachment:// for stored attachments (P7)
+    │   ├── dialogs.ts               native pickers: folder, save file, open file (P7)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
@@ -207,7 +209,8 @@ apps/desktop/
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
     │   │                            ToolServerService.ts (P5; approvals live in ConversationService)
-    │   │                            GoogleDriveService.ts (P5b) AttachmentService.ts (P7)
+    │   │                            GoogleDriveService.ts (P5b) AttachmentService.ts BundleService.ts
+    │   │                            ExportService.ts exporters/markdown.ts (P7)
     │   │            usage/           UsageService.ts Pricing.ts csv.ts (P6)
     │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
@@ -833,6 +836,10 @@ class SearchRepository {         // (P7) the quick switcher
 class ToolServerRepository {    // (P5) built-ins first; rows validated by the ToolServer schema
   list(); get(id); require(id); create(NewToolServer); update(id, changes); delete(id) /* built-ins: invalid_request */;
 }
+// services/BundleService.ts (P7, ADR 0013): export(agentIds?) → PortableBundle (no secret, no ref);
+// import(json) → ImportReport: one transaction, new ids, refs remapped, an agent that cannot be created
+// here skipped with a warning. services/ExportService.ts: the dialogs and file IO around it and the
+// Markdown export (exporters/markdown.ts, pure).
 class ToolApprovalRepository {  // (P5) every decision is kept
   insert(NewToolApproval); alwaysAllowed(agentId): string[] /* `${serverId}:${tool}` */; listByConversation(id);
 }
@@ -973,6 +980,8 @@ googleDrive.getStatus | configure | connect | cancelConnect | disconnect   (P5b;
 agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
+conversations.exportMarkdown                                        (P7; save dialog → path | null)
+bundle.export | import                                              (P7; ADR 0013; import → ImportReport | null)
 messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
 attachments.add                                                     (P7; stores a picked file, returns its block)
 search.query                                                        (P7; { conversations, messages } for the quick switcher)
@@ -1002,7 +1011,9 @@ interface Backend {
   googleDrive: { getStatus(); configure(input); connect(); cancelConnect(); disconnect() };   // (P5b)
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
   settings: { get(); update(patch) };                                               // (P3)
-  conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id) };   // (P4)
+  conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id);   // (P4)
+                   exportMarkdown(id) };                                                           // (P7)
+  bundle: { export(agentIds?); import() };                                                         // (P7)
   messages: { list(convId, { beforeSeq?, limit? }?); send(convId, UserContent); cancel(convId); retry(convId) };   // (P4)
   approvals: { decide(convId, toolUseId, decision) };
   usage: { summary(range); timeseries(range); conversation(id); export(range & { shape });        // (P6)
@@ -1038,6 +1049,8 @@ toolServersStore (P5):  items, loaded, tests (per server: its tools or the error
 googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
                         load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
 toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
+transferStore (P7):     busy, saved (path), report (ImportReport), notice; exportConversation, exportAgents, importBundle
+                        (afterImport reloads connections, agents and tool servers).
 uiStore (P7):           quickSwitcherOpen, shortcutsOpen, search (the switcher's query and result; stale answers dropped)
 ```
 
@@ -1097,7 +1110,7 @@ Phase 7: the Composer attaches files (button, drop, paste) as chips that upload 
 
 `QuickSwitcher` (Cmd/Ctrl+K, pure logic in `lib/quickSwitcher.ts`): agents matched by name locally, conversation titles and message text from `search.query`, snippets with `<mark>`, arrows / Enter / Esc. A message hit opens its conversation at that message, highlighted.
 
-Later components: `Settings/*`.
+`screens/SettingsScreen` replaces the placeholder (P7): a Data section (export all, import). `TransferFeedback` shows where an export went, an error by code, or the import report with what is left to do. The chat header exports the conversation as Markdown and `AgentPanel` exports one agent.
 
 ---
 

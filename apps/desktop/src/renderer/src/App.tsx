@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import { Sidebar } from './components/Sidebar/Sidebar';
+import { TransferFeedback } from './components/TransferFeedback';
 import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
-import { PlaceholderScreen } from './screens/PlaceholderScreen';
+import { SettingsScreen } from './screens/SettingsScreen';
 import { ToolsScreen } from './screens/ToolsScreen';
 import { UsageScreen } from './screens/UsageScreen';
 import { useApp, useStoreApis } from './store/context';
@@ -37,10 +38,11 @@ export function App() {
         ) : section === 'usage' ? (
           <UsageScreen />
         ) : (
-          <PlaceholderScreen section={section} />
+          <SettingsScreen />
         )}
       </main>
       <QuickSwitcher />
+      <TransferFeedback />
     </div>
   );
 }

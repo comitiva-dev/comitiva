@@ -12,6 +12,7 @@ import { createConversationsStore } from './store/conversations';
 import { createGoogleDriveStore } from './store/googleDrive';
 import { createMessagesStore } from './store/messages';
 import { createToolServersStore } from './store/toolServers';
+import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
 import { createUsageStore } from './store/usage';
 
@@ -26,6 +27,16 @@ const stores = {
   googleDrive: createGoogleDriveStore(backend),
   usage: createUsageStore(backend),
   ui: createUiStore(backend),
+  transfer: createTransferStore(backend, {
+    // What an import adds.
+    afterImport: async () => {
+      await Promise.all([
+        stores.connections.getState().load(),
+        stores.agents.getState().load(),
+        stores.toolServers.getState().load(),
+      ]);
+    },
+  }),
 };
 backend.onEvent((event) => {
   stores.app.getState().handleEvent(event);

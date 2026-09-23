@@ -1,0 +1,52 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`conversationMarkdown > writes the header, each message, tool calls and attachments 1`] = `
+"# Launch plan
+
+- Agent: Planner
+- Model: Anthropic · claude-sonnet-5
+- Started: 2026-09-23 11:59:00 UTC
+- Exported from Comitiva: 2026-09-23 13:00:00 UTC
+
+---
+
+### You · 2026-09-23 12:00:00 UTC
+
+Read the notes
+
+> 📎 Attachment: notes.md
+
+---
+
+### Planner · 2026-09-23 12:00:05 UTC
+
+Reading.
+
+<details>
+<summary>Tool <code>fs__read_file</code> (done, 12 ms)</summary>
+
+**Input**
+
+\`\`\`\`json
+{
+  "path": "a\`\`\`b"
+}
+\`\`\`\`
+
+**Result**
+
+\`\`\`
+contents
+\`\`\`
+
+</details>
+
+Done.
+
+---
+
+### Planner · 2026-09-23 12:00:00 UTC
+
+_Failed: rate_limited._
+"
+`;

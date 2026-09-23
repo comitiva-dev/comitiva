@@ -17,6 +17,7 @@ import type {
   Conversation,
   ConversationListInput,
   ConversationSummary,
+  ImportReport,
   DetectBinaryInput,
   IpcEventPayload,
   ErrorCode,
@@ -88,6 +89,14 @@ export interface Backend {
     rename(id: string, title: string): Promise<Conversation>;
     archive(id: string, archived: boolean): Promise<Conversation>;
     markRead(id: string): Promise<void>;
+    /** Saves it as Markdown through a save dialog; the path, or null when cancelled. */
+    exportMarkdown(id: string): Promise<string | null>;
+  };
+  bundle: {
+    /** Agents (all, or those listed) with their connections and tool servers, no secrets. */
+    export(agentIds?: string[]): Promise<string | null>;
+    /** Picks a bundle and imports it as new objects; null when cancelled. */
+    import(): Promise<ImportReport | null>;
   };
   messages: {
     /** The latest page (or the one before `beforeSeq`), oldest first, at the conversation's `rev`. */

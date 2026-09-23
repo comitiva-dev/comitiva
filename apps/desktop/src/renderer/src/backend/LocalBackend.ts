@@ -82,6 +82,12 @@ export class LocalBackend implements Backend {
     archive: (id: string, archived: boolean) =>
       this.api.invoke('conversations.archive', { id, archived }),
     markRead: (id: string) => this.api.invoke('conversations.markRead', { id }),
+    exportMarkdown: (id: string) => this.api.invoke('conversations.exportMarkdown', { id }),
+  };
+
+  bundle = {
+    export: (agentIds?: string[]) => this.api.invoke('bundle.export', agentIds ? { agentIds } : {}),
+    import: () => this.api.invoke('bundle.import', undefined),
   };
 
   messages = {

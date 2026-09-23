@@ -16,7 +16,8 @@
     "saving": "Salvando…",
     "dismiss": "Fechar",
     "edit": "Editar",
-    "loading": "Carregando…"
+    "loading": "Carregando…",
+    "close": "Fechar"
   },
   "nav": {
     "label": "Principal",
@@ -31,9 +32,6 @@
     "unread_one": "{{count}} resposta não lida",
     "unread_other": "{{count}} respostas não lidas",
     "awaiting": "Aprovar"
-  },
-  "placeholder": {
-    "settings": "Idioma, tema e outras preferências chegam em uma fase posterior."
   },
   "secrets": {
     "unavailableTitle": "Não é possível guardar chaves de API com segurança neste sistema",
@@ -300,7 +298,9 @@
       }
     },
     "deleteBodyConversations_one": "As configurações e a conversa dele são removidas. Isso não pode ser desfeito.",
-    "deleteBodyConversations_other": "As configurações e as {{count}} conversas dele são removidas. Isso não pode ser desfeito."
+    "deleteBodyConversations_other": "As configurações e as {{count}} conversas dele são removidas. Isso não pode ser desfeito.",
+    "export": "Exportar",
+    "exportHint": "Salvar este agente, sua conexão e ferramentas em um arquivo (sem chaves)"
   },
   "chat": {
     "conversations": "Conversas",
@@ -345,7 +345,9 @@
     "uploading": "Adicionando…",
     "noImages": "{{name}} não enxerga imagens: recebe só os nomes delas. Arquivos de texto vão como texto.",
     "dropHere": "Solte os arquivos para anexá-los",
-    "openAttachment": "Abrir {{name}}"
+    "openAttachment": "Abrir {{name}}",
+    "export": "Exportar",
+    "exportMarkdown": "Salvar esta conversa em Markdown"
   },
   "approval": {
     "label": "Aprovação necessária",
@@ -540,6 +542,31 @@
       "agent": "Agente",
       "conversation": "Conversa",
       "message": "Mensagem"
+    }
+  },
+  "settings": {
+    "data": {
+      "title": "Agentes e conexões",
+      "body": "Exporte seus agentes com suas conexões e servidores de ferramentas para um arquivo, ou importe um. Chaves e segredos nunca vão para o arquivo: depois de importar, informe-os de novo.",
+      "exportAll": "Exportar tudo…",
+      "import": "Importar…",
+      "imported": "Importação concluída",
+      "counts": "Adicionados: {{agents}}, {{connections}} e {{toolServers}}.",
+      "todo": "Falta fazer:",
+      "saved": "Salvo em {{path}}",
+      "warning": {
+        "key_needed": "{{subject}}: informe a chave de API (Conexões).",
+        "secret_needed": "{{subject}}: informe o segredo {{detail}} (Ferramentas).",
+        "root_missing": "{{subject}}: a pasta {{detail}} não existe neste computador.",
+        "binary_not_found": "{{subject}}: {{detail}} não foi encontrado neste computador.",
+        "agent_skipped": "{{subject}} não foi importado: {{error}}"
+      },
+      "nAgents_one": "{{count}} agente",
+      "nAgents_other": "{{count}} agentes",
+      "nConnections_one": "{{count}} conexão",
+      "nConnections_other": "{{count}} conexões",
+      "nToolServers_one": "{{count}} servidor de ferramentas",
+      "nToolServers_other": "{{count}} servidores de ferramentas"
     }
   }
 }

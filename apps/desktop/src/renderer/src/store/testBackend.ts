@@ -9,6 +9,7 @@ import type {
   ConnectionSummary,
   Conversation,
   ConversationSummary,
+  ImportReport,
   GoogleDriveConfigureInput,
   GoogleDriveStatus,
   Message,
@@ -174,12 +175,17 @@ export function fakeBackend() {
       rename: vi.fn(async (id: string, title: string) => conversation(id, { title })),
       archive: vi.fn(async (id: string, archived: boolean) => conversation(id, { archived })),
       markRead: vi.fn(async () => {}),
+      exportMarkdown: vi.fn(async (): Promise<string | null> => '/tmp/out.md'),
     },
     messages: {
       list: vi.fn(async (): Promise<MessagePage> => ({ messages: [], hasMore: false, rev: 0 })),
       send: vi.fn(async () => {}),
       cancel: vi.fn(async () => {}),
       retry: vi.fn(async () => {}),
+    },
+    bundle: {
+      export: vi.fn(async (): Promise<string | null> => '/tmp/bundle.json'),
+      import: vi.fn(async (): Promise<ImportReport | null> => null),
     },
     search: {
       query: vi.fn(async (): Promise<SearchResult> => ({ conversations: [], messages: [] })),

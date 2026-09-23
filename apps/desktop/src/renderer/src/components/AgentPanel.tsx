@@ -12,6 +12,7 @@ import {
   useConnections,
   useStoreApis,
   useToolServers,
+  useTransfer,
   useUsage,
 } from '../store/context';
 import { AgentAvatar } from './AgentAvatar';
@@ -28,6 +29,8 @@ export function AgentPanel({
   const { t } = useTranslation();
   const openEdit = useAgents((s) => s.openEdit);
   const duplicate = useAgents((s) => s.duplicate);
+  const exportAgents = useTransfer((s) => s.exportAgents);
+  const exporting = useTransfer((s) => s.busy !== null);
   const askDelete = useAgents((s) => s.askDelete);
   const connection = useConnections(
     (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
@@ -71,7 +74,7 @@ export function AgentPanel({
         </div>
       </header>
 
-      <div className="flex gap-1">
+      <div className="flex flex-wrap gap-1">
         <button data-testid="agent-edit" className={ui.button} onClick={() => openEdit(agent.id)}>
           {t('agents.edit')}
         </button>
@@ -88,6 +91,15 @@ export function AgentPanel({
           onClick={() => askDelete(agent.id)}
         >
           {t('agents.delete')}
+        </button>
+        <button
+          data-testid="agent-export"
+          className={ui.button}
+          disabled={exporting}
+          onClick={() => void exportAgents([agent.id])}
+          title={t('agents.exportHint')}
+        >
+          {t('agents.export')}
         </button>
       </div>
 

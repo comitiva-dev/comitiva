@@ -153,7 +153,10 @@
     "oauth_failed": "O Google não concluiu o login. Confira o cliente OAuth e tente de novo.",
     "oauth_cancelled": "A conexão foi cancelada.",
     "google_not_connected": "O Google Drive não está conectado. Conecte na tela Ferramentas.",
-    "google_reconnect_required": "O Google não aceita mais o login salvo. Conecte o Google Drive de novo na tela Ferramentas."
+    "google_reconnect_required": "O Google não aceita mais o login salvo. Conecte o Google Drive de novo na tela Ferramentas.",
+    "attachment_too_large": "Esse arquivo é grande demais. Imagens podem ter até 5 MB, arquivos de texto até 1 MB.",
+    "unsupported_attachment": "Só é possível anexar imagens (PNG, JPEG, GIF, WebP) e arquivos de texto.",
+    "attachment_too_many": "Uma mensagem aceita no máximo 10 arquivos."
   },
   "agents": {
     "create": "Criar agente",
@@ -314,7 +317,7 @@
     "startHint": "Envie uma mensagem para começar uma conversa com {{name}}.",
     "emptyConversation": "Nenhuma mensagem ainda.",
     "placeholder": "Mensagem para {{name}}",
-    "keys": "Enter envia · Shift+Enter quebra a linha",
+    "keys": "Enter envia · Shift+Enter quebra a linha · arraste ou cole arquivos para anexar",
     "send": "Enviar",
     "stop": "Parar",
     "retry": "Tentar de novo",
@@ -326,8 +329,6 @@
     "youInitial": "V",
     "copy": "Copiar",
     "copied": "Copiado",
-    "imageUnavailable": "Imagem indisponível.",
-    "unsupportedBlock": "Conteúdo do tipo {{type}} ainda não pode ser exibido.",
     "tool": {
       "running": "Executando",
       "done": "Concluída",
@@ -338,7 +339,13 @@
       "output": "Resultado",
       "awaiting": "Aguardando você",
       "denied": "Negada"
-    }
+    },
+    "attach": "Anexar arquivos",
+    "removeAttachment": "Remover {{name}}",
+    "uploading": "Adicionando…",
+    "noImages": "{{name}} não enxerga imagens: recebe só os nomes delas. Arquivos de texto vão como texto.",
+    "dropHere": "Solte os arquivos para anexá-los",
+    "openAttachment": "Abrir {{name}}"
   },
   "approval": {
     "label": "Aprovação necessária",

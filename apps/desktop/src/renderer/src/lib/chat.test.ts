@@ -59,7 +59,7 @@ describe('renderParts', () => {
     expect(parts[2]).toMatchObject({ use: { id: 't2' }, result: null });
   });
 
-  it('keeps images and marks documents as other', () => {
+  it('keeps images and documents as their own parts', () => {
     const parts = renderParts([
       { type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'AA==' } },
       {
@@ -69,7 +69,7 @@ describe('renderParts', () => {
         source: { kind: 'file', path: '/a.pdf' },
       },
     ]);
-    expect(parts.map((p) => p.kind)).toEqual(['image', 'other']);
+    expect(parts.map((p) => p.kind)).toEqual(['image', 'document']);
   });
 });
 
@@ -91,11 +91,17 @@ describe('tool block helpers', () => {
     expect(formatInput(undefined)).toBe('');
   });
 
-  it('builds data URLs only for base64 images', () => {
+  it('builds data URLs for base64 images and asks the backend for stored ones', () => {
+    const url = (path: string) => `att://${path}`;
     expect(
-      imageSrc({ type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'AA==' } }),
+      imageSrc(
+        { type: 'image', source: { kind: 'base64', mediaType: 'image/png', data: 'AA==' } },
+        url,
+      ),
     ).toBe('data:image/png;base64,AA==');
-    expect(imageSrc({ type: 'image', source: { kind: 'file', path: '/x.png' } })).toBeNull();
+    expect(imageSrc({ type: 'image', source: { kind: 'file', path: 'x.png' } }, url)).toBe(
+      'att://x.png',
+    );
   });
 });
 

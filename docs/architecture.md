@@ -142,6 +142,7 @@ When the OS offers no keyring (Linux `basic_text` backend), the store **refuses*
 | `comitiva.db` | SQLite (WAL), Drizzle migrations |
 | `secrets.bin` | Encrypted secrets |
 | `logs/runner.log` | Runner stderr and supervisor events (rotates at 5 MB) |
+| `attachments/<ULID><ext>` | Files attached in the composer (0600); served to the renderer only through `comitiva-attachment://` (ADR 0012) |
 | `workspaces/<conversationId>/` | Default working directory of a CLI harness conversation (unless the agent has a read-write root or the connection sets one) |
 
 Outside `<userData>`: the runner's `ToolBridge` keeps its socket and, per harness turn, an MCP config and a token file in `<tmp>/comitiva-bridge-*/` (0700 dir, 0600 files, removed when the turn and the runner end).

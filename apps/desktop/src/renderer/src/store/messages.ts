@@ -1,6 +1,14 @@
 import { createStore } from 'zustand/vanilla';
 import { appendText, type ErrorCode, type Message } from '@comitiva/contract';
 import { errorCode, type Backend, type BackendEvent, type MessageEvent } from '../backend/Backend';
+import {
+  canSendDraft,
+  draftContent,
+  precheck,
+  room,
+  type DraftAttachment,
+  type PickedFile,
+} from '../lib/attachments';
 
 export interface ConversationMessages {
   /** Ordered by seq. */
@@ -23,6 +31,8 @@ export interface MessagesState {
   byConversation: Record<string, ConversationMessages>;
   /** Composer text per conversation, kept across switches. */
   drafts: Record<string, string>;
+  /** Files attached to each draft, stored as soon as they are picked. */
+  attachments: Record<string, DraftAttachment[]>;
   /** A send in flight (the IPC call, not the run). */
   sending: Record<string, boolean>;
   /** Why the last send, cancel or retry was refused. */
@@ -32,6 +42,13 @@ export interface MessagesState {
   load(conversationId: string, opts?: { force?: boolean }): Promise<void>;
   loadOlder(conversationId: string): Promise<void>;
   setDraft(conversationId: string, text: string): void;
+  /** Stores picked files for a draft; beyond the per-message limit they are refused. */
+  attach(key: string, files: readonly PickedFile[]): Promise<void>;
+  detach(key: string, id: string): void;
+  /** Moves a draft (text and files) to another key: a new conversation's first send. */
+  moveDraft(from: string, to: string): void;
+  /** Where the UI loads a stored attachment from. */
+  attachmentUrl(path: string): string;
   /** Sends the draft; it is cleared only once the backend took it. */
   send(conversationId: string): Promise<void>;
   cancel(conversationId: string): Promise<void>;
@@ -111,9 +128,14 @@ export function createMessagesStore(backend: Backend) {
       }
     };
 
+    const patchAttachments = (key: string, fn: (list: DraftAttachment[]) => DraftAttachment[]) =>
+      set((s) => ({ attachments: { ...s.attachments, [key]: fn(s.attachments[key] ?? []) } }));
+    let nextAttachmentId = 0;
+
     return {
       byConversation: {},
       drafts: {},
+      attachments: {},
       sending: {},
       actionError: {},
 
@@ -179,13 +201,63 @@ export function createMessagesStore(backend: Backend) {
 
       setDraft: (id, text) => set((s) => ({ drafts: { ...s.drafts, [id]: text } })),
 
+      async attach(key, files) {
+        const free = room(get().attachments[key] ?? []);
+        const accepted = files.slice(0, free);
+        if (files.length > free) setError(key, 'attachment_too_many');
+        await Promise.all(
+          accepted.map(async (file) => {
+            const id = `a${++nextAttachmentId}`;
+            const refused = precheck(file);
+            const entry: DraftAttachment = {
+              id,
+              name: file.name,
+              size: file.size,
+              isImage: file.type.startsWith('image/'),
+              status: refused ? 'failed' : 'uploading',
+              ...(refused ? { error: refused } : {}),
+            };
+            patchAttachments(key, (list) => [...list, entry]);
+            if (refused) return;
+            const update = (changes: Partial<DraftAttachment>) =>
+              patchAttachments(key, (list) =>
+                list.map((a) => (a.id === id ? { ...a, ...changes } : a)),
+              );
+            try {
+              const block = await backend.attachments.add({
+                name: file.name,
+                mediaType: file.type,
+                dataBase64: await file.read(),
+              });
+              update({ status: 'ready', block, isImage: block.type === 'image' });
+            } catch (err) {
+              update({ status: 'failed', error: errorCode(err) });
+            }
+          }),
+        );
+      },
+
+      detach: (key, id) => patchAttachments(key, (list) => list.filter((a) => a.id !== id)),
+
+      moveDraft: (from, to) =>
+        set((s) => ({
+          drafts: { ...s.drafts, [to]: s.drafts[from] ?? '', [from]: '' },
+          attachments: { ...s.attachments, [to]: s.attachments[from] ?? [], [from]: [] },
+        })),
+
+      attachmentUrl: (path) => backend.attachments.url(path),
+
       async send(id) {
-        const text = (get().drafts[id] ?? '').trim();
-        if (!text || get().sending[id]) return;
+        const text = get().drafts[id] ?? '';
+        const attachments = get().attachments[id] ?? [];
+        if (!canSendDraft(text, attachments) || get().sending[id]) return;
         set((s) => ({ sending: { ...s.sending, [id]: true } }));
         await act(id, async () => {
-          await backend.messages.send(id, [{ type: 'text', text }]);
-          set((s) => ({ drafts: { ...s.drafts, [id]: '' } }));
+          await backend.messages.send(id, draftContent(text, attachments));
+          set((s) => ({
+            drafts: { ...s.drafts, [id]: '' },
+            attachments: { ...s.attachments, [id]: [] },
+          }));
         });
         set((s) => ({ sending: { ...s.sending, [id]: false } }));
       },

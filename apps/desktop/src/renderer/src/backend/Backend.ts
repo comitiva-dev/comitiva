@@ -5,6 +5,8 @@ import type {
   ApprovalDecision,
   AppSettings,
   AppSettingsPatch,
+  AttachmentBlock,
+  AttachmentInput,
   CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
@@ -100,6 +102,15 @@ export interface Backend {
     cancel(conversationId: string): Promise<void>;
     /** Runs the last errored reply again, in the same message. */
     retry(conversationId: string): Promise<void>;
+  };
+  attachments: {
+    /**
+     * Stores a file picked in the composer and returns its block. Rejects
+     * with attachment_too_large or unsupported_attachment.
+     */
+    add(input: AttachmentInput): Promise<AttachmentBlock>;
+    /** Where the UI loads a stored attachment from (an image in a message). */
+    url(path: string): string;
   };
   dialogs: {
     /** A native folder picker; null when cancelled (or when the backend has none). */

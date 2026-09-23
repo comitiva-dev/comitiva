@@ -1,4 +1,11 @@
-import type { Block, ImageBlock, Message, ToolResultBlock, ToolUseBlock } from '@comitiva/contract';
+import type {
+  Block,
+  DocumentBlock,
+  ImageBlock,
+  Message,
+  ToolResultBlock,
+  ToolUseBlock,
+} from '@comitiva/contract';
 
 /**
  * The conversation an agent's chat shows: the one the user picked, else the
@@ -35,8 +42,8 @@ export function canRetry(items: readonly Message[]): boolean {
 export type RenderPart =
   | { kind: 'text'; text: string }
   | { kind: 'image'; block: ImageBlock }
-  | { kind: 'tool'; use: ToolUseBlock; result: ToolResultBlock | null }
-  | { kind: 'other'; type: Block['type'] };
+  | { kind: 'document'; block: DocumentBlock }
+  | { kind: 'tool'; use: ToolUseBlock; result: ToolResultBlock | null };
 
 /**
  * A message's blocks as the chat draws them: each tool_use joined with its
@@ -51,9 +58,9 @@ export function renderParts(content: readonly Block[]): RenderPart[] {
     if (b.type === 'text') {
       if (b.text !== '') parts.push({ kind: 'text', text: b.text });
     } else if (b.type === 'image') parts.push({ kind: 'image', block: b });
+    else if (b.type === 'document') parts.push({ kind: 'document', block: b });
     else if (b.type === 'tool_use')
       parts.push({ kind: 'tool', use: b, result: results.get(b.id) ?? null });
-    else if (b.type !== 'tool_result') parts.push({ kind: 'other', type: b.type });
   }
   return parts;
 }
@@ -76,10 +83,12 @@ export function formatInput(input: unknown): string {
   }
 }
 
-/** `data:` URL for a base64 image; null for file sources (not readable by the renderer). */
-export function imageSrc(block: ImageBlock): string | null {
+/** Where an image loads from: a `data:` URL, or the backend's URL for a stored attachment. */
+export function imageSrc(block: ImageBlock, fileUrl: (path: string) => string): string {
   const { source } = block;
-  return source.kind === 'base64' ? `data:${source.mediaType};base64,${source.data}` : null;
+  return source.kind === 'base64'
+    ? `data:${source.mediaType};base64,${source.data}`
+    : fileUrl(source.path);
 }
 
 /**

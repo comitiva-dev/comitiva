@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Agent } from '@comitiva/contract';
 import { connectionState } from '../../lib/agentForm';
+import { acceptsImages, canSendDraft } from '../../lib/attachments';
 import { newDraftKey } from '../../lib/chat';
 import { providerLabel } from '../../lib/connectionForm';
 import { useConnections, useConversations, useMessages, useStoreApis } from '../../store/context';
@@ -35,6 +36,10 @@ export function ChatView({
   const sending = useMessages((s) => s.sending[draftKey] ?? false);
   const actionError = useMessages((s) => s.actionError[draftKey] ?? null);
   const setDraft = useMessages((s) => s.setDraft);
+  const attachments = useMessages((s) => s.attachments[draftKey]);
+  const attach = useMessages((s) => s.attach);
+  const detach = useMessages((s) => s.detach);
+  const attachmentUrl = useMessages((s) => s.attachmentUrl);
   const dismissError = useMessages((s) => s.dismissError);
   const connection = useConnections(
     (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
@@ -58,14 +63,13 @@ export function ChatView({
     const messages = stores.messages.getState();
     if (conversationId) return messages.send(conversationId);
     const text = messages.drafts[draftKey] ?? '';
-    if (!text.trim() || creating.current) return;
+    if (!canSendDraft(text, messages.attachments[draftKey] ?? []) || creating.current) return;
     creating.current = true;
     setCreating(true);
     try {
       const id = await stores.conversations.getState().create(agent.id);
       if (!id) return;
-      messages.setDraft(id, text);
-      messages.setDraft(draftKey, '');
+      messages.moveDraft(draftKey, id);
       await stores.messages.getState().send(id);
     } finally {
       creating.current = false;
@@ -135,6 +139,15 @@ export function ChatView({
         onDismissError={() => dismissError(draftKey)}
         placeholder={t('chat.placeholder', { name: agent.name })}
         focusKey={draftKey}
+        attachments={attachments}
+        onAttach={(files) => void attach(draftKey, files)}
+        onDetach={(id) => detach(draftKey, id)}
+        attachmentUrl={attachmentUrl}
+        imagesHint={
+          connection && !acceptsImages(connection.provider)
+            ? t('chat.noImages', { name: agent.name })
+            : null
+        }
       />
     </section>
   );

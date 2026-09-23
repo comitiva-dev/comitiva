@@ -165,6 +165,7 @@ packages/runner/src/
 ├── server/            RunnerServer.ts Transport.ts RequestRouter.ts
 ├── runs/              RunManager.ts Run.ts            ToolLoop.ts PermissionGate.ts history.ts (P5)
 ├── providers/         ProviderRegistry.ts (+ createDefaultRegistry) ProviderAdapter.ts
+│                      media.ts: attachments per provider, text fallback (P7, ADR 0012)
 │   ├── api/           shared.ts AnthropicAdapter.ts OpenAICompatibleAdapter.ts GoogleAdapter.ts OllamaAdapter.ts
 │   └── cli/           CliHarnessAdapter.ts ClaudeCodeAdapter.ts CodexAdapter.ts process.ts locateBinary.ts
 │                      prompt.ts parsers/ (claudeCode.ts codex.ts types.ts) (P2)
@@ -187,11 +188,12 @@ packages/mcp-servers/src/            index.ts
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
 ├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4) tools.spec.ts (P5)
-│       google-drive.spec.ts (P5b)
+│       google-drive.spec.ts (P5b) usage.spec.ts (P6) attachments.spec.ts (P7)
 └── src/
     ├── main/
     │   ├── index.ts                 bootstrap: app.whenReady → Database → SecretStore → RunnerSupervisor → IpcRouter → window
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
+    │   ├── attachmentProtocol.ts    comitiva-attachment:// for stored attachments (P7)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
@@ -203,7 +205,7 @@ apps/desktop/
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
     │   │                            ToolServerService.ts (P5; approvals live in ConversationService)
-    │   │                            GoogleDriveService.ts (P5b)
+    │   │                            GoogleDriveService.ts (P5b) AttachmentService.ts (P7)
     │   │            usage/           UsageService.ts Pricing.ts csv.ts (P6)
     │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
@@ -379,11 +381,13 @@ Conventions: ids are ULIDs (sortable); dates are ISO 8601 UTC; JSON in TEXT colu
 ```ts
 type Block =
   | { type: 'text'; text: string }
-  | { type: 'image'; source: { kind: 'base64'; mediaType: string; data: string } | { kind: 'file'; path: string } }
+  | { type: 'image'; name?: string; source: { kind: 'base64'; mediaType: string; data: string } | { kind: 'file'; path: string; mediaType?: string } }
   | { type: 'document'; name: string; mediaType: string; source: /* same */ }
   | { type: 'tool_use'; id: string; toolServerId: string; name: string; input: unknown; signature?: string }
   | { type: 'tool_result'; toolUseId: string; content: Array<TextBlock | ImageBlock | DocumentBlock>; isError: boolean; durationMs?: number };
 ```
+
+A `file` source's `path` is a name in the shell's attachment store, never an absolute path; the shell resolves it to base64 before a run, and the runner refuses one (ADR 0012).
 
 `tool_result.content` cannot nest `tool_use`/`tool_result`, the same restriction as the Anthropic API (ADR 0004).
 
@@ -957,6 +961,7 @@ agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
 messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
+attachments.add                                                     (P7; stores a picked file, returns its block)
 approvals.decide                                                    (P5)
 usage.summary | timeseries | conversation | export | prices | setPrice | clearPrice   (P6)
 dialogs.pickFolder                                                  (P2)
@@ -977,6 +982,7 @@ interface Backend {
   capabilities(): { cliHarnesses: boolean; localRoots: boolean; hub: boolean };   // (P2+)
   connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target); detectBinary(input) };
   dialogs: { pickFolder() };                                   // (P2) null when cancelled
+  attachments: { add(input); url(path) };                      // (P7) url: comitiva-attachment:// here, HTTP in RemoteBackend
   toolServers: { list(); create(d); update(id, d); delete(id); test({ id } | { spec, id? }) };
   googleDrive: { getStatus(); configure(input); connect(); cancelConnect(); disconnect() };   // (P5b)
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
@@ -1006,6 +1012,7 @@ conversationsStore (P4): byId, idsByAgent / archivedIdsByAgent (newest activity 
                         unread, notice; load, loadArchived, create, select, setVisible, rename, archive, forgetAgent.
                         Selectors: agentStatus (running > error > idle), agentUnread, isRunning — from main's status.
 messagesStore (P4):     byConversation: { items, status, hasMore, loadingOlder, rev, buffered }, drafts, sending,
+                        attachments per draft (P7: attach, detach, moveDraft, attachmentUrl),
                         actionError; load (buffers events until the page is in), loadOlder, send, cancel, retry.
                         Events apply by rev (ADR 0008): stale dropped, next applied, a gap reloads the page.
 conversationsStore (P5): + pending (PendingApproval per conversation, from main), deciding, decide; agentStatus:
@@ -1070,7 +1077,9 @@ the usage section of `AgentPanel`. Pure logic is `lib/usage.ts` (periods → win
 y-axes would invite reading a crossing as a relationship. Its palette is validated per mode
 (`Usage/palette.ts` says why the order is the safety mechanism).
 
-Later components: `QuickSwitcher` (Cmd/Ctrl+K), attachments in the composer (P7), `Settings/*`.
+Phase 7: the Composer attaches files (button, drop, paste) as chips that upload at once (`lib/attachments.ts`), warns when the agent's connection cannot see images, and `MessageBubble` shows stored images and document chips.
+
+Later components: `QuickSwitcher` (Cmd/Ctrl+K), `Settings/*`.
 
 ---
 

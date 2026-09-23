@@ -31,6 +31,10 @@ export const paths = {
   secrets(): string {
     return join(app.getPath('userData'), 'secrets.bin');
   },
+  /** Files attached in the composer (ADR 0012). */
+  attachments(): string {
+    return join(app.getPath('userData'), 'attachments');
+  },
   /** Default working directories of CLI harness conversations. */
   workspaces(): string {
     return join(app.getPath('userData'), 'workspaces');

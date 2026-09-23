@@ -1,4 +1,6 @@
 import { EventEmitter } from 'node:events';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -27,6 +29,7 @@ import {
   type ConversationEvents,
   type RunnerPort,
 } from './ConversationService';
+import { AttachmentService } from './AttachmentService';
 import { TitleService } from './TitleService';
 import { ToolServerService } from './ToolServerService';
 
@@ -83,6 +86,8 @@ let secretFor: ReturnType<typeof vi.fn>;
 let title: { generate: ReturnType<typeof vi.fn> };
 let service: ConversationService;
 let events: Emitted[];
+let attachments: AttachmentService;
+let attachmentsDir: string;
 let driveToken: () => Promise<string> = () => Promise.resolve('ya29.fresh');
 
 function makeService(titleService: unknown = title) {
@@ -110,6 +115,7 @@ function makeService(titleService: unknown = title) {
       },
     }),
     approvals: new ToolApprovalRepository(db),
+    attachments,
   });
   for (const channel of [
     'conversation.updated',
@@ -140,6 +146,8 @@ const agentDraft = (id: string, connectionId: string) => ({
 
 beforeEach(() => {
   vi.useFakeTimers();
+  attachmentsDir = mkdtempSync(join(tmpdir(), 'comitiva-att-'));
+  attachments = new AttachmentService(attachmentsDir);
   db = Database.open(':memory:');
   db.migrate(join(__dirname, '..', 'db', 'migrations'));
   runner = new FakeRunner();
@@ -181,6 +189,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.useRealTimers();
   db.close();
+  rmSync(attachmentsDir, { recursive: true, force: true });
 });
 
 const of = <C extends Emitted['channel']>(channel: C) =>
@@ -379,6 +388,59 @@ describe('ConversationService: sending and streaming', () => {
         .map((d) => d.text)
         .join(''),
     ).toBe('BBBBBB');
+  });
+});
+
+describe('ConversationService: attachments', () => {
+  it('stores file sources and sends them to the runner as base64', async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+    const image = await attachments.add({
+      name: 'chart.png',
+      mediaType: 'image/png',
+      dataBase64: png.toString('base64'),
+    });
+    const doc = await attachments.add({
+      name: 'notes.md',
+      mediaType: 'text/markdown',
+      dataBase64: Buffer.from('# Notes').toString('base64'),
+    });
+    const conversation = service.create('a1');
+    await service.sendMessage(conversation.id, [...text('Look'), image, doc]);
+
+    // Stored as file sources…
+    const [user] = messages.all(conversation.id);
+    expect(user!.content[1]).toMatchObject({ type: 'image', source: { kind: 'file' } });
+    // …resolved for the run.
+    const sent = runner.started.at(-1)!.messages[0]!.content;
+    expect(sent[1]).toEqual({
+      type: 'image',
+      name: 'chart.png',
+      source: { kind: 'base64', mediaType: 'image/png', data: png.toString('base64') },
+    });
+    expect(sent[2]).toMatchObject({
+      type: 'document',
+      mediaType: 'text/markdown',
+      source: { kind: 'base64', data: Buffer.from('# Notes').toString('base64') },
+    });
+    expect(messages.attachmentNames()).toEqual(
+      new Set([(image.source as { path: string }).path, (doc.source as { path: string }).path]),
+    );
+    expect(messages.attachmentNames('a2').size).toBe(0);
+  });
+
+  it('runs with a note when an attachment file is gone', async () => {
+    const conversation = service.create('a1');
+    await service.sendMessage(conversation.id, [
+      {
+        type: 'document',
+        name: 'gone.md',
+        mediaType: 'text/markdown',
+        source: { kind: 'file', path: '01JAAAAAAAAAAAAAAAAAAAAAAA.md' },
+      },
+    ]);
+    expect(runner.started.at(-1)!.messages[0]!.content).toEqual([
+      { type: 'text', text: '[Attachment "gone.md" is missing]' },
+    ]);
   });
 });
 

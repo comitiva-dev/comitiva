@@ -2,6 +2,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Agent, ApprovalDecision, Message } from '@comitiva/contract';
 import { imageSrc, renderParts, toolState } from '../../lib/chat';
+import { useMessages } from '../../store/context';
 import { ApprovalCard } from '../ApprovalCard/ApprovalCard';
 import { AgentAvatar } from '../AgentAvatar';
 import { ToolCallBlock } from '../ToolBlock/ToolCallBlock';
@@ -40,6 +41,7 @@ export const MessageBubble = memo(function MessageBubble({
 }) {
   const { t, i18n } = useTranslation();
   const parts = useMemo(() => renderParts(message.content), [message.content]);
+  const attachmentUrl = useMessages((s) => s.attachmentUrl);
   const mine = message.role === 'user';
   const streaming = message.status === 'streaming';
 
@@ -82,17 +84,29 @@ export const MessageBubble = memo(function MessageBubble({
               ) : (
                 <Markdown key={i} text={part.text} />
               );
-            if (part.kind === 'image') {
-              const src = imageSrc(part.block);
-              return src ? (
-                <img key={i} src={src} alt="" className="max-h-80 max-w-full rounded-md" />
-              ) : (
-                <p key={i} className={`text-xs ${ui.muted}`}>
-                  {t('chat.imageUnavailable')}
+            if (part.kind === 'image')
+              return (
+                <img
+                  key={i}
+                  data-testid="message-image"
+                  src={imageSrc(part.block, attachmentUrl)}
+                  alt={part.block.name ?? ''}
+                  title={part.block.name}
+                  className="max-h-80 max-w-full self-start rounded-md"
+                />
+              );
+            if (part.kind === 'document')
+              return (
+                <p
+                  key={i}
+                  data-testid="message-document"
+                  className="flex items-center gap-2 self-start rounded-md border border-neutral-200 bg-neutral-50 px-2 py-1 text-xs dark:border-neutral-700 dark:bg-neutral-900"
+                >
+                  <span aria-hidden>📄</span>
+                  <span className="font-medium">{part.block.name}</span>
                 </p>
               );
-            }
-            if (part.kind === 'tool') {
+            {
               const awaiting = approval?.toolUseId === part.use.id;
               const serverName = part.use.toolServerId.startsWith('harness:')
                 ? null
@@ -117,11 +131,6 @@ export const MessageBubble = memo(function MessageBubble({
                 </div>
               );
             }
-            return (
-              <p key={i} className={`text-xs ${ui.muted}`}>
-                {t('chat.unsupportedBlock', { type: part.type })}
-              </p>
-            );
           })}
           {streaming && (
             // After text, the cursor is drawn at its end by CSS (.streaming-tail); otherwise here.

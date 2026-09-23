@@ -166,3 +166,71 @@ describe('messages store', () => {
     expect(backend.messages.retry).toHaveBeenCalledWith('k2');
   });
 });
+
+describe('messages store: attachments', () => {
+  const picked = (name: string, type = 'text/markdown', size = 10) => ({
+    name,
+    type,
+    size,
+    read: async () => 'IyBoaQ==',
+  });
+
+  it('stores picked files and sends them with the text, then clears the draft', async () => {
+    const backend = fakeBackend();
+    const store = createMessagesStore(backend);
+    store.getState().setDraft('k1', 'See attached');
+    await store.getState().attach('k1', [picked('a.md')]);
+    const [a] = store.getState().attachments.k1!;
+    expect(a).toMatchObject({ name: 'a.md', status: 'ready' });
+    expect(backend.attachments.add).toHaveBeenCalledWith({
+      name: 'a.md',
+      mediaType: 'text/markdown',
+      dataBase64: 'IyBoaQ==',
+    });
+
+    await store.getState().send('k1');
+    expect(backend.messages.send).toHaveBeenCalledWith('k1', [
+      { type: 'text', text: 'See attached' },
+      a!.block,
+    ]);
+    expect(store.getState().attachments.k1).toEqual([]);
+    expect(store.getState().drafts.k1).toBe('');
+  });
+
+  it('refuses files over the limit or past ten, and keeps the refusal on the chip', async () => {
+    const backend = fakeBackend();
+    backend.attachments.add.mockRejectedValueOnce(
+      new BackendError('unsupported_attachment', 'binary', false),
+    );
+    const store = createMessagesStore(backend);
+    await store
+      .getState()
+      .attach('k1', [picked('a.zip', 'application/zip'), picked('big.png', 'image/png', 6e6)]);
+    expect(store.getState().attachments.k1!.map((a) => [a.status, a.error])).toEqual([
+      ['failed', 'unsupported_attachment'],
+      ['failed', 'attachment_too_large'],
+    ]);
+    // A draft of refused files only cannot be sent.
+    await store.getState().send('k1');
+    expect(backend.messages.send).not.toHaveBeenCalled();
+
+    await store.getState().attach(
+      'k1',
+      Array.from({ length: 11 }, (_, i) => picked(`${i}.md`)),
+    );
+    expect(store.getState().attachments.k1!.filter((a) => a.status === 'ready')).toHaveLength(10);
+    expect(store.getState().actionError.k1).toBe('attachment_too_many');
+  });
+
+  it('moves a draft with its files to a new conversation', async () => {
+    const store = createMessagesStore(fakeBackend());
+    store.getState().setDraft('new:a', 'hello');
+    await store.getState().attach('new:a', [picked('a.md')]);
+    store.getState().moveDraft('new:a', 'k9');
+    expect(store.getState().drafts).toMatchObject({ 'new:a': '', k9: 'hello' });
+    expect(store.getState().attachments.k9).toHaveLength(1);
+    expect(store.getState().attachments['new:a']).toEqual([]);
+    store.getState().detach('k9', store.getState().attachments.k9![0]!.id);
+    expect(store.getState().attachments.k9).toEqual([]);
+  });
+});

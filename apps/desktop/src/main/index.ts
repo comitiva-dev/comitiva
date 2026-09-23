@@ -14,10 +14,12 @@ import { Pricing } from './usage/Pricing';
 import { UsageService } from './usage/UsageService';
 import { IpcRouter } from './ipc/IpcRouter';
 import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
+import { handleAttachments, registerAttachmentScheme } from './attachmentProtocol';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
 import { AgentService } from './services/AgentService';
+import { AttachmentService } from './services/AttachmentService';
 import { ConnectionService } from './services/ConnectionService';
 import { ConversationService } from './services/ConversationService';
 import { GoogleDriveService } from './services/GoogleDriveService';
@@ -28,6 +30,8 @@ import { ToolServerService } from './services/ToolServerService';
 // COMITIVA_USER_DATA isolates e2e runs.
 app.setName('Comitiva');
 app.setPath('userData', process.env.COMITIVA_USER_DATA ?? join(app.getPath('appData'), 'comitiva'));
+
+registerAttachmentScheme();
 
 const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 
@@ -160,11 +164,14 @@ async function bootstrap(): Promise<void> {
     pricing,
     saveFile: (name) => pickSaveFile(name),
   });
+  const attachments = new AttachmentService(paths.attachments());
+  handleAttachments((name) => attachments.locate(name));
+  const messageRepo = new MessageRepository(db);
   const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
   const chat = new ConversationService({
     db,
     conversations: new ConversationRepository(db),
-    messages: new MessageRepository(db),
+    messages: messageRepo,
     usage,
     agents: agentRepo,
     connections: connectionRepo,
@@ -174,8 +181,11 @@ async function bootstrap(): Promise<void> {
     workspacesDir: paths.workspaces(),
     toolServers,
     approvals: new ToolApprovalRepository(db),
+    attachments,
   });
   chat.recover();
+  // Attachments of drafts never sent; in the background, it never blocks startup.
+  void attachments.sweep(messageRepo.attachmentNames()).catch(() => {});
 
   const router = new IpcRouter(
     {
@@ -192,9 +202,11 @@ async function bootstrap(): Promise<void> {
       'agents.list': () => agents.list(),
       'agents.create': (draft) => agents.create(draft),
       'agents.update': ({ id, patch }) => agents.update(id, patch),
-      'agents.delete': ({ id }) => {
+      'agents.delete': async ({ id }) => {
         chat.forgetAgent(id);
+        const names = messageRepo.attachmentNames(id);
         agents.delete(id);
+        await attachments.remove(names);
       },
       'agents.duplicate': ({ id, name }) => agents.duplicate(id, name),
       'settings.get': () => settings.get(),
@@ -208,6 +220,7 @@ async function bootstrap(): Promise<void> {
       'messages.send': ({ conversationId, content }) => chat.sendMessage(conversationId, content),
       'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
       'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
+      'attachments.add': (input) => attachments.add(input),
       'dialogs.pickFolder': () => pickFolder(),
       'toolServers.list': () => toolServers.list(),
       'toolServers.create': (draft) => toolServers.create(draft),

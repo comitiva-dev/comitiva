@@ -29,6 +29,7 @@ import type { MessageRepository } from '../db/repositories/MessageRepository';
 import type { ToolApprovalRepository } from '../db/repositories/ToolApprovalRepository';
 import type { UsageRepository } from '../db/repositories/UsageRepository';
 import { placeholderTitle, type TitleService } from './TitleService';
+import type { AttachmentService } from './AttachmentService';
 import type { ToolServerService } from './ToolServerService';
 import { resolveWorkingDirectory } from './workingDirectory';
 
@@ -55,6 +56,8 @@ export interface ConversationServiceDeps {
   /** The agent's MCP servers, resolved for a run (secrets included). */
   toolServers: Pick<ToolServerService, 'launchesFor'>;
   approvals: ToolApprovalRepository;
+  /** Turns attachment file sources into base64 before a run (ADR 0012). */
+  attachments: Pick<AttachmentService, 'resolve'>;
   /** `<userData>/workspaces`: default working directory of CLI harness conversations. */
   workspacesDir: string;
   timing?: { uiFlushMs?: number; dbFlushMs?: number; cancelGraceMs?: number };
@@ -334,8 +337,8 @@ export class ConversationService extends EventEmitter<ConversationEvents> {
   private start(ctx: RunContext, reply: Message): void {
     const { agent, connection, secret, toolServers, alwaysAllowed } = ctx;
     const conversationId = reply.conversationId;
-    const history = buildHistory(
-      this.deps.messages.all(conversationId).filter((m) => m.seq < reply.seq),
+    const history = this.deps.attachments.resolve(
+      buildHistory(this.deps.messages.all(conversationId).filter((m) => m.seq < reply.seq)),
     );
     const run: LiveRun = {
       ...ctx,

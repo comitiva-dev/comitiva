@@ -2,6 +2,7 @@ import type {
   AgentDraft,
   AgentPatch,
   AppSettingsPatch,
+  AttachmentInput,
   ApprovalDecision,
   ConnectionDraft,
   ConnectionPatch,
@@ -89,6 +90,12 @@ export class LocalBackend implements Backend {
       this.api.invoke('messages.send', { conversationId, content }),
     cancel: (conversationId: string) => this.api.invoke('messages.cancel', { conversationId }),
     retry: (conversationId: string) => this.api.invoke('messages.retry', { conversationId }),
+  };
+
+  attachments = {
+    add: (input: AttachmentInput) => this.api.invoke('attachments.add', input),
+    // Served by main from the attachment store (main/attachmentProtocol.ts).
+    url: (path: string) => `comitiva-attachment://file/${encodeURIComponent(path)}`,
   };
 
   dialogs = {

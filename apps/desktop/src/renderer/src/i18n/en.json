@@ -153,7 +153,10 @@
     "oauth_failed": "Google did not complete the sign-in. Check the OAuth client and try again.",
     "oauth_cancelled": "Connecting was cancelled.",
     "google_not_connected": "Google Drive is not connected. Connect it on the Tools screen.",
-    "google_reconnect_required": "Google no longer accepts the saved sign-in. Connect Google Drive again on the Tools screen."
+    "google_reconnect_required": "Google no longer accepts the saved sign-in. Connect Google Drive again on the Tools screen.",
+    "attachment_too_large": "That file is too large. Images can be up to 5 MB, text files up to 1 MB.",
+    "unsupported_attachment": "Only images (PNG, JPEG, GIF, WebP) and text files can be attached.",
+    "attachment_too_many": "A message takes at most 10 files."
   },
   "agents": {
     "create": "Create agent",
@@ -314,7 +317,7 @@
     "startHint": "Send a message to start a conversation with {{name}}.",
     "emptyConversation": "No messages yet.",
     "placeholder": "Message {{name}}",
-    "keys": "Enter sends · Shift+Enter adds a line",
+    "keys": "Enter sends · Shift+Enter adds a line · drop or paste files to attach",
     "send": "Send",
     "stop": "Stop",
     "retry": "Retry",
@@ -326,8 +329,6 @@
     "youInitial": "Y",
     "copy": "Copy",
     "copied": "Copied",
-    "imageUnavailable": "Image not available.",
-    "unsupportedBlock": "Content of type {{type}} cannot be shown yet.",
     "tool": {
       "running": "Running",
       "done": "Done",
@@ -338,7 +339,13 @@
       "output": "Result",
       "awaiting": "Waiting for you",
       "denied": "Denied"
-    }
+    },
+    "attach": "Attach files",
+    "removeAttachment": "Remove {{name}}",
+    "uploading": "Adding…",
+    "noImages": "{{name}} cannot see images: it gets only their names. Text files are sent as text.",
+    "dropHere": "Drop files to attach them",
+    "openAttachment": "Open {{name}}"
   },
   "approval": {
     "label": "Approval needed",

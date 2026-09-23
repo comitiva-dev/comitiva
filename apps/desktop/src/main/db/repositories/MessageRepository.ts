@@ -137,6 +137,24 @@ export class MessageRepository {
       .run();
   }
 
+  /**
+   * Stored attachment names that messages refer to (file sources), for every
+   * conversation or only an agent's.
+   */
+  attachmentNames(agentId?: string): Set<string> {
+    const rows = this.db.raw
+      .prepare(
+        `SELECT DISTINCT json_extract(b.value, '$.source.path') AS path
+           FROM messages m
+           JOIN conversations c ON c.id = m.conversation_id
+           , json_each(m.content) b
+          WHERE json_extract(b.value, '$.source.kind') = 'file'
+            AND (@agentId IS NULL OR c.agent_id = @agentId)`,
+      )
+      .all({ agentId: agentId ?? null }) as Array<{ path: string | null }>;
+    return new Set(rows.flatMap((r) => (r.path ? [r.path] : [])));
+  }
+
   private set(id: string, values: Partial<Row>): void {
     const result = this.db.orm.update(messages).set(values).where(eq(messages.id, id)).run();
     if (result.changes === 0) throw new AppError('not_found', `Message ${id} does not exist`);

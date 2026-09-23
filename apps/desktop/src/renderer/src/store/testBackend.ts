@@ -3,6 +3,8 @@ import type {
   Agent,
   AgentDraft,
   AppSettings,
+  AttachmentBlock,
+  AttachmentInput,
   ConnectionSummary,
   Conversation,
   ConversationSummary,
@@ -177,6 +179,15 @@ export function fakeBackend() {
       send: vi.fn(async () => {}),
       cancel: vi.fn(async () => {}),
       retry: vi.fn(async () => {}),
+    },
+    attachments: {
+      add: vi.fn(async (input: AttachmentInput): Promise<AttachmentBlock> => ({
+        type: 'document',
+        name: input.name,
+        mediaType: 'text/plain',
+        source: { kind: 'file', path: `01STORED.${input.name}` },
+      })),
+      url: (path: string) => `att://${path}`,
     },
     dialogs: { pickFolder: vi.fn(async (): Promise<string | null> => '/home/me/work') },
     toolServers: {

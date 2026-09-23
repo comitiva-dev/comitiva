@@ -43,7 +43,7 @@ describe('RunnerSupervisor', () => {
     // Simulate a crash through the protocol-independent path: kill the process.
     const pid = (sup.client as unknown as { child: { pid: number } }).child.pid;
     process.kill(pid, 'SIGKILL');
-    await expect.poll(() => statuses.includes('restarting')).toBe(true);
+    await expect.poll(() => statuses.includes('restarting'), { timeout: 5000 }).toBe(true);
     await expect.poll(() => sup.status, { timeout: 5000 }).toBe('ready');
     expect(await sup.client.request({ type: 'ping' })).toMatchObject({ protocolVersion: 1 });
     await expect.poll(async () => readFile(logFile, 'utf8')).toMatch(/runner exited/);

@@ -12,7 +12,8 @@ files:
 # The runner and the built-in MCP servers are separate Node processes
 # (ELECTRON_RUN_AS_NODE, ADR 0002), the MCP proxy for CLI harnesses sits next
 # to the runner (ADR 0009), and migrations are read from disk at startup: all
-# live outside the asar.
+# live outside the asar. e2e-packaged/smoke.spec.ts starts each of them from
+# the packaged app on every platform.
 extraResources:
   - from: ../../packages/runner/dist/bin.cjs
     to: runner/bin.cjs
@@ -26,21 +27,67 @@ extraResources:
     to: migrations
 asarUnpack:
   - '**/*.node'
+# Placeholder artwork (build/icon.svg); macOS and Windows icons are derived from it.
+icon: build/icon.png
+
+# Code signing is not set up yet (docs/development.md → Code signing). The
+# release workflow turns it on when the certificates are in its secrets:
+# CSC_LINK / CSC_KEY_PASSWORD (+ APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD,
+# APPLE_TEAM_ID to notarize) for macOS, WIN_CSC_LINK / WIN_CSC_KEY_PASSWORD
+# for Windows.
 mac:
   category: public.app-category.productivity
   target:
-    - dmg
-    - zip
+    - target: dmg
+      arch: [arm64, x64]
+    # The zip is what the macOS updater downloads.
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+dmg:
+  artifactName: ${productName}-${version}-mac-${arch}.${ext}
 win:
   target:
-    - nsis
+    - target: nsis
+      arch: [x64]
+nsis:
+  oneClick: false
+  # Per user, so updates install without an administrator.
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  artifactName: ${productName}-${version}-win-${arch}-setup.${ext}
 linux:
   category: Office
+  synopsis: Agentic chat for your whole team
+  description: >-
+    Connect LLMs (APIs or CLI harnesses such as Claude Code and Codex), create
+    agents with a role and tools, and talk to all of them in a Slack-style chat.
+  maintainer: Comitiva contributors
+  vendor: Comitiva contributors
   syncDesktopName: true
   target:
     - AppImage
-    - tar.gz
-nsis:
-  oneClick: false
-  allowToChangeInstallationDirectory: true
-publish: null
+    - deb
+    - rpm
+rpm:
+  # electron-builder's defaults plus libsecret: safeStorage needs a keyring.
+  depends:
+    - gtk3
+    - libnotify
+    - nss
+    - libXScrnSaver
+    - (libXtst or libXtst6)
+    - xdg-utils
+    - at-spi2-core
+    - (libuuid or libuuid1)
+    - libsecret
+publish:
+  provider: github
+  owner: comitiva-dev
+  repo: comitiva
+  releaseType: draft
+  updaterCacheDirName: comitiva-updater

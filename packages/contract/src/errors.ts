@@ -25,6 +25,7 @@ export const ErrorCode = z.enum([
   'attachment_too_large',
   'unsupported_attachment',
   'attachment_too_many',
+  'update_failed',
   'connection_in_use',
   'connection_disabled',
   'model_required',

@@ -7,6 +7,7 @@ import type {
   AttachmentBlock,
   AttachmentInput,
   SearchResult,
+  UpdateStatus,
   ConnectionSummary,
   Conversation,
   ConversationSummary,
@@ -143,6 +144,19 @@ export function usageRow(over: Partial<UsageSummaryRow> = {}): UsageSummaryRow {
 }
 
 /** A Backend whose methods are vi.fn()s with sensible defaults. */
+export const updateStatus = (over: Partial<UpdateStatus> = {}): UpdateStatus => ({
+  state: 'idle',
+  currentVersion: '0.1.0',
+  version: null,
+  percent: null,
+  lastCheckedAt: null,
+  selfInstall: true,
+  downloadUrl: null,
+  disabledReason: null,
+  error: null,
+  ...over,
+});
+
 export function fakeBackend() {
   const backend = {
     app: { getVersion: vi.fn(async () => '0.1.0') },
@@ -199,6 +213,11 @@ export function fakeBackend() {
     bundle: {
       export: vi.fn(async (): Promise<string | null> => '/tmp/bundle.json'),
       import: vi.fn(async (): Promise<ImportReport | null> => null),
+    },
+    updates: {
+      getStatus: vi.fn(async (): Promise<UpdateStatus> => updateStatus()),
+      check: vi.fn(async (): Promise<UpdateStatus> => updateStatus({ state: 'not-available' })),
+      install: vi.fn(async () => {}),
     },
     search: {
       query: vi.fn(async (): Promise<SearchResult> => ({ conversations: [], messages: [] })),

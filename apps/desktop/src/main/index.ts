@@ -19,6 +19,8 @@ import { handleAttachments, registerAttachmentScheme } from './attachmentProtoco
 import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
 import { setLanguage, t } from './i18n';
 import { menuTemplate, REPO_URL } from './menu';
+import { UpdateService, type Updater } from './updates/UpdateService';
+import { readFileSync } from 'node:fs';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
@@ -44,6 +46,22 @@ const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 function isTrustedUrl(url: string): boolean {
   if (devServerUrl && url.startsWith(devServerUrl)) return true;
   return url.startsWith('file://');
+}
+
+/**
+ * Whether this macOS build is signed, recorded at packaging time
+ * (`extraMetadata.comitiva.macSigned`, set by the release workflow when a
+ * certificate is configured). Unsigned builds cannot install updates.
+ */
+function macBuildIsSigned(): boolean {
+  try {
+    const meta = JSON.parse(readFileSync(join(app.getAppPath(), 'package.json'), 'utf8')) as {
+      comitiva?: { macSigned?: boolean };
+    };
+    return meta.comitiva?.macSigned === true;
+  } catch {
+    return false;
+  }
 }
 
 function createWindow(): BrowserWindow {
@@ -197,6 +215,25 @@ async function bootstrap(): Promise<void> {
   // Attachments of drafts never sent; in the background, it never blocks startup.
   void attachments.sweep(messageRepo.attachmentNames()).catch(() => {});
 
+  // Updates: packaged builds only, and never in e2e/CI runs (COMITIVA_DISABLE_UPDATES=1).
+  const updatesDisabled = !app.isPackaged
+    ? 'development'
+    : process.env.COMITIVA_DISABLE_UPDATES === '1'
+      ? 'env'
+      : null;
+  const updater: Updater | null = updatesDisabled
+    ? null
+    : (await import('electron-updater')).autoUpdater;
+  const updates = new UpdateService({
+    updater,
+    disabledReason: updatesDisabled,
+    currentVersion: app.getVersion(),
+    autoCheck: () => settings.get().autoUpdate,
+    selfInstall: process.platform !== 'darwin' || macBuildIsSigned(),
+    releaseUrl: (version) => `${REPO_URL}/releases/tag/v${version}`,
+    log: (message) => console.warn(message),
+  });
+
   const router = new IpcRouter(
     {
       'app.getVersion': () => app.getVersion(),
@@ -226,6 +263,7 @@ async function bootstrap(): Promise<void> {
           setLanguage(next.language, app.getLocale());
           buildMenu();
         }
+        if (patch.autoUpdate !== undefined) updates.settingsChanged();
         return next;
       },
       'conversations.list': (filter) => chat.list(filter),
@@ -242,6 +280,9 @@ async function bootstrap(): Promise<void> {
       'search.query': ({ query, limit }) => search.search(query, limit),
       'bundle.export': ({ agentIds }) => exports.exportBundle(agentIds),
       'bundle.import': () => exports.importBundle(),
+      'updates.getStatus': () => updates.status(),
+      'updates.check': () => updates.check(),
+      'updates.install': () => updates.install(),
       'dialogs.pickFolder': () => pickFolder(),
       'toolServers.list': () => toolServers.list(),
       'toolServers.create': (draft) => toolServers.create(draft),
@@ -291,6 +332,8 @@ async function bootstrap(): Promise<void> {
   chat.on('message.updated', (p) => router.broadcast('message.updated', p));
   chat.on('message.delta', (p) => router.broadcast('message.delta', p));
   chat.on('message.block', (p) => router.broadcast('message.block', p));
+  updates.on('status', (status) => router.broadcast('updates.status', status));
+  updates.start();
 
   createWindow();
   await supervisor.start();
@@ -301,6 +344,7 @@ async function bootstrap(): Promise<void> {
     quitting = true;
     event.preventDefault();
     // Replies still streaming are saved as cancelled before the runner and the DB go away.
+    updates.stop();
     chat.shutdown();
     void supervisor.stop().finally(() => {
       db.close();

@@ -99,6 +99,12 @@ export class LocalBackend implements Backend {
     retry: (conversationId: string) => this.api.invoke('messages.retry', { conversationId }),
   };
 
+  updates = {
+    getStatus: () => this.api.invoke('updates.getStatus', undefined),
+    check: () => this.api.invoke('updates.check', undefined),
+    install: () => this.api.invoke('updates.install', undefined),
+  };
+
   search = {
     query: (input: SearchInput) => this.api.invoke('search.query', input),
   };
@@ -157,6 +163,7 @@ export class LocalBackend implements Backend {
       this.api.on('message.updated', (p) => handler({ type: 'message.updated', ...p })),
       this.api.on('message.delta', (p) => handler({ type: 'message.delta', ...p })),
       this.api.on('message.block', (p) => handler({ type: 'message.block', ...p })),
+      this.api.on('updates.status', (status) => handler({ type: 'updates.status', status })),
       this.api.on('menu.command', ({ command }) => handler({ type: 'menu.command', command })),
     ];
     return () => offs.forEach((off) => off());

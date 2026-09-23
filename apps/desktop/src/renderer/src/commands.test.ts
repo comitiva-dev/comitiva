@@ -12,6 +12,7 @@ import { fakeBackend } from './store/testBackend';
 import { createToolServersStore } from './store/toolServers';
 import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
+import { createUpdatesStore } from './store/updates';
 import { createUsageStore } from './store/usage';
 
 let backend: ReturnType<typeof fakeBackend>;
@@ -31,6 +32,7 @@ beforeEach(() => {
     ui: createUiStore(backend),
     transfer: createTransferStore(backend),
     settings: createSettingsStore(backend),
+    updates: createUpdatesStore(backend),
   };
 });
 

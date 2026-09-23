@@ -36,6 +36,9 @@ export const ipcInvokeChannels = [
   'search.query',
   'bundle.export',
   'bundle.import',
+  'updates.getStatus',
+  'updates.check',
+  'updates.install',
   'dialogs.pickFolder',
   'toolServers.list',
   'toolServers.create',
@@ -63,5 +66,6 @@ export const ipcEventChannels = [
   'message.updated',
   'message.delta',
   'message.block',
+  'updates.status',
   'menu.command',
 ] as const;

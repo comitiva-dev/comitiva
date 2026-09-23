@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import { ui } from '../components/ui';
+import { UpdatesSection } from '../components/UpdatesSection';
 import { LanguageSetting } from '@comitiva/contract';
 import { useSettings, useStoreApis, useTransfer } from '../store/context';
 
@@ -43,6 +44,8 @@ export function SettingsScreen() {
           </select>
         </label>
       </section>
+
+      <UpdatesSection />
 
       <section className={`${ui.card} flex flex-col gap-3 p-4`} aria-labelledby="settings-keys">
         <h2 id="settings-keys" className="text-base font-semibold">

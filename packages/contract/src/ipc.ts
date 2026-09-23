@@ -495,6 +495,40 @@ export const SearchResult = z.object({
 });
 export type SearchResult = z.infer<typeof SearchResult>;
 
+/**
+ * The app's own updates (packaged desktop builds, from GitHub Releases).
+ * `disabled`: never checks (a development build, turned off by env, or a
+ * build the updater cannot replace); `available` without self-install means
+ * the user downloads it (`downloadUrl`), e.g. an unsigned macOS build.
+ */
+export const UpdateState = z.enum([
+  'disabled',
+  'idle',
+  'checking',
+  'not-available',
+  'available',
+  'downloading',
+  'ready',
+  'error',
+]);
+export type UpdateState = z.infer<typeof UpdateState>;
+
+export const UpdateStatus = z.object({
+  state: UpdateState,
+  currentVersion: z.string(),
+  /** The newer version, once one is known. */
+  version: z.string().nullable(),
+  /** 0–100 while downloading. */
+  percent: z.number().min(0).max(100).nullable(),
+  lastCheckedAt: IsoDate.nullable(),
+  /** Whether this build can download and install the update itself. */
+  selfInstall: z.boolean(),
+  downloadUrl: z.string().nullable(),
+  disabledReason: z.enum(['development', 'env', 'unsupported']).nullable(),
+  error: ErrorCode.nullable(),
+});
+export type UpdateStatus = z.infer<typeof UpdateStatus>;
+
 const ByModel = z.object({ provider: ProviderId, model: z.string().min(1) });
 
 export const ipcInvoke = {
@@ -566,6 +600,11 @@ export const ipcInvoke = {
    * Rejects with invalid_request when the file is not a bundle this version reads.
    */
   'bundle.import': { input: z.undefined(), output: ImportReport.nullable() },
+  'updates.getStatus': { input: z.undefined(), output: UpdateStatus },
+  /** Checks now (even with automatic checks off); the result also arrives as updates.status. */
+  'updates.check': { input: z.undefined(), output: UpdateStatus },
+  /** Quits and installs a downloaded update; invalid_request when none is ready. */
+  'updates.install': { input: z.undefined(), output: z.void() },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
   'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },
@@ -637,6 +676,7 @@ export const ipcEvents = {
   'message.updated': z.object({ message: Message, rev: Rev }),
   'message.delta': z.object({ ...LiveRef, text: z.string() }),
   'message.block': z.object({ ...LiveRef, block: Block }),
+  'updates.status': UpdateStatus,
   /** A native menu item: the renderer runs the command (desktop shortcuts). */
   'menu.command': z.object({ command: z.string() }),
 } as const;

@@ -4,9 +4,14 @@
   "desktopName": "comitiva.desktop",
   "version": "0.1.0",
   "private": true,
-  "description": "Comitiva desktop app — agentic chat for your whole team",
+  "description": "Comitiva desktop app \u2014 agentic chat for your whole team",
   "license": "Apache-2.0",
   "author": "Comitiva contributors",
+  "homepage": "https://github.com/comitiva-dev/comitiva",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/comitiva-dev/comitiva.git"
+  },
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -17,10 +22,13 @@
     "test": "vitest run",
     "test:e2e": "electron-vite build && playwright test",
     "db:generate": "drizzle-kit generate",
-    "package": "electron-vite build && electron-builder --publish never"
+    "package": "electron-vite build && electron-builder --publish never",
+    "package:dir": "electron-vite build && electron-builder --dir --publish never",
+    "test:packaged": "playwright test -c playwright.packaged.config.ts"
   },
   "dependencies": {
-    "better-sqlite3": "^13.0.3"
+    "better-sqlite3": "^13.0.3",
+    "electron-updater": "^6.8.9"
   },
   "devDependencies": {
     "@comitiva/contract": "workspace:*",

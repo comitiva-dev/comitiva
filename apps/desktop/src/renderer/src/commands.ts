@@ -78,6 +78,7 @@ export function runCommand(stores: Stores, command: Command): void {
     case 'importBundle':
       return void stores.transfer.getState().importBundle();
     case 'checkForUpdates':
-      return app.setSection('settings');
+      app.setSection('settings');
+      return void stores.updates.getState().check();
   }
 }

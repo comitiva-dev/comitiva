@@ -10,6 +10,7 @@ import type { ToolServersState, ToolServersStore } from './toolServers';
 import type { SettingsState, SettingsStore } from './settings';
 import type { TransferState, TransferStore } from './transfer';
 import type { UiState, UiStore } from './ui';
+import type { UpdatesState, UpdatesStore } from './updates';
 import type { UsageState, UsageStore } from './usage';
 
 export interface Stores {
@@ -24,6 +25,7 @@ export interface Stores {
   ui: UiStore;
   transfer: TransferStore;
   settings: SettingsStore;
+  updates: UpdatesStore;
 }
 
 const StoresContext = createContext<Stores | null>(null);
@@ -80,6 +82,10 @@ export function useTransfer<T>(selector: (state: TransferState) => T): T {
 
 export function useSettings<T>(selector: (state: SettingsState) => T): T {
   return useStore(useStores().settings, selector);
+}
+
+export function useUpdates<T>(selector: (state: UpdatesState) => T): T {
+  return useStore(useStores().updates, selector);
 }
 
 /** For effects and handlers that need the current state without subscribing. */

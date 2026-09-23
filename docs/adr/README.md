@@ -17,3 +17,4 @@ One file per decision that affects more than one package. Format: context, decis
 | [0011](0011-pricing-and-cost-at-write-time.md) | Prices ship with the runner as one versioned JSON; cost is computed at write time and a correction recosts | Accepted |
 | [0012](0012-attachments-as-stored-file-blocks.md) | Attachments are stored file blocks, resolved to base64 by the shell before a run; providers without images get a note | Accepted |
 | [0013](0013-portable-bundle.md) | Agents, connections and tool servers travel as a versioned portable bundle in the contract, with no secrets and file-local refs | Accepted |
+| [0014](0014-packaging-and-updates.md) | electron-builder for dmg, nsis, AppImage, deb and rpm; signing from secrets when present; updates from GitHub Releases | Accepted |

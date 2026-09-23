@@ -154,7 +154,8 @@
     "google_reconnect_required": "Google no longer accepts the saved sign-in. Connect Google Drive again on the Tools screen.",
     "attachment_too_large": "That file is too large. Images can be up to 5 MB, text files up to 1 MB.",
     "unsupported_attachment": "Only images (PNG, JPEG, GIF, WebP) and text files can be attached.",
-    "attachment_too_many": "A message takes at most 10 files."
+    "attachment_too_many": "A message takes at most 10 files.",
+    "update_failed": "Could not check for updates. Try again later."
   },
   "agents": {
     "create": "Create agent",
@@ -631,6 +632,26 @@
       "send": "Send",
       "newline": "New line",
       "stop": "Stop the reply"
+    }
+  },
+  "updates": {
+    "title": "Updates",
+    "current": "Comitiva {{version}}",
+    "idle": "Not checked yet.",
+    "checking": "Checking for updates…",
+    "upToDate": "Comitiva is up to date (checked {{when}}).",
+    "available": "Version {{version}} is available.",
+    "downloading": "Downloading version {{version}}… {{percent}}%",
+    "ready": "Version {{version}} is ready. Restart to finish.",
+    "check": "Check now",
+    "download": "Download",
+    "restart": "Restart and update",
+    "restartTo": "Restart to update to {{version}}",
+    "auto": "Check for updates automatically",
+    "disabled": {
+      "development": "Updates are off in development builds.",
+      "env": "Updates are turned off for this run.",
+      "unsupported": "This build cannot update itself: download new versions from the releases page."
     }
   }
 }

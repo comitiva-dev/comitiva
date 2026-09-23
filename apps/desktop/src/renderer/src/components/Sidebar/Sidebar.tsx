@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 import type { Section } from '../../store/app';
-import { useAgents, useApp, useConnections } from '../../store/context';
+import { useAgents, useApp, useConnections, useUpdates } from '../../store/context';
 import { ui } from '../ui';
 import { AgentList } from './AgentList';
 
@@ -16,6 +16,8 @@ export function Sidebar() {
   const section = useApp((s) => s.section);
   const setSection = useApp((s) => s.setSection);
   const version = useApp((s) => s.version);
+  const updateReady = useUpdates((s) => (s.status?.state === 'ready' ? s.status.version : null));
+  const installUpdate = useUpdates((s) => s.install);
   const runnerStatus = useApp((s) => s.runnerStatus);
   const hasConnections = useConnections((s) => s.items.length > 0);
   const openCreate = useAgents((s) => s.openCreate);
@@ -71,6 +73,15 @@ export function Sidebar() {
         {settingsSections.map((id) => item(id, t(`nav.${id}`)))}
       </div>
 
+      {updateReady && (
+        <button
+          data-testid="update-ready"
+          className="mx-2 mb-1 rounded-md bg-indigo-600 px-3 py-1.5 text-left text-xs font-medium text-white hover:bg-indigo-500"
+          onClick={() => void installUpdate()}
+        >
+          {t('updates.restartTo', { version: updateReady })}
+        </button>
+      )}
       <footer className={`flex items-center justify-between px-4 py-2 text-xs ${ui.muted}`}>
         <span data-testid="version">{version && t('app.version', { version })}</span>
         <span

@@ -17,6 +17,7 @@ import { createToolServersStore } from './store/toolServers';
 import { createSettingsStore } from './store/settings';
 import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
+import { createUpdatesStore } from './store/updates';
 import { createUsageStore } from './store/usage';
 
 const backend = new LocalBackend();
@@ -30,6 +31,7 @@ const stores = {
   googleDrive: createGoogleDriveStore(backend),
   usage: createUsageStore(backend),
   ui: createUiStore(backend),
+  updates: createUpdatesStore(backend),
   settings: createSettingsStore(backend, { onChange: (s) => applyLanguage(s.language) }),
   transfer: createTransferStore(backend, {
     // What an import adds.
@@ -50,6 +52,7 @@ backend.onEvent((event) => {
   stores.app.getState().handleEvent(event);
   stores.conversations.getState().handleEvent(event);
   stores.messages.getState().handleEvent(event);
+  stores.updates.getState().handleEvent(event);
   // A finished reply wrote a usage record; the right panel shows its totals.
   if (event.type === 'message.updated' && event.message.status !== 'streaming') {
     void stores.usage.getState().loadConversation(event.message.conversationId);
@@ -57,6 +60,7 @@ backend.onEvent((event) => {
 });
 void stores.app.getState().init();
 void stores.settings.getState().load();
+void stores.updates.getState().load();
 void stores.agents.getState().load();
 void stores.conversations.getState().load();
 // The agent form's Tools checklist and the Tools screen share this list.

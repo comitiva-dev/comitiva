@@ -9,6 +9,7 @@ import type {
   AttachmentInput,
   SearchInput,
   SearchResult,
+  UpdateStatus,
   CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
@@ -114,6 +115,13 @@ export interface Backend {
     /** Runs the last errored reply again, in the same message. */
     retry(conversationId: string): Promise<void>;
   };
+  updates: {
+    getStatus(): Promise<UpdateStatus>;
+    /** Checks now; the progress also arrives as `updates.status` events. */
+    check(): Promise<UpdateStatus>;
+    /** Restarts into the downloaded update. */
+    install(): Promise<void>;
+  };
   search: {
     /** Conversations by title and messages by content, archived ones left out. */
     query(input: SearchInput): Promise<SearchResult>;
@@ -191,6 +199,7 @@ export type BackendEvent =
   | ({ type: 'message.updated' } & IpcEventPayload<'message.updated'>)
   | ({ type: 'message.delta' } & IpcEventPayload<'message.delta'>)
   | ({ type: 'message.block' } & IpcEventPayload<'message.block'>)
+  | { type: 'updates.status'; status: UpdateStatus }
   /** The desktop's native menu asked for a command (see shared/shortcuts.ts). */
   | { type: 'menu.command'; command: string };
 

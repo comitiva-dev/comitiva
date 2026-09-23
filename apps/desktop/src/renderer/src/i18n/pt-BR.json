@@ -154,7 +154,8 @@
     "google_reconnect_required": "O Google não aceita mais o login salvo. Conecte o Google Drive de novo na tela Ferramentas.",
     "attachment_too_large": "Esse arquivo é grande demais. Imagens podem ter até 5 MB, arquivos de texto até 1 MB.",
     "unsupported_attachment": "Só é possível anexar imagens (PNG, JPEG, GIF, WebP) e arquivos de texto.",
-    "attachment_too_many": "Uma mensagem aceita no máximo 10 arquivos."
+    "attachment_too_many": "Uma mensagem aceita no máximo 10 arquivos.",
+    "update_failed": "Não foi possível procurar atualizações. Tente mais tarde."
   },
   "agents": {
     "create": "Criar agente",
@@ -631,6 +632,26 @@
       "send": "Enviar",
       "newline": "Nova linha",
       "stop": "Parar a resposta"
+    }
+  },
+  "updates": {
+    "title": "Atualizações",
+    "current": "Comitiva {{version}}",
+    "idle": "Ainda não verificado.",
+    "checking": "Procurando atualizações…",
+    "upToDate": "O Comitiva está atualizado (verificado {{when}}).",
+    "available": "A versão {{version}} está disponível.",
+    "downloading": "Baixando a versão {{version}}… {{percent}}%",
+    "ready": "A versão {{version}} está pronta. Reinicie para concluir.",
+    "check": "Verificar agora",
+    "download": "Baixar",
+    "restart": "Reiniciar e atualizar",
+    "restartTo": "Reiniciar para atualizar para {{version}}",
+    "auto": "Procurar atualizações automaticamente",
+    "disabled": {
+      "development": "Atualizações ficam desligadas em builds de desenvolvimento.",
+      "env": "Atualizações estão desligadas nesta execução.",
+      "unsupported": "Este build não se atualiza sozinho: baixe novas versões na página de releases."
     }
   }
 }

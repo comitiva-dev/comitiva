@@ -188,6 +188,8 @@ packages/mcp-servers/src/            index.ts
 
 apps/desktop/
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
+│   playwright.packaged.config.ts e2e-packaged/smoke.spec.ts (P7: the packaged app on each OS)
+│   build/ icon.svg icon.png (placeholder) entitlements.mac.plist (P7)
 ├── e2e/connections.spec.ts cli-connections.spec.ts (P2) agents.spec.ts (P3) chat.spec.ts (P4) tools.spec.ts (P5)
 │       google-drive.spec.ts (P5b) usage.spec.ts (P6) attachments.spec.ts (P7)
 └── src/
@@ -196,6 +198,7 @@ apps/desktop/
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── attachmentProtocol.ts    comitiva-attachment:// for stored attachments (P7)
     │   ├── dialogs.ts               native pickers: folder, save file, open file (P7)
+    │   ├── updates/UpdateService.ts electron-updater: checks, download, install on restart (P7, ADR 0014)
     │   ├── menu.ts                  the native menu template: commands go to the renderer (menu.command) (P7)
     │   ├── i18n.ts                  main's strings (menu, dialogs, OAuth page) from the renderer's locale files, `main.*` (P7)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
@@ -985,6 +988,7 @@ settings.get | update                                               (P3; AppSett
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
 conversations.exportMarkdown                                        (P7; save dialog → path | null)
 bundle.export | import                                              (P7; ADR 0013; import → ImportReport | null)
+updates.getStatus | check | install                                  (P7; ADR 0014; event updates.status)
 messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
 attachments.add                                                     (P7; stores a picked file, returns its block)
 search.query                                                        (P7; { conversations, messages } for the quick switcher)
@@ -1018,6 +1022,7 @@ interface Backend {
   conversations: { list(filter?); create(agentId); rename(id, t); archive(id, archived); markRead(id);   // (P4)
                    exportMarkdown(id) };                                                           // (P7)
   bundle: { export(agentIds?); import() };                                                         // (P7)
+  updates: { getStatus(); check(); install() };                                                    // (P7)
   messages: { list(convId, { beforeSeq?, limit? }?); send(convId, UserContent); cancel(convId); retry(convId) };   // (P4)
   approvals: { decide(convId, toolUseId, decision) };
   usage: { summary(range); timeseries(range); conversation(id); export(range & { shape });        // (P6)
@@ -1053,6 +1058,7 @@ toolServersStore (P5):  items, loaded, tests (per server: its tools or the error
 googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
                         load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
 toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
+updatesStore (P7):      status (UpdateStatus, pushed by main), notice; load, check, install.
 settingsStore (P7):     settings (AppSettings), notice; load, update. onChange applies the language (i18n/index.ts).
 transferStore (P7):     busy, saved (path), report (ImportReport), notice; exportConversation, exportAgents, importBundle
                         (afterImport reloads connections, agents and tool servers).

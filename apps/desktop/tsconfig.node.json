@@ -11,6 +11,7 @@
     "playwright.config.ts",
     "src/main/**/*",
     "src/preload/**/*",
-    "e2e/**/*"
+    "e2e/**/*",
+    "src/shared/**/*"
   ]
 }

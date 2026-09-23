@@ -11,6 +11,7 @@ import {
   useMessages,
   useStoreApis,
   useTransfer,
+  useUi,
 } from '../../store/context';
 import { isRunning } from '../../store/conversations';
 import { AgentAvatar } from '../AgentAvatar';
@@ -46,6 +47,7 @@ export function ChatView({
   const attach = useMessages((s) => s.attach);
   const detach = useMessages((s) => s.detach);
   const attachmentUrl = useMessages((s) => s.attachmentUrl);
+  const attachRequest = useUi((s) => s.attachRequest);
   const dismissError = useMessages((s) => s.dismissError);
   const connection = useConnections(
     (s) => s.items.find((c) => c.connection.id === agent.connectionId)?.connection,
@@ -162,6 +164,7 @@ export function ChatView({
         onAttach={(files) => void attach(draftKey, files)}
         onDetach={(id) => detach(draftKey, id)}
         attachmentUrl={attachmentUrl}
+        attachRequest={attachRequest}
         imagesHint={
           connection && !acceptsImages(connection.provider)
             ? t('chat.noImages', { name: agent.name })

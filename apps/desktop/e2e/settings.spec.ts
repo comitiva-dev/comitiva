@@ -73,3 +73,48 @@ test('switches the language and keeps it after a restart', async () => {
   await page.getByTestId('settings-language').selectOption('en');
   await expect(page.getByTestId('nav-settings')).toHaveText('Settings');
 });
+
+const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
+
+/** The top-level menu labels, and whether an item with this id exists. */
+async function menu() {
+  return app.evaluate(({ Menu }) => {
+    const m = Menu.getApplicationMenu();
+    return {
+      labels: m?.items.map((i) => i.label) ?? [],
+      hasUsage: Boolean(m?.getMenuItemById('goUsage')),
+    };
+  });
+}
+
+test('shortcuts navigate and open the shortcuts list', async () => {
+  await page.keyboard.press(`${mod}+2`);
+  await expect(page.getByTestId('connections-screen')).toBeVisible();
+  await page.keyboard.press(`${mod}+/`);
+  const dialog = page.getByTestId('shortcuts-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(dialog.locator('[data-command="quickSwitcher"] kbd')).toHaveText(
+    process.platform === 'darwin' ? ['⌘', 'K'] : ['Ctrl', 'K'],
+  );
+  await page.screenshot({ path: join(appDir, 'test-results', 'settings-shortcuts.png') });
+  await page.keyboard.press('Escape');
+  await expect(dialog).toHaveCount(0);
+  await page.keyboard.press(`${mod}+,`);
+  await expect(page.getByTestId('settings-screen')).toBeVisible();
+});
+
+test('the native menu runs commands and follows the language', async () => {
+  const english = await menu();
+  expect(english.labels).toEqual(expect.arrayContaining(['File', 'Edit', 'View', 'Help']));
+  expect(english.hasUsage).toBe(true);
+
+  await app.evaluate(({ Menu }) => Menu.getApplicationMenu()!.getMenuItemById('goUsage')!.click());
+  await expect(page.getByTestId('usage-export-records')).toBeVisible();
+
+  await page.getByTestId('nav-settings').click();
+  await page.getByTestId('settings-language').selectOption('pt-BR');
+  await expect
+    .poll(async () => (await menu()).labels)
+    .toEqual(expect.arrayContaining(['Arquivo', 'Editar', 'Exibir', 'Ajuda']));
+  await page.getByTestId('settings-language').selectOption('system');
+});

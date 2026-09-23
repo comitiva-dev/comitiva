@@ -576,6 +576,10 @@
         "en": "English",
         "pt-BR": "Português (Brasil)"
       }
+    },
+    "keys": {
+      "body": "Every command in the menus has a shortcut.",
+      "open": "Show shortcuts"
     }
   },
   "main": {
@@ -584,6 +588,49 @@
       "connectedBody": "You can close this tab and go back to Comitiva.",
       "failedTitle": "Google Drive was not connected",
       "failedBody": "Go back to Comitiva to try again."
+    },
+    "menu": {
+      "file": "File",
+      "edit": "Edit",
+      "view": "View",
+      "window": "Window",
+      "help": "Help",
+      "about": "About Comitiva",
+      "quit": "Quit Comitiva",
+      "documentation": "Documentation",
+      "releases": "Release notes",
+      "reportIssue": "Report an issue"
+    }
+  },
+  "commands": {
+    "quickSwitcher": "Quick switcher…",
+    "newConversation": "New conversation",
+    "previousConversation": "Previous conversation",
+    "nextConversation": "Next conversation",
+    "exportConversation": "Export conversation…",
+    "attach": "Attach files…",
+    "goAgents": "Agents",
+    "goConnections": "Connections",
+    "goTools": "Tools",
+    "goUsage": "Usage",
+    "settings": "Settings…",
+    "shortcuts": "Keyboard shortcuts",
+    "exportAll": "Export agents…",
+    "importBundle": "Import agents…",
+    "checkForUpdates": "Check for updates…"
+  },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "groups": {
+      "navigation": "Navigation",
+      "conversation": "Conversation",
+      "app": "Help",
+      "composer": "Message box"
+    },
+    "composer": {
+      "send": "Send",
+      "newline": "New line",
+      "stop": "Stop the reply"
     }
   }
 }

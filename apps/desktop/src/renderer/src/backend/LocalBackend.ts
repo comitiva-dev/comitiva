@@ -157,6 +157,7 @@ export class LocalBackend implements Backend {
       this.api.on('message.updated', (p) => handler({ type: 'message.updated', ...p })),
       this.api.on('message.delta', (p) => handler({ type: 'message.delta', ...p })),
       this.api.on('message.block', (p) => handler({ type: 'message.block', ...p })),
+      this.api.on('menu.command', ({ command }) => handler({ type: 'menu.command', command })),
     ];
     return () => offs.forEach((off) => off());
   }

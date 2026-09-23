@@ -576,6 +576,10 @@
         "en": "English",
         "pt-BR": "Português (Brasil)"
       }
+    },
+    "keys": {
+      "body": "Todo comando dos menus tem um atalho.",
+      "open": "Mostrar atalhos"
     }
   },
   "main": {
@@ -584,6 +588,49 @@
       "connectedBody": "Você pode fechar esta aba e voltar ao Comitiva.",
       "failedTitle": "O Google Drive não foi conectado",
       "failedBody": "Volte ao Comitiva para tentar de novo."
+    },
+    "menu": {
+      "file": "Arquivo",
+      "edit": "Editar",
+      "view": "Exibir",
+      "window": "Janela",
+      "help": "Ajuda",
+      "about": "Sobre o Comitiva",
+      "quit": "Sair do Comitiva",
+      "documentation": "Documentação",
+      "releases": "Notas de versão",
+      "reportIssue": "Relatar um problema"
+    }
+  },
+  "commands": {
+    "quickSwitcher": "Navegação rápida…",
+    "newConversation": "Nova conversa",
+    "previousConversation": "Conversa anterior",
+    "nextConversation": "Próxima conversa",
+    "exportConversation": "Exportar conversa…",
+    "attach": "Anexar arquivos…",
+    "goAgents": "Agentes",
+    "goConnections": "Conexões",
+    "goTools": "Ferramentas",
+    "goUsage": "Uso",
+    "settings": "Configurações…",
+    "shortcuts": "Atalhos de teclado",
+    "exportAll": "Exportar agentes…",
+    "importBundle": "Importar agentes…",
+    "checkForUpdates": "Procurar atualizações…"
+  },
+  "shortcuts": {
+    "title": "Atalhos de teclado",
+    "groups": {
+      "navigation": "Navegação",
+      "conversation": "Conversa",
+      "app": "Ajuda",
+      "composer": "Caixa de mensagem"
+    },
+    "composer": {
+      "send": "Enviar",
+      "newline": "Nova linha",
+      "stop": "Parar a resposta"
     }
   }
 }

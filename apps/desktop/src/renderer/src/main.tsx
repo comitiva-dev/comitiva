@@ -2,7 +2,9 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { applyLanguage } from './i18n';
 import './index.css';
+import { isCommand } from '../../shared/shortcuts';
 import { App } from './App';
+import { runCommand } from './commands';
 import { LocalBackend } from './backend/LocalBackend';
 import { createAgentsStore } from './store/agents';
 import { createAppStore } from './store/app';
@@ -41,6 +43,10 @@ const stores = {
   }),
 };
 backend.onEvent((event) => {
+  if (event.type === 'menu.command') {
+    if (isCommand(event.command)) runCommand(stores, event.command);
+    return;
+  }
   stores.app.getState().handleEvent(event);
   stores.conversations.getState().handleEvent(event);
   stores.messages.getState().handleEvent(event);

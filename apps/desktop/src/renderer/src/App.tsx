@@ -1,4 +1,7 @@
 import { useEffect } from 'react';
+import { commandFor } from '../../shared/shortcuts';
+import { isMac, runCommand } from './commands';
+import { ShortcutsDialog } from './components/ShortcutsDialog';
 import { QuickSwitcher } from './components/QuickSwitcher';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { TransferFeedback } from './components/TransferFeedback';
@@ -13,14 +16,15 @@ export function App() {
   const section = useApp((s) => s.section);
   const stores = useStoreApis();
 
+  // Every shortcut (shared/shortcuts.ts); the native menu sends the same commands.
   useEffect(() => {
+    const mac = isMac();
     const onKey = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
-        e.preventDefault();
-        const ui = stores.ui.getState();
-        if (ui.quickSwitcherOpen) ui.closeQuickSwitcher();
-        else ui.openQuickSwitcher();
-      }
+      if (e.isComposing || e.defaultPrevented) return;
+      const command = commandFor(e, mac);
+      if (!command) return;
+      e.preventDefault();
+      runCommand(stores, command);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -42,6 +46,7 @@ export function App() {
         )}
       </main>
       <QuickSwitcher />
+      <ShortcutsDialog />
       <TransferFeedback />
     </div>
   );

@@ -63,4 +63,5 @@ export const ipcEventChannels = [
   'message.updated',
   'message.delta',
   'message.block',
+  'menu.command',
 ] as const;

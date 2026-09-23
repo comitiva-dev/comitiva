@@ -38,7 +38,7 @@ apps/desktop          desktop               Electron: main (SQLite, SecretStore,
 - Conventional commits with package scope: `feat(runner): ...`, `fix(desktop): ...`, `docs: ...`. Small commits.
 - Errors carry stable codes (`AppError` in contract); the UI translates by code and never shows raw provider messages as titles.
 - `run.usage`'s `inputTokens` is always net of `cacheReadTokens`. Providers disagree; adapters normalize. Prices are read off the providers' pages, never from memory, and `pricing.json` records the date and the URLs.
-- Code, comments, commits and docs in English. UI strings go through i18n (`renderer/src/i18n/en.json`, `pt-BR.json`); main's strings (menu, dialogs) live there too, under `main.*`. ESLint rejects literal JSX text and prose in `placeholder`/`title`/`alt`/`aria-label`; a test checks both locales have the same keys and `{{variables}}`.
+- Code, comments, commits and docs in English. UI strings go through i18n (`renderer/src/i18n/en.json`, `pt-BR.json`); main's strings (menu, dialogs) live there too, under `main.*` (command labels under `commands.*`, shared with the shortcuts dialog). ESLint rejects literal JSX text and prose in `placeholder`/`title`/`alt`/`aria-label`; a test checks both locales have the same keys and `{{variables}}`.
 - Contract changes: edit zod in `packages/contract/src`, run `pnpm contract:schema`, commit the JSON. New IPC channels also go in `ipc-channels.ts` (a test checks it).
 - DB changes: edit `apps/desktop/src/main/db/schema.ts`, run `pnpm --filter desktop db:generate`, commit the migration.
 - Plan before coding. When something is ambiguous, ask instead of guessing product decisions.

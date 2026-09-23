@@ -114,10 +114,16 @@ describe('agent IPC', () => {
   });
 
   it('defaults settings and validates patches', () => {
-    expect(ipcInvoke['settings.get'].output.parse({})).toEqual({ sampleAgentOffer: 'pending' });
+    expect(ipcInvoke['settings.get'].output.parse({})).toEqual({
+      sampleAgentOffer: 'pending',
+      language: 'system',
+      autoUpdate: true,
+    });
     expect(ipcInvoke['settings.update'].input.safeParse({ sampleAgentOffer: 'x' }).success).toBe(
       false,
     );
+    expect(ipcInvoke['settings.update'].input.safeParse({ language: 'fr' }).success).toBe(false);
+    expect(ipcInvoke['settings.update'].input.safeParse({ language: 'pt-BR' }).success).toBe(true);
   });
 });
 

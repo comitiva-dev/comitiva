@@ -190,7 +190,9 @@ export type BackendEvent =
   | ({ type: 'conversation.updated' } & IpcEventPayload<'conversation.updated'>)
   | ({ type: 'message.updated' } & IpcEventPayload<'message.updated'>)
   | ({ type: 'message.delta' } & IpcEventPayload<'message.delta'>)
-  | ({ type: 'message.block' } & IpcEventPayload<'message.block'>);
+  | ({ type: 'message.block' } & IpcEventPayload<'message.block'>)
+  /** The desktop's native menu asked for a command (see shared/shortcuts.ts). */
+  | { type: 'menu.command'; command: string };
 
 export type MessageEvent = Extract<
   BackendEvent,

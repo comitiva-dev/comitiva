@@ -1,4 +1,4 @@
-import { app, BrowserWindow, safeStorage, shell } from 'electron';
+import { app, BrowserWindow, Menu, safeStorage, shell } from 'electron';
 import { join } from 'node:path';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
@@ -18,6 +18,7 @@ import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/Googl
 import { handleAttachments, registerAttachmentScheme } from './attachmentProtocol';
 import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
 import { setLanguage, t } from './i18n';
+import { menuTemplate, REPO_URL } from './menu';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
@@ -221,7 +222,10 @@ async function bootstrap(): Promise<void> {
       'settings.get': () => settings.get(),
       'settings.update': (patch) => {
         const next = settings.update(patch);
-        if (patch.language !== undefined) setLanguage(next.language, app.getLocale());
+        if (patch.language !== undefined) {
+          setLanguage(next.language, app.getLocale());
+          buildMenu();
+        }
         return next;
       },
       'conversations.list': (filter) => chat.list(filter),
@@ -263,6 +267,25 @@ async function bootstrap(): Promise<void> {
     isTrustedUrl,
   );
   router.register();
+
+  // The native menu sends commands to the renderer; rebuilt when the language changes.
+  function buildMenu(): void {
+    const template = menuTemplate({
+      mac: process.platform === 'darwin',
+      dev: !app.isPackaged,
+      t,
+      send: (command) => router.broadcast('menu.command', { command }),
+      openExternal: (url) => void shell.openExternal(url),
+    });
+    Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  }
+  buildMenu();
+  app.setAboutPanelOptions({
+    applicationName: 'Comitiva',
+    applicationVersion: app.getVersion(),
+    copyright: 'Copyright © Comitiva contributors · Apache-2.0',
+    website: REPO_URL,
+  });
   supervisor.on('status', (status) => router.broadcast('runner.status', { status }));
   chat.on('conversation.updated', (p) => router.broadcast('conversation.updated', p));
   chat.on('message.updated', (p) => router.broadcast('message.updated', p));

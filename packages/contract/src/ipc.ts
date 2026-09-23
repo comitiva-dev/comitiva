@@ -637,6 +637,8 @@ export const ipcEvents = {
   'message.updated': z.object({ message: Message, rev: Rev }),
   'message.delta': z.object({ ...LiveRef, text: z.string() }),
   'message.block': z.object({ ...LiveRef, block: Block }),
+  /** A native menu item: the renderer runs the command (desktop shortcuts). */
+  'menu.command': z.object({ command: z.string() }),
 } as const;
 
 export type IpcEventChannel = keyof typeof ipcEvents;

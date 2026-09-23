@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { ui } from '../components/ui';
 import { LanguageSetting } from '@comitiva/contract';
-import { useSettings, useTransfer } from '../store/context';
+import { useSettings, useStoreApis, useTransfer } from '../store/context';
 
 /** Preferences and data: language, updates, export and import, shortcuts. */
 export function SettingsScreen() {
@@ -11,6 +11,7 @@ export function SettingsScreen() {
   const importBundle = useTransfer((s) => s.importBundle);
   const settings = useSettings((s) => s.settings);
   const update = useSettings((s) => s.update);
+  const stores = useStoreApis();
 
   return (
     <section
@@ -41,6 +42,22 @@ export function SettingsScreen() {
             ))}
           </select>
         </label>
+      </section>
+
+      <section className={`${ui.card} flex flex-col gap-3 p-4`} aria-labelledby="settings-keys">
+        <h2 id="settings-keys" className="text-base font-semibold">
+          {t('shortcuts.title')}
+        </h2>
+        <p className={`text-sm ${ui.muted}`}>{t('settings.keys.body')}</p>
+        <div>
+          <button
+            data-testid="open-shortcuts"
+            className={ui.button}
+            onClick={() => stores.ui.getState().setShortcutsOpen(true)}
+          >
+            {t('settings.keys.open')}
+          </button>
+        </div>
       </section>
 
       <section className={`${ui.card} flex flex-col gap-3 p-4`} aria-labelledby="settings-data">

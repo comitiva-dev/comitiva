@@ -37,6 +37,7 @@ export function Composer({
   onDetach,
   attachmentUrl,
   imagesHint,
+  attachRequest = 0,
 }: {
   value: string;
   onChange: (text: string) => void;
@@ -57,11 +58,14 @@ export function Composer({
   attachmentUrl?: ((path: string) => string) | undefined;
   /** Shown when images are attached and the agent's connection cannot see them. */
   imagesHint?: string | null | undefined;
+  /** Bumped by the attach shortcut: opens the file picker. */
+  attachRequest?: number | undefined;
 }) {
   const { t, i18n } = useTranslation();
   const ref = useRef<HTMLTextAreaElement>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
+  const seenAttachRequest = useRef(attachRequest);
 
   useEffect(() => {
     ref.current?.focus();
@@ -76,6 +80,12 @@ export function Composer({
     const border = el.offsetHeight - el.clientHeight;
     el.style.height = `${Math.min(el.scrollHeight + border, MAX_HEIGHT)}px`;
   }, [value]);
+
+  useEffect(() => {
+    if (attachRequest === seenAttachRequest.current) return;
+    seenAttachRequest.current = attachRequest;
+    if (onAttach && !disabledReason) fileInput.current?.click();
+  }, [attachRequest, onAttach, disabledReason]);
 
   const blocked = Boolean(disabledReason);
   const canSend = !blocked && !running && !sending && canSendDraft(value, attachments);
@@ -239,6 +249,11 @@ export function Composer({
             attach(e.clipboardData.files);
           }}
           onKeyDown={(e) => {
+            if (e.key === 'Escape' && running && onStop) {
+              e.preventDefault();
+              onStop();
+              return;
+            }
             if (composerKey({ ...e, isComposing: e.nativeEvent.isComposing }) !== 'send') return;
             e.preventDefault();
             if (canSend) onSend();

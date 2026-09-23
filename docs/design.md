@@ -196,6 +196,7 @@ apps/desktop/
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── attachmentProtocol.ts    comitiva-attachment:// for stored attachments (P7)
     │   ├── dialogs.ts               native pickers: folder, save file, open file (P7)
+    │   ├── menu.ts                  the native menu template: commands go to the renderer (menu.command) (P7)
     │   ├── i18n.ts                  main's strings (menu, dialogs, OAuth page) from the renderer's locale files, `main.*` (P7)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
@@ -216,6 +217,7 @@ apps/desktop/
     │   ├── testing/                 MemorySecrets.ts (P5; tests only)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b: loopback + PKCE, no Electron import)
+    ├── shared/shortcuts.ts          commands and keys, one list for the menu, the key handler and the dialog (P7)
     ├── preload/index.ts             exposes the typed, allowlisted window.api (DesktopApi from contract/ipc.ts)
     └── renderer/
         ├── index.html               CSP
@@ -990,6 +992,7 @@ approvals.decide                                                    (P5)
 usage.summary | timeseries | conversation | export | prices | setPrice | clearPrice   (P6)
 dialogs.pickFolder                                                  (P2)
 events: runner.status (P0); conversation.updated, message.updated, message.delta, message.block (P4, ADR 0008);
+        menu.command (P7: a native menu item; the renderer runs the command);
         conversation.updated carries the pending approval (P5; no separate approval event)
 ```
 
@@ -1111,6 +1114,8 @@ y-axes would invite reading a crossing as a relationship. Its palette is validat
 Phase 7: the Composer attaches files (button, drop, paste) as chips that upload at once (`lib/attachments.ts`), warns when the agent's connection cannot see images, and `MessageBubble` shows stored images and document chips.
 
 `QuickSwitcher` (Cmd/Ctrl+K, pure logic in `lib/quickSwitcher.ts`): agents matched by name locally, conversation titles and message text from `search.query`, snippets with `<mark>`, arrows / Enter / Esc. A message hit opens its conversation at that message, highlighted.
+
+Shortcuts (P7): `shared/shortcuts.ts` lists commands and keys (Electron accelerator syntax). `App` handles them with `commandFor` and `commands.ts` `runCommand`; the menu (`main/menu.ts`) shows the same keys and sends `menu.command`. Outside macOS the menu does not register its accelerators, so a key never fires twice; on macOS the menu owns its key equivalents. `ShortcutsDialog` (Ctrl/Cmd+/) is generated from the list. The composer handles Enter, Shift+Enter and Esc (stop) itself.
 
 `screens/SettingsScreen` replaces the placeholder (P7): a Data section (export all, import). `TransferFeedback` shows where an export went, an error by code, or the import report with what is left to do. The chat header exports the conversation as Markdown and `AgentPanel` exports one agent.
 

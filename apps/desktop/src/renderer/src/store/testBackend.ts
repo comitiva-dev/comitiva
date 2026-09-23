@@ -3,6 +3,7 @@ import type {
   Agent,
   AgentDraft,
   AppSettings,
+  AppSettingsPatch,
   AttachmentBlock,
   AttachmentInput,
   SearchResult,
@@ -166,8 +167,20 @@ export function fakeBackend() {
       ),
     },
     settings: {
-      get: vi.fn(async (): Promise<AppSettings> => ({ sampleAgentOffer: 'pending' })),
-      update: vi.fn(async (): Promise<AppSettings> => ({ sampleAgentOffer: 'done' })),
+      get: vi.fn(async (): Promise<AppSettings> => ({
+        sampleAgentOffer: 'pending',
+        language: 'system',
+        autoUpdate: true,
+      })),
+      update: vi.fn(
+        async (patch: AppSettingsPatch = {}): Promise<AppSettings> =>
+          ({
+            sampleAgentOffer: 'done',
+            language: 'system',
+            autoUpdate: true,
+            ...patch,
+          }) as AppSettings,
+      ),
     },
     conversations: {
       list: vi.fn(async (): Promise<ConversationSummary[]> => []),

@@ -175,14 +175,25 @@ export type AgentPatch = z.input<typeof AgentPatch>;
 export type ValidAgentPatch = z.output<typeof AgentPatch>;
 
 /** App-wide preferences kept in the local database. */
+/** The UI language: the system's (English unless it is Portuguese), or a fixed one. */
+export const LanguageSetting = z.enum(['system', 'en', 'pt-BR']);
+export type LanguageSetting = z.infer<typeof LanguageSetting>;
+
 export const AppSettings = z.object({
   /** The first-run offer to create a sample agent: shown until accepted or dismissed. */
   sampleAgentOffer: z.enum(['pending', 'done']).default('pending'),
+  language: LanguageSetting.default('system'),
+  /** Check for updates on start and every few hours (packaged builds only). */
+  autoUpdate: z.boolean().default(true),
 });
 export type AppSettings = z.infer<typeof AppSettings>;
 
 export const AppSettingsPatch = z
-  .object({ sampleAgentOffer: z.enum(['pending', 'done']) })
+  .object({
+    sampleAgentOffer: z.enum(['pending', 'done']),
+    language: LanguageSetting,
+    autoUpdate: z.boolean(),
+  })
   .partial();
 export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
 

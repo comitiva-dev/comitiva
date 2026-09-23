@@ -3,6 +3,7 @@ import js from '@eslint/js';
 import tseslint from 'typescript-eslint';
 import prettier from 'eslint-config-prettier';
 import reactHooks from 'eslint-plugin-react-hooks';
+import i18next from 'eslint-plugin-i18next';
 import globals from 'globals';
 
 const electronBan = {
@@ -67,6 +68,30 @@ export default tseslint.config(
         {
           selector: "MemberExpression[object.name='window'][property.name='api']",
           message: 'window.api is only used by backend/LocalBackend.ts.',
+        },
+        {
+          // Prose (two words or more) in what people read or hear; single-word
+          // samples in inputs (`npx`, a URL) are fine.
+          selector:
+            'JSXAttribute[name.name=/^(placeholder|title|alt|aria-label|aria-description)$/] > Literal[value=/[A-Za-z]+\\s+[A-Za-z]+/]',
+          message: 'User-visible text goes through i18n (t()).',
+        },
+      ],
+    },
+  },
+  // Every string a user reads goes through i18n (en and pt-BR): JSX text here,
+  // and prose in the attributes people read or hear in the renderer block above.
+  {
+    files: ['apps/desktop/src/renderer/**/*.tsx'],
+    ignores: ['**/*.test.tsx'],
+    plugins: { i18next },
+    rules: {
+      'i18next/no-literal-string': [
+        'error',
+        {
+          mode: 'jsx-text-only',
+          // Symbols, arrows and emoji are not prose; "Aa" is the initials swatch.
+          words: { exclude: ['[0-9!-/:-@[-`{-~·•…✕✎↑↓▾▸—]+', /^\p{Emoji}+$/u, 'Aa'] },
         },
       ],
     },

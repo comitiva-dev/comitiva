@@ -58,14 +58,26 @@ export interface GoogleOAuthDeps {
   now?: () => number;
   /** How long to wait for the browser to come back (default 5 min). */
   timeoutMs?: number;
+  /** The text of the page the browser lands on (localized by the shell). */
+  resultPage?: (connected: boolean) => { title: string; body: string };
 }
+
+const ENGLISH_PAGES = (connected: boolean) =>
+  connected
+    ? {
+        title: 'Google Drive is connected',
+        body: 'You can close this tab and go back to Comitiva.',
+      }
+    : { title: 'Google Drive was not connected', body: 'Go back to Comitiva to try again.' };
+
+const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 
 const DEFAULT_TIMEOUT_MS = 5 * 60_000;
 
 const PAGE = (title: string, body: string) =>
   `<!doctype html><html><head><meta charset="utf-8"><title>Comitiva</title>` +
   `<style>body{font-family:system-ui,sans-serif;max-width:32rem;margin:4rem auto;padding:0 1rem}</style>` +
-  `</head><body><h1>${title}</h1><p>${body}</p></body></html>`;
+  `</head><body><h1>${escapeHtml(title)}</h1><p>${escapeHtml(body)}</p></body></html>`;
 
 interface Redirect {
   code?: string;
@@ -93,7 +105,10 @@ export class GoogleOAuth {
     const challenge = createHash('sha256').update(verifier).digest('base64url');
     const state = randomBytes(16).toString('base64url');
 
-    const { server, redirectUri, redirect } = await listen(state);
+    const { server, redirectUri, redirect } = await listen(
+      state,
+      this.deps.resultPage ?? ENGLISH_PAGES,
+    );
     try {
       const url = new URL(this.deps.endpoints.authUrl);
       url.search = new URLSearchParams({
@@ -229,6 +244,7 @@ interface TokenResponse {
  */
 async function listen(
   state: string,
+  page: (connected: boolean) => { title: string; body: string },
 ): Promise<{ server: Server; redirectUri: string; redirect: Promise<Redirect> }> {
   let settle!: (r: Redirect) => void;
   const redirect = new Promise<Redirect>((resolve) => (settle = resolve));
@@ -247,11 +263,8 @@ async function listen(
       'Content-Type': 'text/html; charset=utf-8',
       'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'",
     });
-    res.end(
-      ok
-        ? PAGE('Google Drive is connected', 'You can close this tab and go back to Comitiva.')
-        : PAGE('Google Drive was not connected', 'Go back to Comitiva to try again.'),
-    );
+    const { title, body } = page(ok);
+    res.end(PAGE(title, body));
     if (done) return;
     done = true;
     settle(error ? { error } : code ? { code } : { error: 'no_code' });

@@ -8,10 +8,16 @@ export class SettingsRepository {
 
   get(): AppSettings {
     const rows = this.db.orm.select().from(appSettings).all();
-    const stored = Object.fromEntries(rows.map((r) => [r.key, r.value]));
-    // A value that no longer validates falls back to its default instead of failing the app.
-    const parsed = AppSettings.safeParse(stored);
-    return parsed.success ? parsed.data : AppSettings.parse({});
+    const stored = new Map(rows.map((r) => [r.key, r.value]));
+    // Key by key: a value that no longer validates falls back to its default
+    // instead of failing the app or resetting the other preferences.
+    const valid = Object.fromEntries(
+      Object.entries(AppSettings.shape).flatMap(([key, schema]) => {
+        const parsed = schema.safeParse(stored.get(key));
+        return parsed.success && stored.has(key) ? [[key, parsed.data]] : [];
+      }),
+    );
+    return AppSettings.parse(valid);
   }
 
   update(patch: AppSettingsPatch): AppSettings {

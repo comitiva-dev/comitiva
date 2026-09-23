@@ -147,7 +147,7 @@ describe('agents store', () => {
         emoji: '🤖',
       },
     });
-    expect(store.getState().settings).toEqual({ sampleAgentOffer: 'done' });
+    expect(store.getState().settings).toMatchObject({ sampleAgentOffer: 'done' });
     expect(store.getState().notice).toBeNull();
   });
 
@@ -165,6 +165,6 @@ describe('agents store', () => {
     const store = createAgentsStore(backend);
     await store.getState().dismissSample();
     expect(backend.settings.update).toHaveBeenCalledWith({ sampleAgentOffer: 'done' });
-    expect(store.getState().settings).toEqual({ sampleAgentOffer: 'done' });
+    expect(store.getState().settings).toMatchObject({ sampleAgentOffer: 'done' });
   });
 });

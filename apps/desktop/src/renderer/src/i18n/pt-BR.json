@@ -567,6 +567,23 @@
       "nConnections_other": "{{count}} conexões",
       "nToolServers_one": "{{count}} servidor de ferramentas",
       "nToolServers_other": "{{count}} servidores de ferramentas"
+    },
+    "general": {
+      "title": "Geral",
+      "language": "Idioma",
+      "languages": {
+        "system": "O mesmo do sistema",
+        "en": "English",
+        "pt-BR": "Português (Brasil)"
+      }
+    }
+  },
+  "main": {
+    "oauth": {
+      "connectedTitle": "Google Drive está conectado",
+      "connectedBody": "Você pode fechar esta aba e voltar ao Comitiva.",
+      "failedTitle": "O Google Drive não foi conectado",
+      "failedBody": "Volte ao Comitiva para tentar de novo."
     }
   }
 }

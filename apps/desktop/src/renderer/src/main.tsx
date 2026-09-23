@@ -1,6 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import './i18n';
+import { applyLanguage } from './i18n';
 import './index.css';
 import { App } from './App';
 import { LocalBackend } from './backend/LocalBackend';
@@ -12,6 +12,7 @@ import { createConversationsStore } from './store/conversations';
 import { createGoogleDriveStore } from './store/googleDrive';
 import { createMessagesStore } from './store/messages';
 import { createToolServersStore } from './store/toolServers';
+import { createSettingsStore } from './store/settings';
 import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
 import { createUsageStore } from './store/usage';
@@ -27,6 +28,7 @@ const stores = {
   googleDrive: createGoogleDriveStore(backend),
   usage: createUsageStore(backend),
   ui: createUiStore(backend),
+  settings: createSettingsStore(backend, { onChange: (s) => applyLanguage(s.language) }),
   transfer: createTransferStore(backend, {
     // What an import adds.
     afterImport: async () => {
@@ -48,6 +50,7 @@ backend.onEvent((event) => {
   }
 });
 void stores.app.getState().init();
+void stores.settings.getState().load();
 void stores.agents.getState().load();
 void stores.conversations.getState().load();
 // The agent form's Tools checklist and the Tools screen share this list.

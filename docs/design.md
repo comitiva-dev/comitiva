@@ -196,6 +196,7 @@ apps/desktop/
     │   ├── paths.ts                 runner entry, migrations, userData files (dev vs packaged)
     │   ├── attachmentProtocol.ts    comitiva-attachment:// for stored attachments (P7)
     │   ├── dialogs.ts               native pickers: folder, save file, open file (P7)
+    │   ├── i18n.ts                  main's strings (menu, dialogs, OAuth page) from the renderer's locale files, `main.*` (P7)
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
@@ -233,7 +234,7 @@ apps/desktop/
             │                        ToolList.tsx Forms/GoogleDriveSetup.tsx (P5b)   Settings/ (later)
             ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)
             │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)
-            └── i18n/                index.ts en.json pt-BR.json
+            └── i18n/                index.ts (applyLanguage) language.ts (resolveLanguage, shared with main) en.json pt-BR.json
 ```
 
 ---
@@ -978,7 +979,7 @@ connections.detectBinary                                            (P2)
 toolServers.list | create | update | delete | test                  (P5; test takes { id } | { spec, id? } in 5b)
 googleDrive.getStatus | configure | connect | cancelConnect | disconnect   (P5b; replaces the sketched connectGoogle)
 agents.list | create | update | delete | duplicate                   (P3)
-settings.get | update                                               (P3; AppSettings, e.g. sampleAgentOffer)
+settings.get | update                                               (P3; AppSettings: sampleAgentOffer; P7: language, autoUpdate)
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
 conversations.exportMarkdown                                        (P7; save dialog → path | null)
 bundle.export | import                                              (P7; ADR 0013; import → ImportReport | null)
@@ -1049,6 +1050,7 @@ toolServersStore (P5):  items, loaded, tests (per server: its tools or the error
 googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
                         load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
 toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
+settingsStore (P7):     settings (AppSettings), notice; load, update. onChange applies the language (i18n/index.ts).
 transferStore (P7):     busy, saved (path), report (ImportReport), notice; exportConversation, exportAgents, importBundle
                         (afterImport reloads connections, agents and tool servers).
 uiStore (P7):           quickSwitcherOpen, shortcutsOpen, search (the switcher's query and result; stale answers dropped)

@@ -17,6 +17,7 @@ import { IpcRouter } from './ipc/IpcRouter';
 import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
 import { handleAttachments, registerAttachmentScheme } from './attachmentProtocol';
 import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
+import { setLanguage, t } from './i18n';
 import { paths } from './paths';
 import { RunnerSupervisor } from './runner/RunnerSupervisor';
 import { ElectronSecretStore } from './secrets/ElectronSecretStore';
@@ -105,6 +106,7 @@ async function bootstrap(): Promise<void> {
   const agentRepo = new AgentRepository(db);
   const agents = new AgentService(agentRepo);
   const settings = new SettingsRepository(db);
+  setLanguage(settings.get().language, app.getLocale());
 
   // Google's endpoints; tests and CI point both at a fake server.
   const googleApiBaseUrl = process.env.COMITIVA_GOOGLE_API_BASE_URL;
@@ -116,6 +118,10 @@ async function bootstrap(): Promise<void> {
       endpoints: googleEndpoints(process.env.COMITIVA_GOOGLE_OAUTH_BASE_URL),
       // Looked up at call time, so e2e can stand in for the browser.
       openExternal: (url) => shell.openExternal(url),
+      resultPage: (connected) => ({
+        title: t(connected ? 'main.oauth.connectedTitle' : 'main.oauth.failedTitle'),
+        body: t(connected ? 'main.oauth.connectedBody' : 'main.oauth.failedBody'),
+      }),
     }),
   });
 
@@ -213,7 +219,11 @@ async function bootstrap(): Promise<void> {
       },
       'agents.duplicate': ({ id, name }) => agents.duplicate(id, name),
       'settings.get': () => settings.get(),
-      'settings.update': (patch) => settings.update(patch),
+      'settings.update': (patch) => {
+        const next = settings.update(patch);
+        if (patch.language !== undefined) setLanguage(next.language, app.getLocale());
+        return next;
+      },
       'conversations.list': (filter) => chat.list(filter),
       'conversations.create': ({ agentId }) => chat.create(agentId),
       'conversations.rename': ({ id, title }) => chat.rename(id, title),

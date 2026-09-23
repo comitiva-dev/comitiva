@@ -80,7 +80,8 @@ publishes it (below, "Hand-off").
 | Packaged smoke (`test:packaged`, Linux) | 5/5 on the built `linux-unpacked`: the resources in place and `isPackaged`, migrations through search, **the updater reading a local feed**, an API agent reading a file through the bundled filesystem server, the bundled Google Drive server, a fake Claude Code through the bundled MCP proxy. |
 | Packaged by hand (Linux) | The AppImage on Ubuntu 24.04 with its sandbox logic, updates on and the system language (pt-BR), driven through a first session: a connection through the form, an agent, an image and a text file sent, the reply, the switcher, export of a conversation and of agents (no key in the bundle), import and its report, Settings, the menu in both languages, the shortcuts list, and the image and data after a restart. Screenshots reviewed. |
 | deb | Built and its maintainer scripts read: the AppArmor profile and setuid only without user namespaces. **Not installed** (needs root). |
-| rpm, macOS, Windows | **Not run locally** (no `rpmbuild`, no Mac or Windows here). CI's package job builds them and runs the packaged smoke on each OS once this is pushed. |
+| CI on GitHub (run 35893490751) | Green: the checks, then packaging and the packaged smoke test (5/5) on **macOS, Windows and Ubuntu**. |
+| `release.yml` dry run (run 35893496214) | Green on all three OSes, nothing published (no release or draft exists). Files: `mac-arm64` and `mac-x64` dmg and zip, `win-x64-setup.exe`, AppImage, deb, **rpm**, blockmaps, `latest-mac.yml`, `latest.yml` and `latest-linux.yml`. The first dry run failed on macOS: without secrets, `CSC_LINK` arrived as an empty string, which electron-builder reads as a path. Fixed: the secrets arrive as `SIGN_*` and only set ones are exported. |
 | `actionlint` | Clean on `ci.yml`, `checks.yml` and `release.yml`. |
 
 ### Found by hand, fixed
@@ -126,10 +127,13 @@ publishes it (below, "Hand-off").
 - Signing and notarization (secrets documented, workflow ready).
 - The real icon (a placeholder ships).
 - The repository must be public for updates without a token.
-- Hand checks not done: installing the deb and rpm, macOS and Windows by
-  hand, real providers, the real CLIs in the UI and on Windows, a real Google
+- Hand checks not done: installing the deb and rpm, running the installers
+  by hand on macOS and Windows (CI smoke-tests the unpacked builds there),
+  real providers, the real CLIs in the UI and on Windows, a real Google
   account.
-- `release.yml` has not run on GitHub yet (a dry run needs a push).
+- The macOS x64 build is built but not smoke-tested (the runner is arm64).
+- The publish step of `release.yml` (notes and undrafting) runs for the first
+  time on the v0.1.0 tag.
 - A search hit in a very long conversation pages back at most 50 pages.
 - Carried over: revoking allow-always from the UI, image tool results for
   non-Anthropic providers, `tools/list_changed`, a daylight-saving boundary in

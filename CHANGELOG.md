@@ -60,6 +60,7 @@ All notable changes, from conventional commits (`pnpm changelog`).
 ### Fixes
 
 - run turbo tasks in loose env mode ([ec5b1fc](https://github.com/comitiva-dev/comitiva/commit/ec5b1fc4051bd494683716a908dd5758e9f78425))
+- **ci:** export signing variables only when their secrets exist ([c54967d](https://github.com/comitiva-dev/comitiva/commit/c54967dda3c3cc24fbf56ab1ad7b55ff2a1a3117))
 - **contract:** number message events per conversation ([495ca1e](https://github.com/comitiva-dev/comitiva/commit/495ca1e67b2a80b86dabfd05b38bf8e0293e142d))
 - **desktop:** keep runner status pushed while init is in flight ([663d73d](https://github.com/comitiva-dev/comitiva/commit/663d73d17ad26c3fdf2d8cd4d59e10588933787c))
 - **desktop:** keep the last test unless config or key actually change ([9a65d77](https://github.com/comitiva-dev/comitiva/commit/9a65d775e275df1d448cadc7262e901ce4f901c6))
@@ -84,5 +85,7 @@ All notable changes, from conventional commits (`pnpm changelog`).
 - Phase 6 status, usage guide, ADR 0011 on pricing and cost at write time ([6e9a723](https://github.com/comitiva-dev/comitiva/commit/6e9a7231ad915a98c445b8dc67fda99e9bd91760))
 - README for v0.1.0, development guide, providers and tools for users, roadmap ([a104a00](https://github.com/comitiva-dev/comitiva/commit/a104a0003a822130438350f0df34b14d80855c14))
 - Phase 7 status: v0.1.0 ready to tag ([7890864](https://github.com/comitiva-dev/comitiva/commit/789086404bb7a3e75504308e618e152ed03f6250))
+- changelog for 0.1.0 ([a15af2c](https://github.com/comitiva-dev/comitiva/commit/a15af2cb0ee894cae84550291e15e8970624e78a))
+- Phase 7 status with the CI and release dry-run results ([071a36e](https://github.com/comitiva-dev/comitiva/commit/071a36ed3cc3ab90c0fc854a05078bb7528c936a))
 - **design:** sync runner, registry and backend signatures with the code ([afe58c8](https://github.com/comitiva-dev/comitiva/commit/afe58c8857e291f4d5328bd6c8bd436d677b92fc))
 - **runner:** record verified Claude Code and Codex CLI behavior ([aa61510](https://github.com/comitiva-dev/comitiva/commit/aa6151098998082eb6dae11904413bf5cbb75886))

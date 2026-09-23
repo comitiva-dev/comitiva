@@ -1,0 +1,38 @@
+name: Checks
+
+# The checks every change passes: formatting, lint, types, unit and
+# integration tests, the contract schema, and the e2e suite under Xvfb.
+# Called by ci.yml (pushes and PRs) and release.yml (tags).
+on:
+  workflow_call:
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+
+jobs:
+  check:
+    name: Lint, typecheck, test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm format:check
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Contract JSON Schema is up to date
+        run: pnpm contract:schema && git diff --exit-code packages/contract/schema
+      - name: E2E (Electron under Xvfb)
+        run: xvfb-run --auto-servernum pnpm --filter desktop test:e2e
+      - name: Upload e2e results (screenshots)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-results
+          path: apps/desktop/test-results/
+          if-no-files-found: ignore

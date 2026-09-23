@@ -1,0 +1,158 @@
+name: Release
+
+# A tag `vX.Y.Z` (matching apps/desktop/package.json) builds, signs when the
+# certificates are configured, smoke-tests and uploads every platform's
+# installers to a draft GitHub Release, then writes the notes from the
+# conventional commits since the previous tag and publishes it. electron-updater
+# reads the published release (ADR 0014). `-rc`/`-beta` tags publish as
+# prereleases, which the updater does not offer to stable builds.
+#
+# Run it by hand (workflow_dispatch) to build and smoke-test everything
+# without publishing: the installers are attached to the run as artifacts.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Build and smoke-test only, publish nothing
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: 1
+  PUBLISH: ${{ github.event_name == 'push' && 'always' || (inputs.dry_run && 'never' || 'always') }}
+
+jobs:
+  checks:
+    uses: ./.github/workflows/checks.yml
+
+  prepare:
+    name: Version and draft release
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: version
+        name: The tag matches the app version
+        run: |
+          VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          if [ "$GITHUB_REF_TYPE" = tag ] && [ "v$VERSION" != "$GITHUB_REF_NAME" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME does not match apps/desktop/package.json ($VERSION)"
+            exit 1
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          case "$VERSION" in *-*) echo "prerelease=true" ;; *) echo "prerelease=false" ;; esac >> "$GITHUB_OUTPUT"
+      # One draft for the three build jobs to upload to (they would race to create it).
+      - name: Draft release
+        if: env.PUBLISH == 'always'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: |
+          gh release view "v$VERSION" >/dev/null 2>&1 ||
+            gh release create "v$VERSION" --draft --title "Comitiva $VERSION" --notes "Building…" \
+              --target "$GITHUB_SHA"
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: [checks, prepare]
+    strategy:
+      fail-fast: true
+      matrix:
+        os: [macos-latest, windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Signing (docs/development.md → Code signing). Empty until the secrets exist.
+      CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+      CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: rpm tooling
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y rpm
+      - name: Signing options
+        shell: bash
+        run: |
+          ARGS=""
+          if [ "$RUNNER_OS" = macOS ] && [ -n "$CSC_LINK" ]; then
+            # A signed macOS build can install its own updates.
+            ARGS="-c.extraMetadata.comitiva.macSigned=true"
+            if [ -n "$APPLE_ID" ]; then ARGS="$ARGS -c.mac.notarize=true"; fi
+          elif [ "$RUNNER_OS" = Windows ] && [ -n "$WIN_CSC_LINK" ]; then
+            :
+          else
+            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
+          fi
+          echo "BUILDER_ARGS=$ARGS" >> "$GITHUB_ENV"
+      - run: pnpm turbo run build --filter=desktop...
+      - name: Package
+        shell: bash
+        working-directory: apps/desktop
+        run: pnpm exec electron-vite build && pnpm exec electron-builder --publish "$PUBLISH" $BUILDER_ARGS
+      - name: Smoke test the packaged app
+        if: runner.os != 'Linux'
+        run: pnpm --filter desktop test:packaged
+      - name: Smoke test the packaged app (Xvfb)
+        if: runner.os == 'Linux'
+        run: xvfb-run --auto-servernum pnpm --filter desktop test:packaged
+      - uses: actions/upload-artifact@v4
+        with:
+          name: comitiva-${{ needs.prepare.outputs.version }}-${{ matrix.os }}
+          path: |
+            apps/desktop/release/*.dmg
+            apps/desktop/release/*.zip
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/*.rpm
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/latest*.yml
+          if-no-files-found: error
+
+  publish:
+    name: Notes and publish
+    needs: [prepare, build]
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - name: Release notes from conventional commits
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: node scripts/changelog.mjs --to "$GITHUB_REF_NAME" --version "$VERSION" > notes.md
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+          PRERELEASE: ${{ needs.prepare.outputs.prerelease }}
+        run: |
+          FLAGS="--draft=false --latest"
+          if [ "$PRERELEASE" = true ]; then FLAGS="--draft=false --prerelease"; fi
+          gh release edit "v$VERSION" --title "Comitiva $VERSION" --notes-file notes.md $FLAGS

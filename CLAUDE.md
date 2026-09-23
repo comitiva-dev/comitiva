@@ -54,6 +54,8 @@ pnpm --filter desktop test:e2e      # builds the app and runs Playwright against
 pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate   # generate a Drizzle migration from schema.ts
 pnpm package                        # electron-builder for the current platform → apps/desktop/release/
+pnpm --filter desktop test:packaged # smoke-test the packaged app (after pnpm package)
+pnpm changelog                      # release notes since the last tag (--prepend CHANGELOG.md to write them)
 echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs   # talk to the runner by hand
 ```
 

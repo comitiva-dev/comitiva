@@ -73,14 +73,16 @@ jobs:
     runs-on: ${{ matrix.os }}
     env:
       GH_TOKEN: ${{ github.token }}
-      # Signing (docs/development.md → Code signing). Empty until the secrets exist.
-      CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
-      CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
-      APPLE_ID: ${{ secrets.APPLE_ID }}
-      APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-      WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
-      WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+      # Signing (docs/development.md → Code signing). The secrets are empty until
+      # they exist, and electron-builder reads an empty CSC_LINK as a path, so they
+      # arrive under other names and the Package step exports only the set ones.
+      SIGN_CSC_LINK: ${{ matrix.os == 'macos-latest' && secrets.CSC_LINK || '' }}
+      SIGN_CSC_KEY_PASSWORD: ${{ matrix.os == 'macos-latest' && secrets.CSC_KEY_PASSWORD || '' }}
+      SIGN_APPLE_ID: ${{ secrets.APPLE_ID }}
+      SIGN_APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+      SIGN_APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      SIGN_WIN_CSC_LINK: ${{ matrix.os == 'windows-latest' && secrets.WIN_CSC_LINK || '' }}
+      SIGN_WIN_CSC_KEY_PASSWORD: ${{ matrix.os == 'windows-latest' && secrets.WIN_CSC_KEY_PASSWORD || '' }}
     steps:
       - uses: actions/checkout@v5
       - uses: pnpm/action-setup@v4
@@ -92,25 +94,25 @@ jobs:
       - name: rpm tooling
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y rpm
-      - name: Signing options
-        shell: bash
-        run: |
-          ARGS=""
-          if [ "$RUNNER_OS" = macOS ] && [ -n "$CSC_LINK" ]; then
-            # A signed macOS build can install its own updates.
-            ARGS="-c.extraMetadata.comitiva.macSigned=true"
-            if [ -n "$APPLE_ID" ]; then ARGS="$ARGS -c.mac.notarize=true"; fi
-          elif [ "$RUNNER_OS" = Windows ] && [ -n "$WIN_CSC_LINK" ]; then
-            :
-          else
-            echo "CSC_IDENTITY_AUTO_DISCOVERY=false" >> "$GITHUB_ENV"
-          fi
-          echo "BUILDER_ARGS=$ARGS" >> "$GITHUB_ENV"
       - run: pnpm turbo run build --filter=desktop...
       - name: Package
         shell: bash
         working-directory: apps/desktop
-        run: pnpm exec electron-vite build && pnpm exec electron-builder --publish "$PUBLISH" $BUILDER_ARGS
+        run: |
+          ARGS=""
+          for name in CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID WIN_CSC_LINK WIN_CSC_KEY_PASSWORD; do
+            value="$(printenv "SIGN_$name" || true)"
+            if [ -n "$value" ]; then export "$name=$value"; fi
+          done
+          if [ -n "${CSC_LINK:-}" ]; then
+            # A signed macOS build can install its own updates.
+            ARGS="-c.extraMetadata.comitiva.macSigned=true"
+            if [ -n "${APPLE_ID:-}" ]; then ARGS="$ARGS -c.mac.notarize=true"; fi
+          elif [ -z "${WIN_CSC_LINK:-}" ]; then
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+          fi
+          pnpm exec electron-vite build
+          pnpm exec electron-builder --publish "$PUBLISH" $ARGS
       - name: Smoke test the packaged app
         if: runner.os != 'Linux'
         run: pnpm --filter desktop test:packaged

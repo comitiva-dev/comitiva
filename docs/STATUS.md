@@ -2,7 +2,152 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 6 — Usage: records, pricing, dashboard, export (done)
+## Current phase: 7 — Polish and v0.1.0 (done, release pending the tag)
+
+Done when the release is published: **not yet**, by decision. Everything the
+release needs is in `main`; the user makes the repository public and pushes
+`v0.1.0`, and `.github/workflows/release.yml` builds, smoke-tests and
+publishes it (below, "Hand-off").
+
+### Done
+
+1. **Attachments** (ADR 0012). The composer attaches images and text files
+   (button, drag and drop, paste; Ctrl/Cmd+Shift+A) as chips that upload at
+   once.
+   - Main stores them in `<userData>/attachments/<ULID><ext>`: images sniffed
+     from their bytes (PNG, JPEG, GIF, WebP, 5 MB), text as valid UTF-8 without
+     NUL (1 MB), ten per message.
+   - Messages keep `file` blocks whose path is the store name. The history is
+     resolved to base64 before each run (a missing file becomes a note); the
+     runner refuses a `file` source.
+   - `providers/media.ts` translates per provider: text documents become text
+     everywhere (Anthropic: a plain-text `document`), images go natively to the
+     four API providers, and a harness gets `[Image "x" attached but not sent: …]`.
+     `capabilities` now say what the adapters do (tools everywhere, images for
+     the APIs); they had been stale since Phase 1.
+   - Images render through `comitiva-attachment://`, which serves only store
+     names that resolve inside the store. Unreferenced files are swept after a
+     day; deleting an agent deletes its attachments.
+2. **Search.** Migration `0007` adds `messages_fts` (FTS5, diacritics folded),
+   kept by triggers that index a reply only when it stops streaming.
+   `search.query` returns titles and message hits with `{ text, match }`
+   snippets. The quick switcher (Cmd/Ctrl+K) lists agents, conversations and
+   messages; a message hit pages back to it and opens the list there,
+   highlighted.
+3. **Export and import** (ADR 0013). A conversation exports as Markdown (tool
+   calls as `<details>`). Agents export with their connections and tool
+   servers as a `PortableBundle` (in the contract, with a JSON Schema): no
+   secret and no secret ref, file-local refs, built-ins by id. Import creates
+   new objects in one transaction and reports what is left: keys, secrets,
+   folders or binaries missing here, agents it could not create.
+4. **i18n.** `AppSettings.language` (system, en, pt-BR) and a real Settings
+   screen. Main has its own i18next over the same files (`main.*`, and
+   `commands.*` shared with the shortcuts list) for the menu and the OAuth
+   result page. ESLint rejects literal JSX text and prose in `placeholder`,
+   `title`, `alt` and `aria-label`; the i18n test also checks `{{variables}}`.
+5. **Shortcuts and menu.** `shared/shortcuts.ts` is one list for the key
+   handler, the native menu and the shortcuts dialog (Cmd/Ctrl+/). Outside
+   macOS the menu shows keys without registering them, so nothing fires
+   twice.
+6. **Packaging and updates** (ADR 0014). dmg + zip (arm64, x64), NSIS (per
+   user), AppImage, deb, rpm; a placeholder icon; the hardened-runtime
+   entitlements. Signing reads secrets when they exist and is otherwise off
+   (docs/development.md → Code signing). `UpdateService` wraps
+   electron-updater: checks 10 s after start and every 6 h while the setting
+   is on, downloads, installs on restart; an unsigned macOS build links to the
+   release instead.
+7. **Release workflow.** `scripts/changelog.mjs` (no dependencies) writes notes
+   from conventional commits. `release.yml` on `v*` tags: the shared checks
+   (`checks.yml`, also called by `ci.yml`), the tag against the version, one
+   draft, builds with the packaged smoke test on three OSes, notes, publish
+   (prerelease for `-rc`/`-beta`). `workflow_dispatch` builds without
+   publishing.
+8. **Docs.** README for users (install per OS with the unsigned-build warnings,
+   getting started, screenshot placeholders), `docs/development.md` (new),
+   a user guide at the top of `providers.md`, user sections in `tools.md`, the
+   roadmap and known gaps in CONTRIBUTING, ADRs 0012–0014, SPEC §5 and §7.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 751 tests: contract 60, runner 270, mcp-servers 40, desktop 378, scripts 3 (Phase 6: 660). |
+| `pnpm contract:schema` | No diff. New: `PortableBundle.json`; `Block`, `Message`, `AppError` and the protocol schemas changed. |
+| Runner | `media.test.ts`: the parts per provider (Anthropic, OpenAI-compatible, Gemini, Ollama), the notes, name escaping, a file source refused, the CLI prompt with and without replay, text documents counted as text. |
+| Desktop main | `AttachmentService` (sniffing over the declared type, limits, UTF-8, `..` and a symlink out refused, resolve, sweep, remove), `SearchRepository` (accents, prefixes, FTS operators typed by the user, streaming excluded until finished, retries leave the index, attachment names indexed and tool calls not, archived left out, cascade), the Markdown exporter (snapshot, fences longer than backticks inside), `BundleService` (round trip under new ids, no secret or ref in the JSON, one agent skipped and the rest kept, a missing binary, wrong version and format with nothing written), `ExportService`, `UpdateService` (disabled, download and install, notify-only, failure by code, the schedule, one check at a time), the menu template, settings key by key. |
+| Renderer logic | attachments (checks, send rules, room, sizes), the quick switcher, commands (sections, overlays, previous and next, export and attach only in a chat), shortcuts (Ctrl vs Cmd, exact modifiers, display), stores (messages attach/jump, ui, transfer, settings, updates), i18n parity and variables. |
+| `pnpm --filter desktop test:e2e` | 58/58 (44 earlier + 14): `attachments` (5: Anthropic image and document, OpenAI `image_url`, a binary refused, the harness note, an image after a restart), `search` (3: an old message two pages back opened highlighted, accents, agents and no results), `export` (3: Markdown, a bundle with no key or secret, import into an empty Comitiva with the report), `settings` (3: language kept across a restart, shortcuts, the menu running a command and following the language). |
+| Packaged smoke (`test:packaged`, Linux) | 5/5 on the built `linux-unpacked`: the resources in place and `isPackaged`, migrations through search, **the updater reading a local feed**, an API agent reading a file through the bundled filesystem server, the bundled Google Drive server, a fake Claude Code through the bundled MCP proxy. |
+| Packaged by hand (Linux) | The AppImage on Ubuntu 24.04 with its sandbox logic, updates on and the system language (pt-BR), driven through a first session: a connection through the form, an agent, an image and a text file sent, the reply, the switcher, export of a conversation and of agents (no key in the bundle), import and its report, Settings, the menu in both languages, the shortcuts list, and the image and data after a restart. Screenshots reviewed. |
+| deb | Built and its maintainer scripts read: the AppArmor profile and setuid only without user namespaces. **Not installed** (needs root). |
+| rpm, macOS, Windows | **Not run locally** (no `rpmbuild`, no Mac or Windows here). CI's package job builds them and runs the packaged smoke on each OS once this is pushed. |
+| `actionlint` | Clean on `ci.yml`, `checks.yml` and `release.yml`. |
+
+### Found by hand, fixed
+
+- **Updates never ran in a packaged build.** The main bundle keeps
+  `import('electron-updater')` native, and Node's CommonJS interop does not
+  expose `autoUpdater` (a getter) as a named export, so the service saw no
+  updater and said "this build cannot update itself". The smoke test had
+  turned updates off, so it could not notice. Fixed, and the smoke test now
+  runs the updater against a local feed (`COMITIVA_UPDATE_FEED_URL`).
+- `jumpTo` returned early while the chat's own page load was in flight, and a
+  scroll made while Virtuoso positioned its first render was undone. `load()`
+  now shares the in-flight promise, and the list mounts again at the hit.
+- A contract test still expected the old settings shape after the language
+  commit (caught one commit later; the suite is now run in full before each
+  commit).
+
+### Deviations from the plan and design (all reflected in the docs)
+
+1. A `document` block's text reaches every provider as text; only Anthropic
+   gets a document block. PDFs are not attachable (the blocks allow them).
+2. `ImageBlock` gained an optional `name`, and `attachment_too_many` and
+   `update_failed` joined the error codes.
+3. The Settings screen, a settings store and `LanguageSetting`/`autoUpdate`
+   came with i18n rather than with packaging.
+4. The AppImage runs without Chromium's sandbox where user namespaces are
+   blocked (its launcher adds `--no-sandbox`); ADR 0014 says so.
+5. `ImportWarning` carries `error` (the code for a skipped agent) besides the
+   plan's `code`/`subject`/`detail`.
+
+### Decisions
+
+- **Capability is per provider, not per model.** A text-only model behind an
+  OpenAI-compatible endpoint fails with the provider's error when sent an
+  image. A per-model table would be guesswork.
+- **Importing twice duplicates.** Merging by name could silently change an
+  agent in use.
+- **Update errors are one code.** Whether the network or the feed failed,
+  the user can do the same thing: try later. The log keeps the detail.
+
+### Open
+
+- Signing and notarization (secrets documented, workflow ready).
+- The real icon (a placeholder ships).
+- The repository must be public for updates without a token.
+- Hand checks not done: installing the deb and rpm, macOS and Windows by
+  hand, real providers, the real CLIs in the UI and on Windows, a real Google
+  account.
+- `release.yml` has not run on GitHub yet (a dry run needs a push).
+- A search hit in a very long conversation pages back at most 50 pages.
+- Carried over: revoking allow-always from the UI, image tool results for
+  non-Anthropic providers, `tools/list_changed`, a daylight-saving boundary in
+  usage buckets.
+
+### Hand-off
+
+1. Make `comitiva-dev/comitiva` public.
+2. `git tag v0.1.0 && git push origin v0.1.0`.
+3. The Release workflow publishes Comitiva 0.1.0 with its notes. Installed
+   builds find later versions from then on.
+
+## Next: Phase 8 — Laravel hub
+
+Auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend`
+in the desktop. Done when two desktops see the same conversation live.
+
+## Phase 6 — Usage: records, pricing, dashboard, export (done)
 
 Done when the dashboard matches the records: yes. The first test of
 `e2e/usage.spec.ts` is the exit criterion, checked without trusting the screen:
@@ -163,11 +308,6 @@ exported rows itself, and compares.
   - the real Google account check (Phase 5b)
   - CI on GitHub (no remote)
   - the Linux sandbox, signing and icon (Phase 7)
-
-## Next: Phase 7 — Polish and v0.1.0
-
-Attachments, search, export/import, i18n, packaging and auto-update. Done when
-the release is published.
 
 ## Phase 5b — Google Drive and third-party servers (done)
 

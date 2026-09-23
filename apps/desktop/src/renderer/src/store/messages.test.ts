@@ -234,3 +234,23 @@ describe('messages store: attachments', () => {
     expect(store.getState().attachments.k9).toEqual([]);
   });
 });
+
+describe('messages store: jumping to a message', () => {
+  it('pages back until the message is loaded, then focuses it', async () => {
+    const backend = fakeBackend();
+    const at = (seq: number) => message(`m${seq}`, { seq, content: text(`#${seq}`) });
+    backend.messages.list
+      .mockResolvedValueOnce(page({ messages: [at(20), at(21)], hasMore: true, rev: 1 }))
+      .mockResolvedValueOnce(page({ messages: [at(10), at(11)], hasMore: true }))
+      .mockResolvedValueOnce(page({ messages: [at(2), at(3)], hasMore: true }));
+    const store = createMessagesStore(backend);
+    await store.getState().jumpTo('k1', 3);
+    expect(store.getState().byConversation.k1!.items.map((m) => m.seq)).toEqual([
+      2, 3, 10, 11, 20, 21,
+    ]);
+    expect(store.getState().focus.k1).toEqual({ seq: 3, token: 1, highlight: true });
+    expect(backend.messages.list).toHaveBeenCalledTimes(3);
+    store.getState().clearFocus('k1');
+    expect(store.getState().focus.k1).toEqual({ seq: 3, token: 1, highlight: false });
+  });
+});

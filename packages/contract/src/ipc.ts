@@ -10,7 +10,7 @@ import {
 } from './entities/agent.js';
 import { Connection } from './entities/connection.js';
 import { Conversation } from './entities/conversation.js';
-import { Message } from './entities/message.js';
+import { Message, MessageRole } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
 import { ATTACHMENT_LIMITS, Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
@@ -445,6 +445,44 @@ export type AttachmentInput = z.infer<typeof AttachmentInput>;
 export const AttachmentBlock = z.discriminatedUnion('type', [ImageBlock, DocumentBlock]);
 export type AttachmentBlock = z.infer<typeof AttachmentBlock>;
 
+/** Quick switcher search: words, matched as prefixes, diacritics ignored. */
+export const SearchInput = z.object({
+  query: z.string().trim().min(1).max(200),
+  limit: z.number().int().min(1).max(100).default(20),
+});
+export type SearchInput = z.input<typeof SearchInput>;
+
+/** A match in context: the renderer highlights `match` pieces (never HTML). */
+export const SearchSnippet = z.array(z.object({ text: z.string(), match: z.boolean() }));
+export type SearchSnippet = z.infer<typeof SearchSnippet>;
+
+export const MessageHit = z.object({
+  conversationId: Id,
+  agentId: Id,
+  messageId: Id,
+  seq: z.number().int().nonnegative(),
+  role: MessageRole,
+  createdAt: IsoDate,
+  conversationTitle: z.string().nullable(),
+  snippet: SearchSnippet,
+});
+export type MessageHit = z.infer<typeof MessageHit>;
+
+export const ConversationHit = z.object({
+  conversationId: Id,
+  agentId: Id,
+  title: z.string(),
+  lastActivityAt: IsoDate,
+});
+export type ConversationHit = z.infer<typeof ConversationHit>;
+
+/** Archived conversations are left out, as in the sidebar. */
+export const SearchResult = z.object({
+  conversations: z.array(ConversationHit),
+  messages: z.array(MessageHit),
+});
+export type SearchResult = z.infer<typeof SearchResult>;
+
 const ByModel = z.object({ provider: ProviderId, model: z.string().min(1) });
 
 export const ipcInvoke = {
@@ -498,6 +536,8 @@ export const ipcInvoke = {
    * unsupported_attachment.
    */
   'attachments.add': { input: AttachmentInput, output: AttachmentBlock },
+  /** Conversations by title and messages by content (full-text), best first. */
+  'search.query': { input: SearchInput, output: SearchResult },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
   'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },

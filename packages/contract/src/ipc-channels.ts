@@ -32,6 +32,7 @@ export const ipcInvokeChannels = [
   'messages.cancel',
   'messages.retry',
   'attachments.add',
+  'search.query',
   'dialogs.pickFolder',
   'toolServers.list',
   'toolServers.create',

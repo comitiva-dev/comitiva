@@ -530,5 +530,16 @@
       "optional": "optional",
       "invalid": "Input and output prices must be numbers of zero or more."
     }
+  },
+  "switcher": {
+    "title": "Quick switcher",
+    "placeholder": "Jump to an agent, a conversation or a message…",
+    "keys": "↑↓ to move · Enter to open · Esc to close",
+    "empty": "Nothing found.",
+    "kind": {
+      "agent": "Agent",
+      "conversation": "Conversation",
+      "message": "Message"
+    }
   }
 }

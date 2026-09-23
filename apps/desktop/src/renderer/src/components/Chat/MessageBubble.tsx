@@ -29,6 +29,7 @@ export const MessageBubble = memo(function MessageBubble({
   retry,
   approval,
   serverNames,
+  highlighted = false,
 }: {
   message: Message;
   agent: Pick<Agent, 'name' | 'avatar'>;
@@ -38,6 +39,8 @@ export const MessageBubble = memo(function MessageBubble({
   approval?: Approval | undefined;
   /** Display names of tool servers by id. */
   serverNames: Record<string, string>;
+  /** Briefly marked after the quick switcher jumped to it. */
+  highlighted?: boolean;
 }) {
   const { t, i18n } = useTranslation();
   const parts = useMemo(() => renderParts(message.content), [message.content]);
@@ -50,7 +53,10 @@ export const MessageBubble = memo(function MessageBubble({
       data-testid="message"
       data-role={message.role}
       data-status={message.status}
-      className="flex gap-3 px-6 py-2"
+      data-highlighted={highlighted || undefined}
+      className={`flex gap-3 px-6 py-2 transition-colors duration-700 ${
+        highlighted ? 'bg-amber-50 dark:bg-amber-900/30' : ''
+      }`}
     >
       <div className="pt-0.5">
         {mine ? (

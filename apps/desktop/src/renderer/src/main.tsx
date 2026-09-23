@@ -12,6 +12,7 @@ import { createConversationsStore } from './store/conversations';
 import { createGoogleDriveStore } from './store/googleDrive';
 import { createMessagesStore } from './store/messages';
 import { createToolServersStore } from './store/toolServers';
+import { createUiStore } from './store/ui';
 import { createUsageStore } from './store/usage';
 
 const backend = new LocalBackend();
@@ -24,6 +25,7 @@ const stores = {
   toolServers: createToolServersStore(backend),
   googleDrive: createGoogleDriveStore(backend),
   usage: createUsageStore(backend),
+  ui: createUiStore(backend),
 };
 backend.onEvent((event) => {
   stores.app.getState().handleEvent(event);

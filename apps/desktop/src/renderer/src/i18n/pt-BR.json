@@ -530,5 +530,16 @@
       "optional": "opcional",
       "invalid": "Os preços de entrada e saída devem ser números maiores ou iguais a zero."
     }
+  },
+  "switcher": {
+    "title": "Navegação rápida",
+    "placeholder": "Ir para um agente, uma conversa ou uma mensagem…",
+    "keys": "↑↓ para mover · Enter para abrir · Esc para fechar",
+    "empty": "Nada encontrado.",
+    "kind": {
+      "agent": "Agente",
+      "conversation": "Conversa",
+      "message": "Mensagem"
+    }
   }
 }

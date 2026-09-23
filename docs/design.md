@@ -197,10 +197,12 @@ apps/desktop/
     │   ├── runner/                  RunnerSupervisor.ts RotatingLog.ts
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
-    │   │                            0005_google_drive_tool_server (P5b), meta/)
+    │   │                            0005_google_drive_tool_server (P5b), 0006_usage_reports (P6),
+    │   │                            0007_message_search (P7: FTS5 table + triggers, custom SQL), meta/)
     │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
     │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4)
     │   │                            ToolServerRepository.ts ToolApprovalRepository.ts (P5)
+    │   │                            SearchRepository.ts (P7)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
@@ -368,6 +370,13 @@ CREATE TABLE model_prices (                                        -- the user's
   cache_read_per_1m REAL, cache_write_per_1m REAL, updated_at TEXT NOT NULL,
   PRIMARY KEY (provider, model)
 );
+
+-- 0007_message_search (P7, custom SQL; not in schema.ts, Drizzle cannot model a virtual table).
+-- One row per finished message (rowid = messages.rowid): its text blocks and attachment names.
+CREATE VIRTUAL TABLE messages_fts USING fts5(text, message_id UNINDEXED, conversation_id UNINDEXED,
+  tokenize = 'unicode61 remove_diacritics 2');
+-- triggers: AFTER INSERT (not streaming), AFTER UPDATE OF content, status (unless streaming → streaming,
+-- so checkpoints never touch it), AFTER DELETE; the migration backfills existing rows.
 
 -- applied migrations are tracked by Drizzle in __drizzle_migrations
 ```
@@ -817,6 +826,10 @@ class UsageRepository {          // (P6) cost is computed in insert(), so replie
 // Raw SQL over the new indexes. A day is the viewer's: the bucket shifts created_at by their
 // offset, while the range predicate still compares UTC text the index covers.
 class PricingRepository { all(); set(provider, model, prices); clear(provider, model) }   // (P6)
+class SearchRepository {         // (P7) the quick switcher
+  search(query, limit): SearchResult;   // titles by LIKE (escaped); messages by FTS5: every word quoted,
+  // the last as a prefix; snippet() split into { text, match } pieces; bm25 then recency; archived left out
+}
 class ToolServerRepository {    // (P5) built-ins first; rows validated by the ToolServer schema
   list(); get(id); require(id); create(NewToolServer); update(id, changes); delete(id) /* built-ins: invalid_request */;
 }
@@ -962,6 +975,7 @@ settings.get | update                                               (P3; AppSett
 conversations.list | create | rename | archive | markRead             (P4; list takes { agentId?, archived })
 messages.list | send | cancel | retry                                (P4; list → { messages, hasMore, rev })
 attachments.add                                                     (P7; stores a picked file, returns its block)
+search.query                                                        (P7; { conversations, messages } for the quick switcher)
 approvals.decide                                                    (P5)
 usage.summary | timeseries | conversation | export | prices | setPrice | clearPrice   (P6)
 dialogs.pickFolder                                                  (P2)
@@ -983,6 +997,7 @@ interface Backend {
   connections: { list(); create(draft); update(id, patch); delete(id); test(target); listModels(target); detectBinary(input) };
   dialogs: { pickFolder() };                                   // (P2) null when cancelled
   attachments: { add(input); url(path) };                      // (P7) url: comitiva-attachment:// here, HTTP in RemoteBackend
+  search: { query({ query, limit? }) };                        // (P7)
   toolServers: { list(); create(d); update(id, d); delete(id); test({ id } | { spec, id? }) };
   googleDrive: { getStatus(); configure(input); connect(); cancelConnect(); disconnect() };   // (P5b)
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
@@ -1013,6 +1028,7 @@ conversationsStore (P4): byId, idsByAgent / archivedIdsByAgent (newest activity 
                         Selectors: agentStatus (running > error > idle), agentUnread, isRunning — from main's status.
 messagesStore (P4):     byConversation: { items, status, hasMore, loadingOlder, rev, buffered }, drafts, sending,
                         attachments per draft (P7: attach, detach, moveDraft, attachmentUrl),
+                        focus + jumpTo(seq) (P7: pages back to a search hit; the list remounts there),
                         actionError; load (buffers events until the page is in), loadOlder, send, cancel, retry.
                         Events apply by rev (ADR 0008): stale dropped, next applied, a gap reloads the page.
 conversationsStore (P5): + pending (PendingApproval per conversation, from main), deciding, decide; agentStatus:
@@ -1022,7 +1038,7 @@ toolServersStore (P5):  items, loaded, tests (per server: its tools or the error
 googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
                         load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
 toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
-uiStore (later):        rightPanelOpen, theme, quickSwitcherOpen
+uiStore (P7):           quickSwitcherOpen, shortcutsOpen, search (the switcher's query and result; stale answers dropped)
 ```
 
 Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.
@@ -1079,7 +1095,9 @@ y-axes would invite reading a crossing as a relationship. Its palette is validat
 
 Phase 7: the Composer attaches files (button, drop, paste) as chips that upload at once (`lib/attachments.ts`), warns when the agent's connection cannot see images, and `MessageBubble` shows stored images and document chips.
 
-Later components: `QuickSwitcher` (Cmd/Ctrl+K), `Settings/*`.
+`QuickSwitcher` (Cmd/Ctrl+K, pure logic in `lib/quickSwitcher.ts`): agents matched by name locally, conversation titles and message text from `search.query`, snippets with `<mark>`, arrows / Enter / Esc. A message hit opens its conversation at that message, highlighted.
+
+Later components: `Settings/*`.
 
 ---
 

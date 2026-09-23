@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import type { Agent, ApprovalDecision } from '@comitiva/contract';
@@ -29,12 +29,26 @@ export function MessageList({
   const list = useRef<VirtuosoHandle>(null);
   const atBottom = useRef(true);
   const [anchorSeq, setAnchorSeq] = useState<number | null>(null);
+  const focus = useMessages((s) => s.focus[conversationId]);
+  const clearFocus = useMessages((s) => s.clearFocus);
 
   const items = state?.items ?? [];
   const ready = state?.status === 'ready';
   // The first message of the first page is where older pages are counted from
   // (set during render, React's pattern for state derived from props).
   if (ready && anchorSeq === null && items[0]) setAnchorSeq(items[0].seq);
+
+  // A search hit: the list is mounted again, opening at the hit (Virtuoso
+  // positions its first render itself, and would undo a scroll made while it
+  // settles), and the message is highlighted for a moment.
+  const jumpIndex = focus ? items.findIndex((m) => m.seq === focus.seq) : -1;
+  const highlightSeq = focus?.highlight ? focus.seq : null;
+  useEffect(() => {
+    if (highlightSeq === null) return;
+    atBottom.current = false;
+    const timer = setTimeout(() => clearFocus(conversationId), 2500);
+    return () => clearTimeout(timer);
+  }, [highlightSeq, clearFocus, conversationId]);
 
   const onRetry = useCallback(() => void retry(conversationId), [retry, conversationId]);
 
@@ -83,12 +97,15 @@ export function MessageList({
 
   return (
     <Virtuoso
+      key={focus?.token ?? 0}
       ref={list}
       data-testid="message-list"
       className="flex-1"
       data={items}
       firstItemIndex={firstItemIndex(items, anchorSeq)}
-      initialTopMostItemIndex={items.length - 1}
+      initialTopMostItemIndex={
+        jumpIndex >= 0 ? { index: jumpIndex, align: 'center' } : items.length - 1
+      }
       computeItemKey={(_, m) => m.id}
       followOutput={(bottom) => (bottom ? 'auto' : false)}
       atBottomStateChange={(bottom) => (atBottom.current = bottom)}
@@ -114,6 +131,7 @@ export function MessageList({
           retry={message.id === retryId ? onRetry : undefined}
           approval={message.status === 'streaming' ? approval : undefined}
           serverNames={serverNames}
+          highlighted={message.seq === highlightSeq}
         />
       )}
     />

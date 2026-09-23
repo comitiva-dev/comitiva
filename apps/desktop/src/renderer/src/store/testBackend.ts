@@ -5,6 +5,7 @@ import type {
   AppSettings,
   AttachmentBlock,
   AttachmentInput,
+  SearchResult,
   ConnectionSummary,
   Conversation,
   ConversationSummary,
@@ -179,6 +180,9 @@ export function fakeBackend() {
       send: vi.fn(async () => {}),
       cancel: vi.fn(async () => {}),
       retry: vi.fn(async () => {}),
+    },
+    search: {
+      query: vi.fn(async (): Promise<SearchResult> => ({ conversations: [], messages: [] })),
     },
     attachments: {
       add: vi.fn(async (input: AttachmentInput): Promise<AttachmentBlock> => ({

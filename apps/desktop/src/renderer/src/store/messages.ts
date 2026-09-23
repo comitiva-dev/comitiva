@@ -37,10 +37,22 @@ export interface MessagesState {
   sending: Record<string, boolean>;
   /** Why the last send, cancel or retry was refused. */
   actionError: Record<string, ErrorCode | null>;
+  /**
+   * The last message jumped to (a search hit), by seq: the list opens there
+   * (a new `token` each jump) and marks it while `highlight` holds.
+   */
+  focus: Record<string, { seq: number; token: number; highlight: boolean } | undefined>;
 
   /** Loads the latest page, unless it is loaded or loading (`force` reloads). */
   load(conversationId: string, opts?: { force?: boolean }): Promise<void>;
   loadOlder(conversationId: string): Promise<void>;
+  /**
+   * Loads pages back until the message with `seq` is in (a bounded number of
+   * pages), then marks it to be scrolled to and highlighted.
+   */
+  jumpTo(conversationId: string, seq: number): Promise<void>;
+  /** Ends the highlight; the list stays where it is. */
+  clearFocus(conversationId: string): void;
   setDraft(conversationId: string, text: string): void;
   /** Stores picked files for a draft; beyond the per-message limit they are refused. */
   attach(key: string, files: readonly PickedFile[]): Promise<void>;
@@ -119,6 +131,44 @@ export function createMessagesStore(backend: Backend) {
     /** The latest load per conversation: an older one that resolves late is ignored. */
     const loads = new Map<string, number>();
 
+    const inflight = new Map<string, Promise<void>>();
+
+    /** Fetches the latest page and replays the events buffered meanwhile. */
+    const loadPage = async (
+      id: string,
+      current: ConversationMessages | undefined,
+    ): Promise<void> => {
+      const token = (loads.get(id) ?? 0) + 1;
+      loads.set(id, token);
+      // Events that arrive from now on wait for the page (buffered); a reload keeps what is shown.
+      set((s) => ({
+        byConversation: {
+          ...s.byConversation,
+          [id]: { ...empty(), items: current?.items ?? [] },
+        },
+      }));
+      try {
+        const page = await backend.messages.list(id);
+        if (loads.get(id) !== token) return;
+        const { buffered } = get().byConversation[id] ?? empty();
+        let next: ConversationMessages | null = {
+          ...empty(),
+          items: page.messages,
+          hasMore: page.hasMore,
+          rev: page.rev,
+          status: 'ready',
+        };
+        for (const e of buffered) {
+          next = apply(next, e);
+          if (!next) return get().load(id, { force: true });
+        }
+        set((s) => ({ byConversation: { ...s.byConversation, [id]: next! } }));
+      } catch (err) {
+        if (loads.get(id) !== token) return;
+        patch(id, (c) => ({ ...c, status: 'failed', error: errorCode(err), buffered: [] }));
+      }
+    };
+
     const act = async (id: string, fn: () => Promise<void>) => {
       setError(id, null);
       try {
@@ -131,6 +181,7 @@ export function createMessagesStore(backend: Backend) {
     const patchAttachments = (key: string, fn: (list: DraftAttachment[]) => DraftAttachment[]) =>
       set((s) => ({ attachments: { ...s.attachments, [key]: fn(s.attachments[key] ?? []) } }));
     let nextAttachmentId = 0;
+    let jumps = 0;
 
     return {
       byConversation: {},
@@ -138,39 +189,19 @@ export function createMessagesStore(backend: Backend) {
       attachments: {},
       sending: {},
       actionError: {},
+      focus: {},
 
-      async load(id, opts = {}) {
+      load(id, opts = {}) {
         const current = get().byConversation[id];
-        if (current && current.status !== 'failed' && !opts.force) return;
-        const token = (loads.get(id) ?? 0) + 1;
-        loads.set(id, token);
-        // Events that arrive from now on wait for the page (buffered); a reload keeps what is shown.
-        set((s) => ({
-          byConversation: {
-            ...s.byConversation,
-            [id]: { ...empty(), items: current?.items ?? [] },
-          },
-        }));
-        try {
-          const page = await backend.messages.list(id);
-          if (loads.get(id) !== token) return;
-          const { buffered } = get().byConversation[id] ?? empty();
-          let next: ConversationMessages | null = {
-            ...empty(),
-            items: page.messages,
-            hasMore: page.hasMore,
-            rev: page.rev,
-            status: 'ready',
-          };
-          for (const e of buffered) {
-            next = apply(next, e);
-            if (!next) return void get().load(id, { force: true });
-          }
-          set((s) => ({ byConversation: { ...s.byConversation, [id]: next! } }));
-        } catch (err) {
-          if (loads.get(id) !== token) return;
-          patch(id, (c) => ({ ...c, status: 'failed', error: errorCode(err), buffered: [] }));
+        if (current && current.status !== 'failed' && !opts.force) {
+          // Loading already: callers that need the page (jumpTo) wait for it.
+          return current.status === 'loading'
+            ? (inflight.get(id) ?? Promise.resolve())
+            : Promise.resolve();
         }
+        const run = loadPage(id, current);
+        inflight.set(id, run);
+        return run;
       },
 
       async loadOlder(id) {
@@ -198,6 +229,26 @@ export function createMessagesStore(backend: Backend) {
           patch(id, (c) => ({ ...c, loadingOlder: false }));
         }
       },
+
+      async jumpTo(id, seq) {
+        await get().load(id);
+        for (let page = 0; page < 50; page += 1) {
+          const c = get().byConversation[id];
+          if (!c || c.status !== 'ready') return;
+          const oldest = c.items[0]?.seq;
+          if (oldest === undefined || oldest <= seq || !c.hasMore) break;
+          await get().loadOlder(id);
+          if (get().byConversation[id]?.items[0]?.seq === oldest) break; // a failed page
+        }
+        jumps += 1;
+        set((s) => ({ focus: { ...s.focus, [id]: { seq, token: jumps, highlight: true } } }));
+      },
+
+      clearFocus: (id) =>
+        set((s) => {
+          const f = s.focus[id];
+          return f ? { focus: { ...s.focus, [id]: { ...f, highlight: false } } } : {};
+        }),
 
       setDraft: (id, text) => set((s) => ({ drafts: { ...s.drafts, [id]: text } })),
 

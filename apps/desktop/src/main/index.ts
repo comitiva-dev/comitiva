@@ -10,6 +10,7 @@ import { ToolServerRepository } from './db/repositories/ToolServerRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { UsageRepository } from './db/repositories/UsageRepository';
 import { PricingRepository } from './db/repositories/PricingRepository';
+import { SearchRepository } from './db/repositories/SearchRepository';
 import { Pricing } from './usage/Pricing';
 import { UsageService } from './usage/UsageService';
 import { IpcRouter } from './ipc/IpcRouter';
@@ -167,6 +168,7 @@ async function bootstrap(): Promise<void> {
   const attachments = new AttachmentService(paths.attachments());
   handleAttachments((name) => attachments.locate(name));
   const messageRepo = new MessageRepository(db);
+  const search = new SearchRepository(db);
   const secretFor = (c: Parameters<ConnectionService['secretFor']>[0]) => connections.secretFor(c);
   const chat = new ConversationService({
     db,
@@ -221,6 +223,7 @@ async function bootstrap(): Promise<void> {
       'messages.cancel': ({ conversationId }) => chat.cancel(conversationId),
       'messages.retry': ({ conversationId }) => chat.retryLast(conversationId),
       'attachments.add': (input) => attachments.add(input),
+      'search.query': ({ query, limit }) => search.search(query, limit),
       'dialogs.pickFolder': () => pickFolder(),
       'toolServers.list': () => toolServers.list(),
       'toolServers.create': (draft) => toolServers.create(draft),

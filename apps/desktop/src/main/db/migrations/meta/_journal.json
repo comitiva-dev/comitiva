@@ -50,6 +50,13 @@
       "when": 1790105092388,
       "tag": "0006_usage_reports",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1790175898517,
+      "tag": "0007_message_search",
+      "breakpoints": true
     }
   ]
 }

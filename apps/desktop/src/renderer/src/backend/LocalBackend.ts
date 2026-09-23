@@ -3,6 +3,7 @@ import type {
   AgentPatch,
   AppSettingsPatch,
   AttachmentInput,
+  SearchInput,
   ApprovalDecision,
   ConnectionDraft,
   ConnectionPatch,
@@ -90,6 +91,10 @@ export class LocalBackend implements Backend {
       this.api.invoke('messages.send', { conversationId, content }),
     cancel: (conversationId: string) => this.api.invoke('messages.cancel', { conversationId }),
     retry: (conversationId: string) => this.api.invoke('messages.retry', { conversationId }),
+  };
+
+  search = {
+    query: (input: SearchInput) => this.api.invoke('search.query', input),
   };
 
   attachments = {

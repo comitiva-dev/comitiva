@@ -1,13 +1,29 @@
+import { useEffect } from 'react';
+import { QuickSwitcher } from './components/QuickSwitcher';
 import { Sidebar } from './components/Sidebar/Sidebar';
 import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { PlaceholderScreen } from './screens/PlaceholderScreen';
 import { ToolsScreen } from './screens/ToolsScreen';
 import { UsageScreen } from './screens/UsageScreen';
-import { useApp } from './store/context';
+import { useApp, useStoreApis } from './store/context';
 
 export function App() {
   const section = useApp((s) => s.section);
+  const stores = useStoreApis();
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        const ui = stores.ui.getState();
+        if (ui.quickSwitcherOpen) ui.closeQuickSwitcher();
+        else ui.openQuickSwitcher();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [stores]);
   return (
     <div className="flex h-screen bg-white text-neutral-900 dark:bg-neutral-900 dark:text-neutral-100">
       <Sidebar />
@@ -24,6 +40,7 @@ export function App() {
           <PlaceholderScreen section={section} />
         )}
       </main>
+      <QuickSwitcher />
     </div>
   );
 }

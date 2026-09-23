@@ -7,6 +7,8 @@ import type {
   AppSettingsPatch,
   AttachmentBlock,
   AttachmentInput,
+  SearchInput,
+  SearchResult,
   CliDetectResult,
   ConnectionDraft,
   ConnectionPatch,
@@ -102,6 +104,10 @@ export interface Backend {
     cancel(conversationId: string): Promise<void>;
     /** Runs the last errored reply again, in the same message. */
     retry(conversationId: string): Promise<void>;
+  };
+  search: {
+    /** Conversations by title and messages by content, archived ones left out. */
+    query(input: SearchInput): Promise<SearchResult>;
   };
   attachments: {
     /**

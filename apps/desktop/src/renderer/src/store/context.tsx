@@ -7,6 +7,7 @@ import type { ConversationsState, ConversationsStore } from './conversations';
 import type { GoogleDriveState, GoogleDriveStore } from './googleDrive';
 import type { MessagesState, MessagesStore } from './messages';
 import type { ToolServersState, ToolServersStore } from './toolServers';
+import type { UiState, UiStore } from './ui';
 import type { UsageState, UsageStore } from './usage';
 
 export interface Stores {
@@ -18,6 +19,7 @@ export interface Stores {
   toolServers: ToolServersStore;
   usage: UsageStore;
   googleDrive: GoogleDriveStore;
+  ui: UiStore;
 }
 
 const StoresContext = createContext<Stores | null>(null);
@@ -62,6 +64,10 @@ export function useGoogleDrive<T>(selector: (state: GoogleDriveState) => T): T {
 
 export function useUsage<T>(selector: (state: UsageState) => T): T {
   return useStore(useStores().usage, selector);
+}
+
+export function useUi<T>(selector: (state: UiState) => T): T {
+  return useStore(useStores().ui, selector);
 }
 
 /** For effects and handlers that need the current state without subscribing. */

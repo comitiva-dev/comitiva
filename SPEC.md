@@ -148,8 +148,11 @@ Three columns, Slack style:
 - **Sidebar**: agents with avatar, status (idle / responding / awaiting approval / error) and unread count. Shortcuts to Connections, Tools, Usage, Settings.
 - **Center**: conversations of the selected agent and the open chat. Markdown, code with copy, collapsible tool blocks, approval cards, streaming cursor, cancel, retry.
 - **Right panel**: agent details with editable role, active roots and tools, conversation usage.
-- **Composer**: Enter sends, Shift+Enter adds a line break, text and image attachments, `Cmd/Ctrl+K` to switch agent or conversation.
-- Light/dark theme; i18n from the start (en, pt-BR).
+- **Composer**: Enter sends, Shift+Enter adds a line break, Esc stops, text and image attachments (button, drop, paste).
+- **Quick switcher** (`Cmd/Ctrl+K`): agents, conversations and full-text search over messages.
+- **Keyboard shortcuts** for every menu command, listed with `Cmd/Ctrl+/`; a native menu.
+- **Settings**: language, updates, export and import of agents, shortcuts.
+- Light/dark theme (follows the system); i18n (en, pt-BR), chosen in Settings or from the system.
 
 ### 6. Roadmap
 
@@ -177,6 +180,8 @@ Resolved in Phase 1: on Linux without a keyring (Chromium's `basic_text` backend
 Resolved in Phase 5: tool approvals go through the runner for API and CLI runs alike; CLI harnesses reach the agent's tools through the runner's MCP proxy, and their native file tools are turned off or sandboxed read-only when the agent has the `filesystem` server (ADR 0009).
 
 Resolved in Phase 5b: the `google-drive` server is our own, not a community one; OAuth and token refresh live in the desktop, and the server gets a fresh access token via env per launch (ADR 0010).
+
+Resolved in Phase 7: attachments are stored file blocks under the shell's data folder, resolved to base64 before each run, and providers without image support get a note instead of an error (ADR 0012); agents, connections and tool servers move between installs as a versioned portable bundle with no secrets (ADR 0013); installers for macOS, Windows and Linux update themselves from GitHub Releases, signing waits for certificates (ADR 0014).
 
 Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is frozen into the row at write time rather than computed on read, and a CLI harness's cost is shown as an *equivalent* that a subscription may not bill (ADR 0011).
 

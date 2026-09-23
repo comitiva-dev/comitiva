@@ -1129,29 +1129,16 @@ Shortcuts (P7): `shared/shortcuts.ts` lists commands and keys (Electron accelera
 
 ## 8. Everyday commands
 
+Setup, commands, environment variables, tests, debugging, packaging, signing
+and releasing are in [development.md](development.md). The short list:
+
 ```bash
-pnpm dev                      # desktop in dev (hot reload in the renderer, restart of main)
-pnpm dev -- --noSandbox       # Ubuntu 24.04+ (AppArmor blocks the Chromium sandbox for unpackaged Electron)
-pnpm runner:dev               # runner alone (tsx watch): type JSON lines into stdin
-echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs
-
-pnpm test                     # everything
-pnpm --filter @comitiva/runner test -- --watch
-pnpm --filter desktop test:e2e    # electron-vite build + Playwright against the fake four-provider server
-
-pnpm contract:schema          # regenerates packages/contract/schema/*.json (commit it)
-pnpm --filter desktop db:generate                                  # Drizzle migration from db/schema.ts (commit it)
-
-pnpm package                  # builds deps (turbo) + electron-builder for the current platform → apps/desktop/release/
-
-# Inspecting the local database
-sqlite3 "$HOME/Library/Application Support/comitiva/comitiva.db" '.tables'   # macOS
-# Linux: ~/.config/comitiva/ ; Windows: %APPDATA%\comitiva\
+pnpm dev                          # desktop in dev (Ubuntu 24.04+: pnpm dev -- --noSandbox)
+pnpm test && pnpm --filter desktop test:e2e
+pnpm contract:schema              # regenerate packages/contract/schema/*.json (commit it)
+pnpm --filter desktop db:generate # Drizzle migration from db/schema.ts (commit it)
+pnpm package && pnpm --filter desktop test:packaged
 ```
-
-Debugging the runner: `COMITIVA_RUNNER_LOG=debug pnpm dev` makes the runner log to stderr (never to stdout, which is the protocol channel). Main writes that stderr to `<userData>/logs/runner.log` with rotation (5 MB, one backup).
-
-Other env vars: `COMITIVA_USER_DATA` (override userData, used by e2e), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI: allow Linux `basic_text`). The Phase 0 spike vars (`COMITIVA_ANTHROPIC_BASE_URL`, `COMITIVA_DELTA_FLUSH_MS`) went away with the spike; point a connection's base URL at a fake server instead.
 
 ---
 

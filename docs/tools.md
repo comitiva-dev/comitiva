@@ -2,6 +2,25 @@
 
 How agents use tools: MCP servers, the built-in `filesystem` server and its roots, the built-in `google-drive` server and its Google account, the permission gate, approvals, and how to add a server. The decisions behind it are in ADR 0009 and ADR 0010; the protocol is in `docs/architecture.md`.
 
+## Tools or attachments?
+
+Two ways to give an agent something to read:
+
+- **Attach it** (the paperclip in the composer, drag and drop, or paste): the file goes into the message itself, sent with the history on every turn. For a screenshot, a short text file, something the agent needs now. Images up to 5 MB, text files up to 1 MB, ten per message; see [providers.md](providers.md#what-each-provider-does) for what each provider does with them.
+- **Give it a folder or a Drive** (tools): the agent looks things up when it needs them, reads only what it asks for, and can write back with your approval. For a project folder, a set of documents, anything larger or changing.
+
+## Policies at a glance
+
+Each agent has a permission policy (Agent → Edit → Permissions):
+
+| Policy | Reads (list, read, search) | Writes (write, move, delete, create) |
+|---|---|---|
+| **Ask before changes** (`ask`, the default) | run | ask every time, unless you chose "Always allow for this agent" for that tool |
+| **Allow changes** (`allow-writes`) | run | run without asking |
+| **Read only** (`read-only`) | run | not offered to the model; refused if called |
+
+Folders add their own limit: a folder added as **Read only** cannot be written whatever the policy, and anything outside the agent's folders is refused by the server itself.
+
 ## The pieces
 
 ```mermaid
@@ -193,6 +212,22 @@ Header: Authorization = Bearer <token>   (Secret)
 ```
 
 Editing or disabling a server stops its client in the runner, and the next run starts it with the new settings. Deleting a server removes its secrets and unlinks it from agents.
+
+## Importing agents with tool servers
+
+Agents export with their tool servers (Settings → Agents and connections, or the agent's **Export**, ADR 0013). Secret env vars and headers never go into the file. After an import, the report lists each secret the server needs; until you enter it (Tools → the server → Edit, type the value, Save), running an agent that uses the server stops with `secret_missing`. Built-in servers are not exported: an imported agent that used Files or Google Drive gets this app's own, and its folders are kept as paths (the report says which do not exist on this computer).
+
+## When something fails
+
+| Code | What it means | What to do |
+|---|---|---|
+| `outside_roots` | The agent asked for a path outside its folders | Expected; add the folder to the agent if it should have it |
+| `read_only_root` | A write inside a folder added as read | Change the folder to read-write in the agent, if you want that |
+| `approval_denied` | You (or the policy) said no | The model sees it and carries on |
+| `tool_server_failed` | The server did not start or crashed | Tools → the server → **Test** shows the error; check the command, the args and that it is installed (`npx` needs Node) |
+| `tool_failed` | The tool itself failed | The tool block shows the server's message |
+| `secret_missing` | A server's secret is not stored (e.g. after an import) | Tools → Edit → type the value |
+| `google_not_connected`, `google_reconnect_required` | Drive has no usable account | Tools → Google Drive → Connect or Reconnect |
 
 ## Testing
 

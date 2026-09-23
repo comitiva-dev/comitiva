@@ -48,7 +48,10 @@ ESLint enforces the dependency boundaries.
 ```bash
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm --filter desktop test:e2e
+pnpm package && pnpm --filter desktop test:packaged   # when you touch packaging or paths
 ```
+
+More on tests, debugging and packaging in [docs/development.md](docs/development.md).
 
 If you change the contract, run `pnpm contract:schema` and commit `packages/contract/schema/`. If you change the DB schema, run `pnpm --filter desktop db:generate` and commit the migration.
 
@@ -56,7 +59,30 @@ If you change the contract, run `pnpm contract:schema` and commit `packages/cont
 
 - Conventional commits with the package as scope: `feat(runner): …`, `fix(desktop): …`, `docs: …`, `ci: …`.
 - Keep commits small and focused; keep `docs/design.md` in sync in the same commit when you deviate from it.
-- PRs must pass CI (lint, typecheck, tests, e2e, packaging on three OSes).
+- PRs must pass CI (lint, typecheck, tests, e2e, and packaging plus a smoke test of the packaged app on three OSes).
+- Releases are cut by maintainers from tags; the process is in [docs/development.md](docs/development.md#releasing).
+
+## Roadmap
+
+v0.1.0 closes the desktop phases. What comes next, by phase ([SPEC.md §6](SPEC.md#6-roadmap)):
+
+| Phase | Deliverable | Done when |
+|---|---|---|
+| 8 | Laravel hub: auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend` in the desktop | Two desktops see the same conversation live |
+| 9 | Web: the same UI served by the hub, API and `http` MCP execution in the hub, team keys; a desktop as the workspace runner | A user without the desktop talks to a team API agent |
+| 10 | Usage policies: limits, concurrency, fallback and connection switching | An agent switches connection when it hits a limit |
+
+Known gaps you can pick up (see [docs/STATUS.md](docs/STATUS.md) for the details):
+
+- **Code signing and notarization** for macOS and Windows (the release workflow is ready for the secrets; [docs/development.md](docs/development.md#code-signing-to-do)).
+- **A real app icon** (`apps/desktop/build/icon.svg` is a placeholder).
+- Revoking "Always allow" decisions from the UI.
+- Images in tool results for providers other than Anthropic, and PDFs as attachments.
+- MCP `tools/list_changed` notifications.
+- A Gemini CLI harness (`gemini-cli` is in the contract, without an adapter).
+- Hand-run checks against real providers, the real CLIs and a real Google account, on Windows and macOS too.
+
+Good first issues: translations (add a locale next to `en.json` and `pt-BR.json`), provider presets for more OpenAI-compatible endpoints, MCP server examples in [docs/tools.md](docs/tools.md).
 
 ## License
 

@@ -1,3 +1,74 @@
+# Providers
+
+How to connect each LLM Comitiva supports, what each one can do, and how to fix the usual errors. The second half is for contributors: [adding a provider adapter](#adding-a-provider-adapter) and [CLI harnesses](#cli-harnesses).
+
+A **connection** is a way to reach a model: an API with a key (or none, for local servers), or a command-line harness that uses its own login. Open **Connections → Add connection**, pick the provider, fill in the form, press **Fetch models** (APIs) or **Detect** (harnesses), then **Test**, then **Save**. Keys go to the OS keychain (Electron `safeStorage`), never to the database or the renderer. On Linux you need a running keyring (GNOME Keyring or KWallet); without one, Comitiva refuses to store keys and says why.
+
+## What each provider does
+
+| Provider | Kind | Key | Streaming | Tools | Images | Resume | Models list | Usage |
+|---|---|---|---|---|---|---|---|---|
+| Anthropic | API | required | tokens | yes | yes | – | yes | exact, with cache |
+| OpenAI-compatible | API | per preset | tokens | yes | yes¹ | – | yes | exact when the server reports it |
+| Google Gemini | API | required | tokens | yes | yes | – | yes | exact, thinking counted as output |
+| Ollama | API | optional | tokens | yes² | yes¹ | – | yes | exact |
+| Claude Code | CLI | its login | tokens | yes, through the proxy | no → note | session | – | exact, cost reported by the harness |
+| Codex | CLI | its login | whole messages | yes, through the proxy | no → note | session | – | exact |
+
+¹ The provider takes images; whether a given model does depends on the model. A text-only model behind the endpoint answers with an error, shown by code.
+² Tools need a model that supports them (for example `llama3.1`, `qwen2.5`).
+
+**Attachments** (the composer's paperclip, drag and drop, or paste): images (PNG, JPEG, GIF, WebP, up to 5 MB) and text files (UTF-8, up to 1 MB), ten per message.
+- Text files go to every provider as text, inside a `<document name="…">` element. Anthropic gets them as a plain-text document block.
+- Images go natively to the four API providers. A CLI harness does not get them: the model reads `[Image "x.png" attached but not sent: … does not accept images]` instead, and the composer warns before you send.
+- Files are stored under `<userData>/attachments` and sent with the history on every turn (ADR 0012).
+
+## Setting up each one
+
+**Anthropic.** Paste an API key from [console.anthropic.com](https://console.anthropic.com/settings/keys). The base URL (under Advanced) is for gateways and proxies. Pick a default model, or set one per agent.
+
+**OpenAI-compatible.** One adapter for any server that speaks the Chat Completions API. Presets fill the base URL:
+
+| Preset | Base URL | Key |
+|---|---|---|
+| OpenAI | `https://api.openai.com/v1` | required |
+| OpenRouter | `https://openrouter.ai/api/v1` | required |
+| Groq | `https://api.groq.com/openai/v1` | required |
+| LM Studio | `http://localhost:1234/v1` | none |
+| Custom | yours (vLLM, LiteLLM, llama.cpp server, …) | optional |
+
+The server must stream and, for usage, honor `stream_options.include_usage`; without it Comitiva estimates the tokens and marks them estimated.
+
+**Google Gemini.** A Gemini API key from [aistudio.google.com](https://aistudio.google.com/apikey) (not Vertex AI). Thinking tokens count as output.
+
+**Ollama.** Run `ollama serve` and pull a model (`ollama pull llama3.1`). The base URL defaults to `http://localhost:11434`. A key is only for a proxy in front of it. Local models cost nothing: their usage shows `$0.00`.
+
+**Claude Code.** Install it and log in once in a terminal: `claude auth login`. **Detect** finds the binary on `PATH` and the usual install folders, or type its path. The working directory is where it works when the agent has no read-write folder. Comitiva runs it non-interactively with every action auto-accepted, isolated from your own Claude Code settings, hooks and MCP servers. With the agent's Files tool on, its own file tools are turned off, so every write asks you first.
+
+**Codex.** Install it and log in: `codex login`. The **sandbox** setting is Codex's own (read-only, workspace-write, or full access). On Ubuntu 24.04 the workspace-write sandbox may not start (AppArmor restricts user namespaces); **Test** checks for that and says so. Codex cannot turn off its own file edits, so with the agent's Files tool on, Comitiva forces its sandbox read-only; without it, Codex's own edits do not ask you, and the form warns.
+
+## When something fails
+
+Errors are shown by code, in your language. The usual ones:
+
+| Code | What it means | What to do |
+|---|---|---|
+| `auth_failed` | The provider refused the key | Paste the key again; check it has credit and access to the model |
+| `rate_limited` | Too many requests | Wait and **Retry**; lower the concurrency on that key |
+| `provider_unavailable` | No answer (refused, DNS, 5xx) | Check the base URL and that a local server is running |
+| `provider_error` | The provider refused the request | Often an unknown model or a feature the model lacks (images, tools) |
+| `timeout` | No answer in time | Retry; local models may need a smaller one |
+| `model_required` | Neither the agent nor the connection names a model | Set a default model on the connection, or one on the agent |
+| `secret_missing` | The connection needs a key it does not have (e.g. after an import) | Edit the connection and paste the key |
+| `binary_not_found` | The harness is not installed where Comitiva looked | Install it, or type its full path and press **Detect** |
+| `not_logged_in` | The harness has no login | Run the login command the error shows, in a terminal |
+| `sandbox_unavailable` | Codex's sandbox cannot start | Pick the read-only sandbox, or allow user namespaces (see Codex above) |
+| `unsupported_content` | Content the provider cannot take | Remove the attachment, or use a provider that takes it |
+
+Every run's tokens and cost are on the **Usage** screen ([usage.md](usage.md)).
+
+---
+
 # Adding a provider adapter
 
 How to teach the runner a new LLM API. The four API adapters (`anthropic`, `openai-compatible`, `google`, `ollama`) follow this recipe; use them as working examples. CLI harnesses follow a different base class, `CliHarnessAdapter`: see [CLI harnesses](#cli-harnesses) below.
@@ -22,7 +93,8 @@ xxx: {
   id: 'xxx',
   kind: 'api',
   label: 'Xxx',
-  capabilities: textOnly,             // be honest: only what the adapter does today
+  capabilities: { streaming: true, tools: true, resume: false, listModels: true, usage: true, images: false },
+                                      // be honest: only what the adapter does today
   secret: 'required',                 // 'required' | 'optional' | 'none'
   baseUrl: { mode: 'advanced', default: 'https://api.xxx.com' },  // or mode 'required'
 },
@@ -69,6 +141,8 @@ export class XxxAdapter implements ProviderAdapter {
 }
 ```
 
+**Attachments**: translate the parts `userParts(m.content, { images: capabilities.images, provider })` returns — text and, when the provider takes them, images (`{ mediaType, data }` base64). Anthropic's `document` block and Ollama's `images` array are examples.
+
 **Tools** (Phase 5, `docs/tools.md`): `toolLoop` (`runs/ToolLoop.ts`) runs the calls through `ctx.callTool` (gate, approvals, MCP), appends the assistant turn and a `tool` message with the results, and calls `stream` again. It fills `toolServerId`, sums usage across calls, and stops at the iteration limit. The adapter only translates:
 - `ToolDef` → the provider's tool format. `inputSchema` is a JSON Schema object; add `type: 'object'`.
 - `tool_use` blocks in `assistant` messages → the provider's tool calls. Keep `signature` if the provider needs it back (Gemini thought signatures).
@@ -86,13 +160,13 @@ The helpers in `providers/api/shared.ts` enforce the rules every adapter must fo
 | Every turn ends with exactly one `run.usage`, then `run.done`. Failures are thrown as `AppError`, and `Run` turns them into `run.error`. | `streamTurn` |
 | Cancel is not an error. It yields the usage known so far (`estimated: true`) and `done { stopReason: 'cancelled' }` right away, even if the SDK keeps its stream open. | `streamTurn` (races every read against the signal) |
 | `inputTokens` is always **net of `cacheReadTokens`**. Providers disagree — OpenAI's `prompt_tokens` and Gemini's `promptTokenCount` include the cached tokens, Anthropic's and both harnesses' do not — so the adapter subtracts before reporting. Without this, cost charges the cached tokens twice. | each adapter |
-| Usage the provider does not report is estimated by `usage/Tokenizer.ts` (word, punctuation and CJK aware; tool-call and tool-result JSON counted; images and documents charged a flat rate). The tool loop re-seeds the prompt estimate before each model call. | `UsageTracker` |
+| Usage the provider does not report is estimated by `usage/Tokenizer.ts` (word, punctuation and CJK aware; tool-call and tool-result JSON counted; text documents counted as text; images and binary documents charged a flat rate). The tool loop re-seeds the prompt estimate before each model call. | `UsageTracker` |
 | A turn that **fails** still yields its usage before throwing: the tokens were spent and the provider bills them. | `streamTurn` |
 | Report `model` when the provider names what it ran, and `costUsd` when the harness computed one. | each adapter |
 | HTTP errors map to stable codes: 401/403 → `auth_failed`; 429 → `rate_limited` (retryable); 5xx → `provider_unavailable` (retryable); other 4xx → `provider_error`. | `httpError` |
 | No response (refused, DNS, reset) → `provider_unavailable` (retryable). A timeout → `timeout` (retryable). | `networkError`, `isFetchFailure` |
 | Test and list models give up after 15 s with `timeout`. `testConnection` never throws; it returns `{ ok: false, error }`. | `withDeadline`, `probe` |
-| Content the provider cannot take yet (images, documents) fails with `unsupported_content`. | `plainText` |
+| Attachments (ADR 0012): text documents become text, images go natively where `capabilities.images` holds and become a note elsewhere, other binaries become a note. A `file` source is `invalid_request`: the shell resolves it before the run. | `providers/media.ts` (`userParts`, `textOf`) |
 
 Your own `toAppError(err)` should check the SDK's error classes first (timeout before connection error), then fall back to `httpError(status, …)`, `networkError`, and finally `AppError.from`.
 

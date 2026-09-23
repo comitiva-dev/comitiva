@@ -59,6 +59,6 @@ pnpm changelog                      # release notes since the last tag (--prepen
 echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs   # talk to the runner by hand
 ```
 
-Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`; without it the app refuses to store keys on a keyring-less Linux), `COMITIVA_GOOGLE_OAUTH_BASE_URL` / `COMITIVA_GOOGLE_API_BASE_URL` (tests/CI only: point Google OAuth and the Drive API at the fake server).
+Env vars: `COMITIVA_RUNNER_LOG` (runner log level, stderr → `<userData>/logs/runner.log`), `COMITIVA_USER_DATA` (override userData), `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` (tests/CI only: allow Linux `basic_text`; without it the app refuses to store keys on a keyring-less Linux), `COMITIVA_GOOGLE_OAUTH_BASE_URL` / `COMITIVA_GOOGLE_API_BASE_URL` (tests/CI only: point Google OAuth and the Drive API at the fake server), `COMITIVA_DISABLE_UPDATES=1` (never check for updates), `COMITIVA_UPDATE_FEED_URL` (tests only: a local update feed).
 
 More detail: `docs/design.md` §8.

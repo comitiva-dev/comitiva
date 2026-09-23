@@ -24,9 +24,12 @@ installed resources, on all three OSes in CI.
 
 **Linux sandbox.** The deb and rpm install electron-builder's AppArmor profile
 (Ubuntu 24.04+ restricts unprivileged user namespaces) and make `chrome-sandbox`
-setuid only where namespaces are unavailable. The AppImage runs as is on
-Ubuntu 24.04 (verified). The unpacked folder needs `--no-sandbox`, which only
-the tests use.
+setuid only where namespaces are unavailable. The AppImage cannot carry
+either: its launcher (electron-builder's `AppRun`) probes `unshare -Ur true`
+and adds `--no-sandbox` when user namespaces are unavailable, which is the
+case on a default Ubuntu 24.04 (verified). There, the AppImage runs without
+Chromium's sandbox; people who want it use the deb or rpm. The unpacked
+folder needs `--no-sandbox` too, which only the tests use.
 
 **Signing is a documented TODO.** The configuration and the release workflow
 take the certificates from secrets when they exist (`CSC_LINK`,

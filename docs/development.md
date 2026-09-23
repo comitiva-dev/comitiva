@@ -49,7 +49,8 @@ echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs
 | `COMITIVA_RUNNER_LOG` | Runner log level (`debug`, `info`…); stderr goes to `<userData>/logs/runner.log` |
 | `COMITIVA_USER_DATA` | Use another data folder (the tests do) |
 | `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1` | Tests and CI only: allow Linux's `basic_text` secret storage |
-| `COMITIVA_DISABLE_UPDATES=1` | Never check for updates (the packaged smoke test sets it) |
+| `COMITIVA_DISABLE_UPDATES=1` | Never check for updates |
+| `COMITIVA_UPDATE_FEED_URL` | Tests only: read updates from this generic feed instead of GitHub Releases (the packaged smoke test serves one) |
 | `COMITIVA_GOOGLE_OAUTH_BASE_URL`, `COMITIVA_GOOGLE_API_BASE_URL` | Tests only: point Google OAuth and the Drive API at the fake server |
 
 `<userData>` is `~/.config/comitiva` (Linux), `~/Library/Application Support/comitiva`
@@ -72,8 +73,9 @@ echo '{"id":"1","type":"ping"}' | node packages/runner/dist/bin.cjs
   Xvfb.
 - **Packaged smoke** (`pnpm --filter desktop test:packaged`, after
   `pnpm package`): launches `release/*-unpacked` (or the `.app`) and checks
-  that the runner, the MCP proxy, both built-in servers and the migrations
-  work from the packaged resources. CI runs it on macOS, Windows and Linux.
+  that the runner, the MCP proxy, both built-in servers, the migrations and
+  the updater (against a local feed) work from the packaged resources. CI
+  runs it on macOS, Windows and Linux.
 
 Prompt controls for the fake providers: `[chunks:N]`, `[interval:MS]`,
 `[error:NNN]`, `[tool:NAME {json}]`; the fake harnesses take `[mcp:NAME {json}]`

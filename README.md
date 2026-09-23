@@ -34,7 +34,7 @@ Download the file for your system from the [latest release](https://github.com/c
 | Windows 10/11 | `Comitiva-…-win-x64-setup.exe` | Not signed yet: SmartScreen shows **More info → Run anyway**. Installs for your user; updates install on restart. |
 | Linux (Debian, Ubuntu) | `.deb` | `sudo apt install ./Comitiva-…-linux-amd64.deb`. Updates install on restart. |
 | Linux (Fedora, openSUSE) | `.rpm` | `sudo dnf install ./Comitiva-…-linux-x86_64.rpm` |
-| Linux (any) | `.AppImage` | `chmod +x` it and run it. Updates itself. |
+| Linux (any) | `.AppImage` | `chmod +x` it and run it. Updates itself. Where the system blocks user namespaces (Ubuntu 24.04+), it runs without Chromium's sandbox; the deb and rpm keep it. |
 
 On Linux, Comitiva stores API keys in your keyring (GNOME Keyring or KWallet). Without a running keyring it refuses to save keys and says why; local models without a key still work.
 

@@ -19,6 +19,7 @@ import { handleAttachments, registerAttachmentScheme } from './attachmentProtoco
 import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
 import { setLanguage, t } from './i18n';
 import { menuTemplate, REPO_URL } from './menu';
+import type { AppUpdater } from 'electron-updater';
 import { UpdateService, type Updater } from './updates/UpdateService';
 import { readFileSync } from 'node:fs';
 import { paths } from './paths';
@@ -46,6 +47,29 @@ const devServerUrl = process.env.ELECTRON_RENDERER_URL;
 function isTrustedUrl(url: string): boolean {
   if (devServerUrl && url.startsWith(devServerUrl)) return true;
   return url.startsWith('file://');
+}
+
+/**
+ * electron-updater's `autoUpdater`, pointed at COMITIVA_UPDATE_FEED_URL when
+ * set (tests only: a local generic feed). It is a CommonJS module whose
+ * `autoUpdater` is a getter, which a native import() only exposes on
+ * `default`.
+ */
+async function loadUpdater(): Promise<Updater | null> {
+  try {
+    const mod = (await import('electron-updater')) as unknown as {
+      autoUpdater?: AppUpdater;
+      default?: { autoUpdater?: AppUpdater };
+    };
+    const autoUpdater = mod.autoUpdater ?? mod.default?.autoUpdater;
+    if (!autoUpdater) throw new Error('electron-updater has no autoUpdater');
+    const feed = process.env.COMITIVA_UPDATE_FEED_URL;
+    if (feed) autoUpdater.setFeedURL({ provider: 'generic', url: feed });
+    return autoUpdater;
+  } catch (err) {
+    console.warn(`updates unavailable: ${err instanceof Error ? err.message : String(err)}`);
+    return null;
+  }
 }
 
 /**
@@ -221,9 +245,7 @@ async function bootstrap(): Promise<void> {
     : process.env.COMITIVA_DISABLE_UPDATES === '1'
       ? 'env'
       : null;
-  const updater: Updater | null = updatesDisabled
-    ? null
-    : (await import('electron-updater')).autoUpdater;
+  const updater = updatesDisabled ? null : await loadUpdater();
   const updates = new UpdateService({
     updater,
     disabledReason: updatesDisabled,

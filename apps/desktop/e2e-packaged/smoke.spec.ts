@@ -6,6 +6,8 @@ import {
   type Page,
 } from '@playwright/test';
 import { existsSync } from 'node:fs';
+import { createServer, type Server } from 'node:http';
+import type { AddressInfo } from 'node:net';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -42,7 +44,41 @@ function executable(): string {
   return found;
 }
 
+/**
+ * A generic update feed announcing 9.9.9, so the packaged updater runs for
+ * real: it loads, reads the feed and reports the version. The installers it
+ * would download are not there (404), which ends in update_failed.
+ */
+function startUpdateFeed(): Promise<{ url: string; server: Server }> {
+  const file = (name: string) => `  - url: ${name}\n    sha512: ${'A'.repeat(86)}==\n    size: 1\n`;
+  const yml =
+    'version: 9.9.9\nfiles:\n' +
+    file('Comitiva-9.9.9-mac-arm64.zip') +
+    file('Comitiva-9.9.9-win-x64-setup.exe') +
+    file('Comitiva-9.9.9-linux-x86_64.AppImage') +
+    file('Comitiva-9.9.9-linux-amd64.deb') +
+    file('Comitiva-9.9.9-linux-x86_64.rpm') +
+    'path: Comitiva-9.9.9-win-x64-setup.exe\nsha512: ' +
+    'A'.repeat(86) +
+    "==\nreleaseDate: '2026-09-23T00:00:00.000Z'\n";
+  const server = createServer((req, res) => {
+    if (/\/latest(-mac|-linux)?\.yml/.test(req.url ?? '')) {
+      res.writeHead(200, { 'content-type': 'text/yaml' });
+      res.end(yml);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+  return new Promise((resolve) =>
+    server.listen(0, '127.0.0.1', () =>
+      resolve({ url: `http://127.0.0.1:${(server.address() as AddressInfo).port}`, server }),
+    ),
+  );
+}
+
 let fake: FakeProviders;
+let feed: { url: string; server: Server };
 let work: string;
 let app: ElectronApplication;
 let page: Page;
@@ -67,6 +103,7 @@ async function invoke<C extends IpcInvokeChannel>(
 
 test.beforeAll(async () => {
   fake = await startFakeProviders({ chunks: 2, intervalMs: 1 });
+  feed = await startUpdateFeed();
   const userData = await mkdtemp(join(tmpdir(), 'comitiva-packaged-'));
   work = await mkdtemp(join(tmpdir(), 'comitiva-packaged-work-'));
   await writeFile(join(work, 'notes.txt'), 'packaged and working');
@@ -78,7 +115,7 @@ test.beforeAll(async () => {
       ...process.env,
       COMITIVA_USER_DATA: userData,
       COMITIVA_ALLOW_WEAK_SECRET_STORAGE: '1',
-      COMITIVA_DISABLE_UPDATES: '1',
+      COMITIVA_UPDATE_FEED_URL: feed.url,
     },
   });
   page = await app.firstWindow();
@@ -90,6 +127,7 @@ test.beforeAll(async () => {
 test.afterAll(async () => {
   await app?.close();
   await fake?.close();
+  feed?.server.close();
 });
 
 const lastReply = () => page.locator('[data-testid="message"][data-role="assistant"]').last();
@@ -122,8 +160,17 @@ test('is the packaged app, with the runner and the migrations from its resources
     conversations: [],
     messages: [],
   });
-  const updates = await invoke('updates.getStatus');
-  expect(updates).toMatchObject({ state: 'disabled', disabledReason: 'env' });
+});
+
+test('the updater loads and reads its feed', async () => {
+  expect((await invoke('updates.getStatus')).disabledReason).toBeNull();
+  await invoke('updates.check');
+  await expect
+    .poll(async () => (await invoke('updates.getStatus')).version, { timeout: 30_000 })
+    .toBe('9.9.9');
+  const status = await invoke('updates.getStatus');
+  expect(status.currentVersion).toBe('0.1.0');
+  expect(status.lastCheckedAt).not.toBeNull();
 });
 
 test('an API agent reads a file through the bundled filesystem server', async () => {

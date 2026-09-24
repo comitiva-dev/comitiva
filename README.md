@@ -8,7 +8,7 @@ It is not a coding tool. Agents research, write, review and organize files; code
 
 <!-- Screenshot placeholder: docs/images/chat.png — the three columns: agents in the sidebar, a conversation with a tool call waiting for approval, the agent's panel. -->
 
-> **Status: v0.1.0**, the first release: macOS, Windows and Linux. A self-hostable hub for teams and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
+> **Status: v0.1.0**, the first release: macOS, Windows and Linux. A hub for teams (self-hostable, in its own AGPL repository, or hosted at `app.comitiva.dev`) and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
 
 ## What it does
 
@@ -54,7 +54,7 @@ Renderer (React) ──Backend──▶ Preload ──IPC──▶ Electron main
 
 - **The runner is the product.** All LLM execution — adapters, streaming, cancellation, usage, the tool loop, MCP clients and approvals — lives in `packages/runner`, a plain Node process with its own JSON-lines protocol. Electron is one client of it.
 - **Local-first.** SQLite for everything, the OS keychain for secrets.
-- **Shared contract.** `packages/contract` holds zod schemas and the JSON Schema the future Laravel hub will read.
+- **Shared contract.** `packages/contract` holds zod schemas and the JSON Schema the future Laravel hub, in its own repository, will read ([ADR 0015](docs/adr/0015-hub-repositories-and-editions.md)).
 
 Read more in [SPEC.md](SPEC.md), [docs/architecture.md](docs/architecture.md), [docs/design.md](docs/design.md) and the [ADRs](docs/adr/).
 

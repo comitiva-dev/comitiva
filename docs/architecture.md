@@ -33,7 +33,7 @@ flowchart LR
   PX -- "local socket + run token (ToolBridge)" --> RN
 ```
 
-- **Renderer** — React 19, Zustand, Tailwind, i18next. It depends only on the `Backend` interface (`renderer/src/backend/Backend.ts`). `LocalBackend` implements it over `window.api`; `RemoteBackend` (Phase 8) will implement it over HTTP + WebSocket.
+- **Renderer** — React 19, Zustand, Tailwind, i18next. It depends only on the `Backend` interface (`renderer/src/backend/Backend.ts`). `LocalBackend` implements it over `window.api`; `RemoteBackend` (Phase 8) will implement it over HTTP + WebSocket, against a hub from `comitiva-dev/hub`: a self-hosted community edition or the official hosted hub (ADR 0015).
 - **Preload** — Exposes `window.api = { invoke, on }` through `contextBridge`, allowlisted against the channel names in `@comitiva/contract/ipc-channels`. The window runs with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, a strict CSP, no navigation and no popups.
 - **Main** — Validates every IPC input with the zod schemas in `contract/ipc.ts` and strips every output to its schema (`runInvoke`). Owns SQLite (Drizzle), the `SecretStore`, and the `RunnerSupervisor`. It is the only process that sees secret values; it sends them to the runner per request.
 - **CLI harnesses** — Claude Code and Codex, spawned by the runner for each turn in the conversation's working directory, in their own process group. They run non-interactively with auto-accept and use their own login (ADR 0007, `docs/providers.md` → CLI harnesses).

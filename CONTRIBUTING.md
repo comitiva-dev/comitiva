@@ -68,7 +68,7 @@ v0.1.0 closes the desktop phases. What comes next, by phase ([SPEC.md §6](SPEC.
 
 | Phase | Deliverable | Done when |
 |---|---|---|
-| 8 | Laravel hub: auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend` in the desktop | Two desktops see the same conversation live |
+| 8 | Laravel hub, in its own repository (`comitiva-dev/hub`, AGPL-3.0, [ADR 0015](docs/adr/0015-hub-repositories-and-editions.md)): auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend` in the desktop | Two desktops see the same conversation live |
 | 9 | Web: the same UI served by the hub, API and `http` MCP execution in the hub, team keys; a desktop as the workspace runner | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | An agent switches connection when it hits a limit |
 

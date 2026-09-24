@@ -6,7 +6,7 @@
 
 ### 1. Vision
 
-An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop.
+An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop. The hub comes in two editions: an open source **community edition** teams host themselves, and the **official hosted hub** at `app.comitiva.dev`, billed by usage, which adds a closed enterprise layer (ADR 0015).
 
 What it is not: a coding tool. Nothing in the core assumes Git, repositories or a terminal. Those can come in as an MCP server like any other tool.
 
@@ -17,7 +17,7 @@ What it is not: a coding tool. Nothing in the core assumes Git, repositories or 
 3. **Local-first.** Without the hub, everything works offline with SQLite. The hub is optional and syncs.
 4. **Secrets never in plain text.** API keys and OAuth tokens go through Electron's `safeStorage`, outside SQLite.
 5. **The user sees and controls what the agent does with files.** Reading inside the roots is free; writing asks for approval; outside the roots is denied.
-6. **Shared contract, not shared code.** Desktop (TS) and hub (PHP) share the JSON schemas for messages, blocks, events and entities, published in `packages/contract`. Each side implements them as best fits its world.
+6. **Shared contract, not shared code.** Desktop (TS) and hub (PHP) share the JSON schemas for messages, blocks, events and entities, published in `packages/contract`. Each side implements them as best fits its world. The hub lives in its own repository and pins a release of the contract (ADR 0015).
 
 ### 3. Domain concepts
 
@@ -57,18 +57,19 @@ repo/
 │   └── mcp-servers/  # built-in MCP servers: filesystem (with roots), google-drive, documents (future)
 ├── apps/
 │   ├── desktop/      # Electron: main (runner client, SQLite, secrets, IPC) + React renderer
-│   ├── hub/          # Phase 8: Laravel + Reverb + Postgres
 │   └── web/          # Phase 9: React served by the hub, reuses desktop components
 ├── docs/
 ├── SPEC.md
 └── CLAUDE.md
 ```
 
+Sibling repositories under `comitiva-dev` (ADR 0015): `hub` (Phase 8, the Laravel hub, community edition, AGPL-3.0), `hub-enterprise` (private: the enterprise package and the deployment of the hosted hub) and `comitiva.dev` (the static site).
+
 **Desktop stack:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 with Drizzle migrations (ADR 0003), zod-typed IPC, vitest, Playwright.
 
 **Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists. The desktop runs it with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE`, ADR 0002); any Node ≥ 22 can run it standalone.
 
-**Hub stack:** Laravel 12+, Reverb, Sanctum, Postgres, Pest. Implements the `contract` in PHP (validation via generated JSON Schema).
+**Hub stack:** Laravel 12+, Reverb, Sanctum, Postgres, Pest, in its own repository (`comitiva-dev/hub`, AGPL-3.0 with a CLA). Implements the `contract` in PHP (validation via generated JSON Schema, copied from a pinned release). Billing, plans, usage policies, identity and audit sit behind interfaces with community defaults; the private enterprise package rebinds them for the hosted hub (ADR 0015).
 
 #### 4.1 Runner protocol
 
@@ -167,8 +168,8 @@ Three columns, Slack style:
 | 5b | Google Drive: OAuth, built-in server, registering third-party MCP servers in the UI | Agent reads a Google Doc and creates another one with approval |
 | 6 | Usage: records, pricing, dashboard, export | Dashboard matches the records |
 | 7 | Polish and v0.1.0: attachments, search, export/import, i18n, packaging, auto-update | Release published |
-| 8 | Laravel hub: auth, workspaces, sync of agents and conversations, Reverb, `RemoteBackend` in the desktop | Two desktops see the same conversation live |
-| 9 | Web: same UI served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
+| 8 | Laravel hub in `comitiva-dev/hub`: auth, workspaces, sync of agents and conversations, Reverb, `RemoteBackend` in the desktop | Two desktops see the same conversation live |
+| 9 | Web: same UI, built here and served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | Agent switches connection when it hits a limit |
 
 ### 7. Decisions
@@ -184,5 +185,7 @@ Resolved in Phase 5b: the `google-drive` server is our own, not a community one;
 Resolved in Phase 7: attachments are stored file blocks under the shell's data folder, resolved to base64 before each run, and providers without image support get a note instead of an error (ADR 0012); agents, connections and tool servers move between installs as a versioned portable bundle with no secrets (ADR 0013); installers for macOS, Windows and Linux update themselves from GitHub Releases, signing waits for certificates (ADR 0014).
 
 Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is frozen into the row at write time rather than computed on read, and a CLI harness's cost is shown as an *equivalent* that a subscription may not bill (ADR 0011).
+
+Resolved after v0.1.0: the hub lives in its own repository as an AGPL-3.0 community edition with a CLA; a private Laravel package adds billing and the other enterprise features for the official hosted hub at `app.comitiva.dev`; the contract and the web UI stay in this repository, and the hub pins their releases (ADR 0015).
 
 ---

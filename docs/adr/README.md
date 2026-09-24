@@ -18,3 +18,4 @@ One file per decision that affects more than one package. Format: context, decis
 | [0012](0012-attachments-as-stored-file-blocks.md) | Attachments are stored file blocks, resolved to base64 by the shell before a run; providers without images get a note | Accepted |
 | [0013](0013-portable-bundle.md) | Agents, connections and tool servers travel as a versioned portable bundle in the contract, with no secrets and file-local refs | Accepted |
 | [0014](0014-packaging-and-updates.md) | electron-builder for dmg, nsis, AppImage, deb and rpm; signing from secrets when present; updates from GitHub Releases | Accepted |
+| [0015](0015-hub-repositories-and-editions.md) | The hub in its own repository: AGPL community edition, private enterprise package for the hosted hub; contract and web UI stay here | Accepted |

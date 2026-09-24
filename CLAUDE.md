@@ -1,6 +1,6 @@
 # Comitiva
 
-Agentic chat for your whole team. Open source desktop app (Electron + TypeScript) where users register LLM connections (APIs or CLI harnesses such as Claude Code and Codex), create agents with a role and a set of tools (local folders, Google Drive, any MCP server), and talk to all of them in a Slack-style chat with many conversations running in parallel. Later: a Laravel hub for teams and a web UI.
+Agentic chat for your whole team. Open source desktop app (Electron + TypeScript) where users register LLM connections (APIs or CLI harnesses such as Claude Code and Codex), create agents with a role and a set of tools (local folders, Google Drive, any MCP server), and talk to all of them in a Slack-style chat with many conversations running in parallel. Later: a Laravel hub for teams (separate repository, ADR 0015) and a web UI.
 
 ## Read first
 

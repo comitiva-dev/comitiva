@@ -151,6 +151,22 @@ publishes it (below, "Hand-off").
 Auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend`
 in the desktop. Done when two desktops see the same conversation live.
 
+The hub lives in its own repository (ADR 0015). First steps, before any hub
+code:
+
+1. Create `comitiva-dev/hub`: Laravel 12, AGPL-3.0, CLA Assistant on pull
+   requests (license and CLA text reviewed by a lawyer first), CI publishing
+   `ghcr.io/comitiva-dev/hub` for every commit on `main` and every tag.
+2. Define the hub's extension interfaces and events with community defaults,
+   and the metadata endpoint (`apiVersion`, `edition`, capabilities).
+3. Add the contract sync to the hub: copy `packages/contract/schema/*.json`
+   from a pinned release tag, with a drift check in CI.
+4. Here: the hub's HTTP and WebSocket payloads in `@comitiva/contract`, a fake
+   hub for unit and integration tests, and a `RemoteBackend` e2e against the
+   pinned hub image.
+5. Separately: `comitiva-dev/hub-enterprise` (private) when billing starts, and
+   `comitiva-dev/comitiva.dev` for the site at `comitiva.dev`.
+
 ## Phase 6 — Usage: records, pricing, dashboard, export (done)
 
 Done when the dashboard matches the records: yes. The first test of

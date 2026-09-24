@@ -121,7 +121,7 @@ Build order: `contract` → `runner` and `mcp-servers` → `desktop`. `turbo` re
 
 | Directory | `name` | Publishable |
 |---|---|---|
-| packages/contract | `@comitiva/contract` | yes (the Laravel hub consumes `schema/`; subpath `./ipc-channels` has no zod) |
+| packages/contract | `@comitiva/contract` | yes (the Laravel hub, `comitiva-dev/hub`, copies `schema/` from a pinned release tag, ADR 0015; subpath `./ipc-channels` has no zod) |
 | packages/runner | `@comitiva/runner` | yes (bin `comitiva-runner` = `dist/bin.cjs`, with `dist/mcp-proxy.cjs` next to it (P5); subpaths `./bin`, `./testing`) |
 | packages/mcp-servers | `@comitiva/mcp-servers` | yes (bin `comitiva-mcp-filesystem` = `dist/filesystem.cjs`, subpath `./filesystem-bin` (P5); bin `comitiva-mcp-gdrive` = `dist/google-drive.cjs`, subpath `./google-drive-bin`, and `./testing` (fake Google) (P5b)) |
 | apps/desktop | `desktop` | no |

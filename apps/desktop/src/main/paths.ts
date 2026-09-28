@@ -35,6 +35,10 @@ export const paths = {
   attachments(): string {
     return join(app.getPath('userData'), 'attachments');
   },
+  /** Attachments of workspace messages, downloaded from the hub (P8). */
+  hubCache(): string {
+    return join(app.getPath('userData'), 'hub-cache');
+  },
   /** Default working directories of CLI harness conversations. */
   workspaces(): string {
     return join(app.getPath('userData'), 'workspaces');

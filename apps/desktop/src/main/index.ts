@@ -1,5 +1,7 @@
 import { app, BrowserWindow, Menu, safeStorage, shell } from 'electron';
-import { AppError, ipcInvokeChannels } from '@comitiva/contract';
+import { AppError } from '@comitiva/contract';
+import { hostname } from 'node:os';
+import { isAbsolute } from 'node:path';
 import { join } from 'node:path';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
@@ -16,7 +18,17 @@ import { Pricing } from './usage/Pricing';
 import { UsageService } from './usage/UsageService';
 import { IpcRouter } from './ipc/IpcRouter';
 import { GOOGLE_API_BASE_URL, GoogleOAuth, googleEndpoints } from './oauth/GoogleOAuth';
-import { handleAttachments, registerAttachmentScheme } from './attachmentProtocol';
+import {
+  handleAttachments,
+  handleHubAttachments,
+  registerAttachmentScheme,
+} from './attachmentProtocol';
+import { HubLocalRepository } from './db/repositories/HubLocalRepository';
+import { HubSettingsRepository } from './db/repositories/HubSettingsRepository';
+import { HubAttachments } from './hub/HubAttachments';
+import { hubHeaderRef } from './hub/HubChatStore';
+import { HubRunService } from './hub/HubRunService';
+import { HubService } from './hub/HubService';
 import { pickFolder, pickOpenFile, pickSaveFile } from './dialogs';
 import { setLanguage, t } from './i18n';
 import { menuTemplate, REPO_URL } from './menu';
@@ -237,6 +249,35 @@ async function bootstrap(): Promise<void> {
     attachments,
   });
   chat.recover();
+
+  // The hub (P8, ADR 0017): main keeps the token, the REST client and the
+  // socket; workspace turns run here and are published there.
+  const hubLocal = new HubLocalRepository(db);
+  const hub = new HubService({
+    settings: new HubSettingsRepository(db),
+    secrets,
+    deviceName: `${hostname()} (Comitiva)`,
+    log: (message) => console.warn(message),
+  });
+  const hubAttachments = new HubAttachments(paths.hubCache(), () => hub.client());
+  handleHubAttachments((id) => hubAttachments.get(id));
+  const hubRuns = new HubRunService({
+    hub,
+    local: hubLocal,
+    connections: connectionRepo,
+    toolServers,
+    secrets,
+    pricing,
+    attachments: hubAttachments,
+    runner: supervisor.client,
+    secretFor,
+    title: new TitleService({ runner: supervisor.client, usage, secretFor }),
+    workspacesDir: paths.workspaces(),
+    log: (message) => console.warn(message),
+  });
+  void hub.init();
+  /** Channels the window listens to; main's own (a run's cancel requests) are not forwarded. */
+  const windowChannels = new Set<string>();
   // Attachments of drafts never sent; in the background, it never blocks startup.
   void attachments.sweep(messageRepo.attachmentNames()).catch(() => {});
 
@@ -256,13 +297,6 @@ async function bootstrap(): Promise<void> {
     releaseUrl: (version) => `${REPO_URL}/releases/tag/v${version}`,
     log: (message) => console.warn(message),
   });
-
-  const notYet = (): never => {
-    throw new AppError('not_implemented', 'The hub is not wired yet');
-  };
-  const hubNotYet = Object.fromEntries(
-    ipcInvokeChannels.filter((c) => c.startsWith('hub')).map((c) => [c, notYet]),
-  ) as Record<Extract<(typeof ipcInvokeChannels)[number], `hub${string}`>, () => never>;
 
   const router = new IpcRouter(
     {
@@ -334,7 +368,52 @@ async function bootstrap(): Promise<void> {
       'usage.setPrice': ({ provider, model, prices: p }) =>
         usageReports.setPrice(provider, model, p),
       'usage.clearPrice': ({ provider, model }) => usageReports.clearPrice(provider, model),
-      ...hubNotYet,
+      'hub.getStatus': () => hub.status(),
+      'hub.configure': ({ url }) => hub.configure(url),
+      'hub.register': (input) => hub.register(input),
+      'hub.login': (input) => hub.login(input),
+      'hub.logout': () => hub.logout(),
+      'hub.request': (req) => hub.request(req),
+      'hub.subscribe': ({ channel }) => {
+        if (windowChannels.has(channel)) return;
+        windowChannels.add(channel);
+        hub.subscribe(channel);
+      },
+      'hub.unsubscribe': ({ channel }) => {
+        if (windowChannels.delete(channel)) hub.unsubscribe(channel);
+      },
+      'hubRuns.send': ({ conversationId, content }) => hubRuns.send(conversationId, content),
+      'hubRuns.retry': ({ conversationId }) => hubRuns.retry(conversationId),
+      'hubRuns.cancel': ({ conversationId }) => hubRuns.cancel(conversationId),
+      'hubRuns.decide': ({ conversationId, toolUseId, decision }) =>
+        hubRuns.decide(conversationId, toolUseId, decision),
+      'hubLinks.list': ({ workspaceId }) => hubLocal.links(workspaceId),
+      'hubLinks.set': (link) => {
+        if (link.connectionId) connectionRepo.require(link.connectionId);
+        if (link.roots.some((r) => !isAbsolute(r.path))) {
+          throw new AppError('invalid_request', 'Folders must be absolute paths');
+        }
+        return hubLocal.setLink(link);
+      },
+      'hubToolSecrets.names': async ({ toolServerId, names }) => {
+        const stored: string[] = [];
+        for (const name of names) {
+          if (await secrets.has(hubHeaderRef(toolServerId, name))) stored.push(name);
+        }
+        return stored;
+      },
+      'hubToolSecrets.set': async ({ toolServerId, headers }) => {
+        for (const [name, value] of Object.entries(headers)) {
+          const ref = hubHeaderRef(toolServerId, name);
+          if (value === null) await secrets.delete(ref);
+          else await secrets.set(ref, value);
+        }
+        const stored: string[] = [];
+        for (const name of Object.keys(headers)) {
+          if (await secrets.has(hubHeaderRef(toolServerId, name))) stored.push(name);
+        }
+        return stored;
+      },
     },
     isTrustedUrl,
   );
@@ -364,6 +443,13 @@ async function bootstrap(): Promise<void> {
   chat.on('message.delta', (p) => router.broadcast('message.delta', p));
   chat.on('message.block', (p) => router.broadcast('message.block', p));
   updates.on('status', (status) => router.broadcast('updates.status', status));
+  hub.on('status', (status) => router.broadcast('hub.status', status));
+  hub.on('event', (channel, event) => {
+    if (windowChannels.has(channel)) router.broadcast('hub.event', { channel, event });
+  });
+  hub.on('presence', (channel, members) => {
+    if (windowChannels.has(channel)) router.broadcast('hub.presence', { channel, members });
+  });
   updates.start();
 
   createWindow();
@@ -377,6 +463,8 @@ async function bootstrap(): Promise<void> {
     // Replies still streaming are saved as cancelled before the runner and the DB go away.
     updates.stop();
     chat.shutdown();
+    hubRuns.shutdown();
+    hub.close();
     void supervisor.stop().finally(() => {
       db.close();
       app.quit();

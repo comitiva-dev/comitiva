@@ -725,8 +725,11 @@ export const ipcInvoke = {
   /** How this machine runs a workspace's shared agents (never sent to the hub). */
   'hubLinks.list': { input: z.object({ workspaceId: Id }), output: z.array(AgentLink) },
   'hubLinks.set': { input: AgentLink, output: AgentLink },
-  /** Names of a workspace tool server's secret headers that have a value on this machine. */
-  'hubToolSecrets.names': { input: z.object({ toolServerId: Id }), output: z.array(z.string()) },
+  /** Which of these secret header names of a workspace tool server have a value on this machine. */
+  'hubToolSecrets.names': {
+    input: z.object({ toolServerId: Id, names: z.array(z.string()) }),
+    output: z.array(z.string()),
+  },
   'hubToolSecrets.set': { input: HubToolSecretsInput, output: z.array(z.string()) },
 } as const;
 

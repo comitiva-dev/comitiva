@@ -232,3 +232,39 @@ export const appSettings = sqliteTable('app_settings', {
   key: text('key').primaryKey(),
   value: text('value', { mode: 'json' }).notNull(),
 });
+
+// ---------------------------------------------------------------- hub (P8)
+// What this machine keeps about workspaces on a hub (ADR 0017). The hub is
+// the source of truth for shared data; these are the per-desktop parts.
+
+/**
+ * How this member runs a workspace's shared agent: one of their local
+ * connections, plus local folders and tool servers. Never sent to the hub.
+ */
+export const hubAgentLinks = sqliteTable('hub_agent_links', {
+  agentId: text('agent_id').primaryKey(),
+  workspaceId: text('workspace_id').notNull(),
+  connectionId: text('connection_id'),
+  roots: json('roots', '[]'),
+  toolServerIds: json('tool_server_ids', '[]'),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/** Harness sessions of workspace conversations run on this machine. */
+export const hubHarnessSessions = sqliteTable('hub_harness_sessions', {
+  conversationId: text('conversation_id').primaryKey(),
+  harnessSessionId: text('harness_session_id').notNull(),
+  connectionId: text('connection_id').notNull(),
+});
+
+/** "Always allow" for a workspace agent's tool: it acts on this machine, so it stays here. */
+export const hubAlwaysAllowed = sqliteTable(
+  'hub_always_allowed',
+  {
+    agentId: text('agent_id').notNull(),
+    toolServerId: text('tool_server_id').notNull(),
+    toolName: text('tool_name').notNull(),
+    decidedAt: text('decided_at').notNull(),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.toolServerId, t.toolName] })],
+);

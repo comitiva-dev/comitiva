@@ -186,7 +186,10 @@ export class RemoteBackend implements Backend {
       const links = await this.executor.links(this.ws);
       let link = links.find((l) => l.agentId === id) ?? null;
 
+      // Only what changed goes to the hub: the edit form sends every field, and a member who
+      // is not the agent's creator may still change their own link (connection, folders).
       const body: Record<string, unknown> = {};
+      const changed = (a: unknown, b: unknown) => stable(a) !== stable(b);
       for (const key of [
         'name',
         'avatar',
@@ -196,12 +199,12 @@ export class RemoteBackend implements Backend {
         'permissionPolicy',
         'tags',
       ] as const) {
-        if (valid[key] !== undefined) body[key] = valid[key];
+        if (valid[key] !== undefined && changed(valid[key], shared[key])) body[key] = valid[key];
       }
       let localTools = link?.toolServerIds ?? [];
       if (valid.toolServerIds !== undefined) {
         const split = await this.splitTools(valid.toolServerIds);
-        body.toolServerIds = split.shared;
+        if (changed(split.shared, shared.toolServerIds)) body.toolServerIds = split.shared;
         localTools = split.local;
       }
       if (Object.keys(body).length > 0) {
@@ -649,6 +652,17 @@ function sharedHeaders(
       name,
       'value' in value ? { value: value.value } : { secretRef: 'member' as const },
     ]),
+  );
+}
+
+/** JSON with object keys sorted: the hub's jsonb does not keep key order. */
+function stable(value: unknown): string {
+  return JSON.stringify(value, (_key, v: unknown) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+      ? Object.fromEntries(
+          Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)),
+        )
+      : v,
   );
 }
 

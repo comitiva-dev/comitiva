@@ -144,34 +144,24 @@ test('two desktops see the same conversation live', async () => {
     timeout: 15_000,
   });
 
-  // Setup through the same IPC the UI uses: a shared agent, linked to each one's own connection.
-  const workspaces = (await invoke(ana.page, 'hub.request', {
-    method: 'GET',
-    path: '/api/v1/workspaces',
-  })) as Array<{ id: string }>;
-  const workspaceId = workspaces[0]!.id;
-  const agent = (await invoke(ana.page, 'hub.request', {
-    method: 'POST',
-    path: `/api/v1/workspaces/${workspaceId}/agents`,
-    body: {
-      name: 'Scout',
-      avatar: { color: 'teal' },
-      provider: 'ollama',
-      model: 'llama-fake:latest',
-    },
-  })) as { id: string };
-  for (const d of [ana, bea]) {
-    await invoke(d.page, 'hubLinks.set', {
-      agentId: agent.id,
-      workspaceId,
-      connectionId: d.connectionId,
-      roots: [],
-      toolServerIds: [],
-    });
-  }
+  // Ana creates an agent in the workspace, run with her own connection.
+  await ana.page.getByTestId('new-agent').click();
+  const anaForm = ana.page.getByTestId('agent-form');
+  await anaForm.getByTestId('agent-name').fill('Scout');
+  await anaForm.getByTestId('agent-connection').selectOption({ label: "ana's Ollama" });
+  await anaForm.getByTestId('save').click();
   await expect(agentItem(ana.page, 'Scout')).toBeVisible();
-  await expect(agentItem(bea.page, 'Scout')).toBeVisible();
-  // The shared agent loads with each member's own link after a fresh load of the list.
+
+  // Bea sees it appear, and links it to her own connection (only her link changes).
+  await expect(agentItem(bea.page, 'Scout')).toBeVisible({ timeout: 15_000 });
+  await agentItem(bea.page, 'Scout').click();
+  await bea.page.getByTestId('agent-edit').click();
+  const beaForm = bea.page.getByTestId('agent-form');
+  await beaForm.getByTestId('agent-connection').selectOption({ label: "bea's Ollama" });
+  await beaForm.getByTestId('save').click();
+  await expect(beaForm).toBeHidden();
+  await expect(bea.page.getByTestId('agent-panel')).toContainText("bea's Ollama");
+
   for (const d of [ana, bea]) {
     await d.page.reload();
     await expect(agentItem(d.page, 'Scout')).toBeVisible();

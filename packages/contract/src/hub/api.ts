@@ -43,6 +43,15 @@ export const HubMeta = z.object({
     execution: z.boolean(),
     registration: z.enum(['open', 'invite-only']),
   }),
+  /** Where clients open the WebSocket (Reverb, Pusher protocol); null when realtime is off. */
+  realtime: z
+    .object({
+      key: z.string().min(1),
+      host: z.string().min(1),
+      port: z.number().int().positive(),
+      scheme: z.enum(['http', 'https']),
+    })
+    .nullable(),
 });
 export type HubMeta = z.infer<typeof HubMeta>;
 

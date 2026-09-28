@@ -20,5 +20,10 @@ export const Message = z.object({
   createdAt: IsoDate,
   /** Why an assistant message ended in `error`; null otherwise. The UI shows it by code. */
   error: AppErrorShape.nullable().default(null),
+  /**
+   * Hub workspaces: the member who wrote it (a user message) or whose desktop
+   * ran it (a reply). Absent on this machine's own conversations.
+   */
+  author: z.object({ id: Id, name: z.string() }).nullable().optional(),
 });
 export type Message = z.infer<typeof Message>;

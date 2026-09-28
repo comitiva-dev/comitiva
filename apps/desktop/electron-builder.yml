@@ -2,7 +2,7 @@ appId: dev.comitiva.desktop
 productName: Comitiva
 executableName: comitiva
 artifactName: ${productName}-${version}-${os}-${arch}.${ext}
-copyright: Copyright © Comitiva contributors
+copyright: Copyright © Softerize Sistemas Ltda
 directories:
   output: release
   buildResources: build
@@ -66,8 +66,8 @@ linux:
   description: >-
     Connect LLMs (APIs or CLI harnesses such as Claude Code and Codex), create
     agents with a role and tools, and talk to all of them in a Slack-style chat.
-  maintainer: Comitiva contributors
-  vendor: Comitiva contributors
+  maintainer: Softerize Sistemas Ltda
+  vendor: Softerize Sistemas Ltda
   syncDesktopName: true
   target:
     - AppImage

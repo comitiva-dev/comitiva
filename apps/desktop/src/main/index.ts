@@ -438,7 +438,7 @@ async function bootstrap(): Promise<void> {
   app.setAboutPanelOptions({
     applicationName: 'Comitiva',
     applicationVersion: app.getVersion(),
-    copyright: 'Copyright © Comitiva contributors · Apache-2.0',
+    copyright: 'Copyright © Softerize Sistemas Ltda · Apache-2.0',
     website: REPO_URL,
   });
   supervisor.on('status', (status) => router.broadcast('runner.status', { status }));

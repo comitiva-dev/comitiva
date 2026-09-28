@@ -47,6 +47,8 @@ export const ErrorCode = z.enum([
   'run_expired',
   'agent_not_linked',
   'invitation_invalid',
+  'invalid_credentials',
+  'email_taken',
   'timeout',
   'internal',
 ]);

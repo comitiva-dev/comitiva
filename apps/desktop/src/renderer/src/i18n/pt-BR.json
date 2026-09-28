@@ -154,6 +154,8 @@
     "run_expired": "O hub parou de esperar por esta resposta. Você pode tentar de novo.",
     "agent_not_linked": "Escolha primeiro qual das suas conexões roda este agente.",
     "invitation_invalid": "Este convite é inválido, expirou ou é para outro e-mail.",
+    "invalid_credentials": "E-mail ou senha incorretos.",
+    "email_taken": "Já existe uma conta com este e-mail neste hub. Entre em vez disso.",
     "oauth_not_configured": "Adicione antes o seu cliente OAuth do Google (Ferramentas → Google Drive → Configurar).",
     "oauth_failed": "O Google não concluiu o login. Confira o cliente OAuth e tente de novo.",
     "oauth_cancelled": "A conexão foi cancelada.",

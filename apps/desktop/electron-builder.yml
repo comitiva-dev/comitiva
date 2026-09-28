@@ -73,7 +73,12 @@ linux:
     - AppImage
     - deb
     - rpm
+# The package name defaults to package.json's `name`, which is the workspace
+# name (`desktop`); installers such as Ubuntu's App Center show it as the title.
+deb:
+  packageName: comitiva
 rpm:
+  packageName: comitiva
   # electron-builder's defaults plus libsecret: safeStorage needs a keyring.
   depends:
     - gtk3

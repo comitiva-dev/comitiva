@@ -1,0 +1,633 @@
+{
+  "$id": "https://comitiva.dev/schema/HubRunEventsInput.json",
+  "title": "HubRunEventsInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "batch": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "events": {
+      "minItems": 1,
+      "maxItems": 500,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "const": "run.text_delta"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "runId",
+              "type",
+              "text"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "const": "run.block"
+              },
+              "block": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "text"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "image"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "document"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "name",
+                      "mediaType",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_use"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "toolServerId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "input": {},
+                      "signature": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id",
+                      "toolServerId",
+                      "name",
+                      "input"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_result"
+                      },
+                      "toolUseId": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "text"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "image"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "source"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "document"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "name",
+                                "mediaType",
+                                "source"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "isError": {
+                        "type": "boolean"
+                      },
+                      "durationMs": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "toolUseId",
+                      "content",
+                      "isError"
+                    ]
+                  }
+                ]
+              }
+            },
+            "required": [
+              "runId",
+              "type",
+              "block"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "const": "run.tool_call"
+              },
+              "toolUseId": {
+                "type": "string"
+              },
+              "toolServerId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "toolName": {
+                "type": "string"
+              },
+              "input": {},
+              "requiresApproval": {
+                "type": "boolean"
+              }
+            },
+            "required": [
+              "runId",
+              "type",
+              "toolUseId",
+              "toolServerId",
+              "toolName",
+              "input",
+              "requiresApproval"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "runId": {
+                "type": "string",
+                "minLength": 1
+              },
+              "ts": {
+                "type": "number"
+              },
+              "type": {
+                "type": "string",
+                "const": "run.tool_result"
+              },
+              "toolUseId": {
+                "type": "string"
+              },
+              "output": {
+                "type": "array",
+                "items": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "text"
+                        },
+                        "text": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "text"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "image"
+                        },
+                        "source": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "base64"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                },
+                                "data": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "mediaType",
+                                "data"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "file"
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "path"
+                              ]
+                            }
+                          ]
+                        },
+                        "name": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "source"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "type": {
+                          "type": "string",
+                          "const": "document"
+                        },
+                        "name": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "source": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "base64"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                },
+                                "data": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "mediaType",
+                                "data"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "kind": {
+                                  "type": "string",
+                                  "const": "file"
+                                },
+                                "path": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "kind",
+                                "path"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "required": [
+                        "type",
+                        "name",
+                        "mediaType",
+                        "source"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "isError": {
+                "type": "boolean"
+              },
+              "durationMs": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "required": [
+              "runId",
+              "type",
+              "toolUseId",
+              "output",
+              "isError",
+              "durationMs"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "batch",
+    "events"
+  ]
+}

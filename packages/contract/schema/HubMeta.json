@@ -1,0 +1,48 @@
+{
+  "$id": "https://comitiva.dev/schema/HubMeta.json",
+  "title": "HubMeta",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "apiVersion": {
+      "type": "integer",
+      "exclusiveMinimum": 0,
+      "maximum": 9007199254740991
+    },
+    "edition": {
+      "type": "string",
+      "enum": [
+        "community",
+        "cloud"
+      ]
+    },
+    "contractVersion": {
+      "type": "string"
+    },
+    "capabilities": {
+      "type": "object",
+      "properties": {
+        "execution": {
+          "type": "boolean"
+        },
+        "registration": {
+          "type": "string",
+          "enum": [
+            "open",
+            "invite-only"
+          ]
+        }
+      },
+      "required": [
+        "execution",
+        "registration"
+      ]
+    }
+  },
+  "required": [
+    "apiVersion",
+    "edition",
+    "contractVersion",
+    "capabilities"
+  ]
+}

@@ -111,6 +111,20 @@ export const Block = z.discriminatedUnion('type', [
 ]);
 export type Block = z.infer<typeof Block>;
 
+/** What a user sends: text, images and documents (tool blocks come only from runs). */
+export const UserContent = z
+  .array(z.discriminatedUnion('type', [TextBlock, ImageBlock, DocumentBlock]))
+  .min(1)
+  .refine(
+    (blocks) => blocks.some((b) => b.type !== 'text' || b.text.trim() !== ''),
+    'message is empty',
+  )
+  .refine(
+    (blocks) => blocks.filter((b) => b.type !== 'text').length <= ATTACHMENT_LIMITS.perMessage,
+    `at most ${ATTACHMENT_LIMITS.perMessage} attachments per message`,
+  );
+export type UserContent = z.infer<typeof UserContent>;
+
 /**
  * Appends streamed text to a message's content: extends the last block when
  * it is text, else starts a new text block (text after a tool block). Every

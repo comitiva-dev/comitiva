@@ -1,0 +1,162 @@
+{
+  "$id": "https://comitiva.dev/schema/HubRunStartInput.json",
+  "title": "HubRunStartInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "runId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "content": {
+      "minItems": 1,
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "text"
+              },
+              "text": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "text"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "image"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "base64"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      },
+                      "data": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "mediaType",
+                      "data"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "file"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path"
+                    ]
+                  }
+                ]
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "type",
+              "source"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "type": {
+                "type": "string",
+                "const": "document"
+              },
+              "name": {
+                "type": "string"
+              },
+              "mediaType": {
+                "type": "string"
+              },
+              "source": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "base64"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      },
+                      "data": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "mediaType",
+                      "data"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "kind": {
+                        "type": "string",
+                        "const": "file"
+                      },
+                      "path": {
+                        "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "kind",
+                      "path"
+                    ]
+                  }
+                ]
+              }
+            },
+            "required": [
+              "type",
+              "name",
+              "mediaType",
+              "source"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "required": [
+    "runId"
+  ]
+}

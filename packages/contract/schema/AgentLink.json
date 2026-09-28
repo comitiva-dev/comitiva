@@ -1,0 +1,64 @@
+{
+  "$id": "https://comitiva.dev/schema/AgentLink.json",
+  "title": "AgentLink",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "agentId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "workspaceId": {
+      "type": "string",
+      "minLength": 1
+    },
+    "connectionId": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "roots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "path": {
+            "type": "string",
+            "minLength": 1
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "read",
+              "readwrite"
+            ]
+          }
+        },
+        "required": [
+          "path",
+          "mode"
+        ]
+      }
+    },
+    "toolServerIds": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    }
+  },
+  "required": [
+    "agentId",
+    "workspaceId",
+    "connectionId",
+    "roots",
+    "toolServerIds"
+  ]
+}

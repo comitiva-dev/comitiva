@@ -1,0 +1,60 @@
+{
+  "$id": "https://comitiva.dev/schema/WorkspaceToolServerDraft.json",
+  "title": "WorkspaceToolServerDraft",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    },
+    "url": {
+      "type": "string",
+      "format": "uri"
+    },
+    "headers": {
+      "default": {},
+      "type": "object",
+      "propertyNames": {
+        "type": "string",
+        "pattern": "^[!#$%&'*+.^_`|~0-9A-Za-z-]+$"
+      },
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "object",
+            "properties": {
+              "value": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "value"
+            ]
+          },
+          {
+            "type": "object",
+            "properties": {
+              "secretRef": {
+                "type": "string",
+                "const": "member"
+              }
+            },
+            "required": [
+              "secretRef"
+            ]
+          }
+        ]
+      }
+    },
+    "enabled": {
+      "default": true,
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "name",
+    "url"
+  ]
+}

@@ -58,6 +58,22 @@ export const ipcInvokeChannels = [
   'usage.prices',
   'usage.setPrice',
   'usage.clearPrice',
+  'hub.getStatus',
+  'hub.configure',
+  'hub.register',
+  'hub.login',
+  'hub.logout',
+  'hub.request',
+  'hub.subscribe',
+  'hub.unsubscribe',
+  'hubRuns.send',
+  'hubRuns.retry',
+  'hubRuns.cancel',
+  'hubRuns.decide',
+  'hubLinks.list',
+  'hubLinks.set',
+  'hubToolSecrets.names',
+  'hubToolSecrets.set',
 ] as const;
 
 export const ipcEventChannels = [
@@ -68,4 +84,7 @@ export const ipcEventChannels = [
   'message.block',
   'updates.status',
   'menu.command',
+  'hub.status',
+  'hub.event',
+  'hub.presence',
 ] as const;

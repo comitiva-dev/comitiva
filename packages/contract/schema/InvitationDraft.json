@@ -1,0 +1,25 @@
+{
+  "$id": "https://comitiva.dev/schema/InvitationDraft.json",
+  "title": "InvitationDraft",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "maxLength": 255,
+      "format": "email",
+      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+    },
+    "role": {
+      "default": "member",
+      "type": "string",
+      "enum": [
+        "admin",
+        "member"
+      ]
+    }
+  },
+  "required": [
+    "email"
+  ]
+}

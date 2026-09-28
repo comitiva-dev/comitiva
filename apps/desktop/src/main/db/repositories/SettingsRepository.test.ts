@@ -15,7 +15,12 @@ beforeEach(() => {
 afterEach(() => db.close());
 
 describe('SettingsRepository', () => {
-  const defaults = { sampleAgentOffer: 'pending', language: 'system', autoUpdate: true };
+  const defaults = {
+    sampleAgentOffer: 'pending',
+    language: 'system',
+    autoUpdate: true,
+    activeWorkspaceId: null,
+  };
 
   it('returns defaults, then stored values', () => {
     expect(repo.get()).toEqual(defaults);
@@ -31,6 +36,7 @@ describe('SettingsRepository', () => {
       sampleAgentOffer: 'done',
       language: 'pt-BR',
       autoUpdate: false,
+      activeWorkspaceId: null,
     });
     expect(repo.update({})).toMatchObject({ sampleAgentOffer: 'done' });
   });

@@ -2,6 +2,7 @@ export * from './blocks.js';
 export * from './common.js';
 export * from './entities/index.js';
 export * from './errors.js';
+export * from './hub/index.js';
 export * from './ipc.js';
 export * from './provider-config.js';
 export * from './portable.js';

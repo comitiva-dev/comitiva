@@ -1,0 +1,29 @@
+{
+  "$id": "https://comitiva.dev/schema/HubLoginInput.json",
+  "title": "HubLoginInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "email": {
+      "type": "string",
+      "maxLength": 255,
+      "format": "email",
+      "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+    },
+    "password": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 200
+    },
+    "deviceName": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 100
+    }
+  },
+  "required": [
+    "email",
+    "password",
+    "deviceName"
+  ]
+}

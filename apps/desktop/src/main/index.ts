@@ -1,4 +1,5 @@
 import { app, BrowserWindow, Menu, safeStorage, shell } from 'electron';
+import { AppError, ipcInvokeChannels } from '@comitiva/contract';
 import { join } from 'node:path';
 import { Database } from './db/Database';
 import { AgentRepository } from './db/repositories/AgentRepository';
@@ -256,6 +257,13 @@ async function bootstrap(): Promise<void> {
     log: (message) => console.warn(message),
   });
 
+  const notYet = (): never => {
+    throw new AppError('not_implemented', 'The hub is not wired yet');
+  };
+  const hubNotYet = Object.fromEntries(
+    ipcInvokeChannels.filter((c) => c.startsWith('hub')).map((c) => [c, notYet]),
+  ) as Record<Extract<(typeof ipcInvokeChannels)[number], `hub${string}`>, () => never>;
+
   const router = new IpcRouter(
     {
       'app.getVersion': () => app.getVersion(),
@@ -326,6 +334,7 @@ async function bootstrap(): Promise<void> {
       'usage.setPrice': ({ provider, model, prices: p }) =>
         usageReports.setPrice(provider, model, p),
       'usage.clearPrice': ({ provider, model }) => usageReports.clearPrice(provider, model),
+      ...hubNotYet,
     },
     isTrustedUrl,
   );

@@ -118,6 +118,7 @@ describe('agent IPC', () => {
       sampleAgentOffer: 'pending',
       language: 'system',
       autoUpdate: true,
+      activeWorkspaceId: null,
     });
     expect(ipcInvoke['settings.update'].input.safeParse({ sampleAgentOffer: 'x' }).success).toBe(
       false,

@@ -185,6 +185,7 @@ export function fakeBackend() {
         sampleAgentOffer: 'pending',
         language: 'system',
         autoUpdate: true,
+        activeWorkspaceId: null,
       })),
       update: vi.fn(
         async (patch: AppSettingsPatch = {}): Promise<AppSettings> =>

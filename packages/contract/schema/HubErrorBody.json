@@ -1,0 +1,76 @@
+{
+  "$id": "https://comitiva.dev/schema/HubErrorBody.json",
+  "title": "HubErrorBody",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": [
+            "auth_failed",
+            "rate_limited",
+            "provider_unavailable",
+            "provider_error",
+            "binary_not_found",
+            "not_logged_in",
+            "sandbox_unavailable",
+            "outside_roots",
+            "read_only_root",
+            "approval_denied",
+            "tool_failed",
+            "tool_server_failed",
+            "invalid_request",
+            "not_implemented",
+            "unknown_provider",
+            "not_found",
+            "unsupported_content",
+            "attachment_too_large",
+            "unsupported_attachment",
+            "attachment_too_many",
+            "update_failed",
+            "connection_in_use",
+            "connection_disabled",
+            "model_required",
+            "secret_missing",
+            "secret_store_unavailable",
+            "oauth_not_configured",
+            "oauth_failed",
+            "oauth_cancelled",
+            "google_not_connected",
+            "google_reconnect_required",
+            "runner_crashed",
+            "runner_unavailable",
+            "conversation_busy",
+            "interrupted",
+            "hub_unreachable",
+            "hub_auth_required",
+            "hub_incompatible",
+            "forbidden",
+            "run_expired",
+            "agent_not_linked",
+            "invitation_invalid",
+            "timeout",
+            "internal"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "code",
+        "message",
+        "retryable"
+      ]
+    }
+  },
+  "required": [
+    "error"
+  ]
+}

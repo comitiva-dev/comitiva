@@ -1,0 +1,25 @@
+{
+  "$id": "https://comitiva.dev/schema/AttachmentInput.json",
+  "title": "AttachmentInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 255
+    },
+    "mediaType": {
+      "type": "string",
+      "maxLength": 255
+    },
+    "dataBase64": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "name",
+    "mediaType",
+    "dataBase64"
+  ]
+}

@@ -13,7 +13,7 @@ import { Conversation } from './entities/conversation.js';
 import { Message, MessageRole } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
-import { ATTACHMENT_LIMITS, Block, DocumentBlock, ImageBlock, TextBlock } from './blocks.js';
+import { Block, DocumentBlock, ImageBlock, UserContent } from './blocks.js';
 import { ErrorCode, type AppErrorShape } from './errors.js';
 import { ImportReport } from './portable.js';
 import {
@@ -26,6 +26,9 @@ import {
   ProviderId,
 } from './provider-config.js';
 import { CliDetectResult, ModelInfo, TestResult, ToolDef } from './runner-protocol.js';
+import { HubMeta } from './hub/api.js';
+import { AgentLink, HubUser, PresenceMember } from './hub/entities.js';
+import { HubEvent } from './hub/events.js';
 
 export { ipcEventChannels, ipcInvokeChannels } from './ipc-channels.js';
 
@@ -185,6 +188,8 @@ export const AppSettings = z.object({
   language: LanguageSetting.default('system'),
   /** Check for updates on start and every few hours (packaged builds only). */
   autoUpdate: z.boolean().default(true),
+  /** The hub workspace the window shows; null is Personal (this machine only). */
+  activeWorkspaceId: Id.nullable().default(null),
 });
 export type AppSettings = z.infer<typeof AppSettings>;
 
@@ -193,6 +198,7 @@ export const AppSettingsPatch = z
     sampleAgentOffer: z.enum(['pending', 'done']),
     language: LanguageSetting,
     autoUpdate: z.boolean(),
+    activeWorkspaceId: Id.nullable(),
   })
   .partial();
 export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
@@ -323,20 +329,6 @@ export const ConversationListInput = z
   .object({ agentId: Id.optional(), archived: z.boolean().default(false) })
   .default({ archived: false });
 export type ConversationListInput = z.input<typeof ConversationListInput>;
-
-/** What a user sends: text, images and documents (tool blocks come only from runs). */
-export const UserContent = z
-  .array(z.discriminatedUnion('type', [TextBlock, ImageBlock, DocumentBlock]))
-  .min(1)
-  .refine(
-    (blocks) => blocks.some((b) => b.type !== 'text' || b.text.trim() !== ''),
-    'message is empty',
-  )
-  .refine(
-    (blocks) => blocks.filter((b) => b.type !== 'text').length <= ATTACHMENT_LIMITS.perMessage,
-    `at most ${ATTACHMENT_LIMITS.perMessage} attachments per message`,
-  );
-export type UserContent = z.infer<typeof UserContent>;
 
 export const MessageListInput = z.object({
   conversationId: Id,
@@ -531,6 +523,52 @@ export type UpdateStatus = z.infer<typeof UpdateStatus>;
 
 const ByModel = z.object({ provider: ProviderId, model: z.string().min(1) });
 
+// --------------------------------------------------------------------- hub
+
+/**
+ * The hub this desktop talks to (Phase 8, ADR 0017). The token lives in
+ * main's SecretStore and never reaches the renderer; the renderer only learns
+ * who is signed in.
+ */
+export const HubRealtimeState = z.enum(['off', 'connecting', 'connected', 'disconnected']);
+export type HubRealtimeState = z.infer<typeof HubRealtimeState>;
+
+export const HubStatus = z.object({
+  /** The hub's base URL; null when none is set. */
+  url: z.string().nullable(),
+  /** What the hub said about itself the last time it was checked. */
+  meta: HubMeta.nullable(),
+  /** Signed-in user; null when signed out. */
+  user: HubUser.nullable(),
+  realtime: HubRealtimeState,
+});
+export type HubStatus = z.infer<typeof HubStatus>;
+
+const HubUrl = z.url({ protocol: /^https?$/ });
+
+/**
+ * A REST call to the hub, made by main with the stored token. Only paths under
+ * the versioned API; the body is validated by the hub against the contract.
+ */
+export const HubRequest = z.object({
+  method: z.enum(['GET', 'POST', 'PATCH', 'DELETE']),
+  path: z.string().regex(/^\/api\/v1\/[A-Za-z0-9/_-]*$/, 'not a hub API path'),
+  query: z.record(z.string(), z.string()).optional(),
+  body: z.unknown().optional(),
+});
+export type HubRequest = z.infer<typeof HubRequest>;
+
+/** A Reverb channel the renderer listens to (main holds the socket). */
+export const HubChannel = z
+  .string()
+  .regex(/^(private-user|presence-workspace|private-conversation)\.[A-Za-z0-9]+$/);
+
+/** Header values of a workspace tool server kept on this machine; null deletes one. */
+export const HubToolSecretsInput = z.object({
+  toolServerId: Id,
+  headers: z.record(z.string(), z.string().min(1).nullable()),
+});
+
 export const ipcInvoke = {
   'app.getVersion': { input: z.undefined(), output: z.string() },
   'runner.getStatus': { input: z.undefined(), output: z.object({ status: RunnerStatus }) },
@@ -645,6 +683,51 @@ export const ipcInvoke = {
   'usage.setPrice': { input: ByModel.extend({ prices: ModelPrices }), output: z.array(ModelPrice) },
   /** Drops the correction and reprices from the built-in table. */
   'usage.clearPrice': { input: ByModel, output: z.array(ModelPrice) },
+  'hub.getStatus': { input: z.undefined(), output: HubStatus },
+  /**
+   * Sets (or, with null, forgets) the hub URL after checking its `/meta`.
+   * Rejects with hub_unreachable or hub_incompatible. A different URL signs out.
+   */
+  'hub.configure': { input: z.object({ url: HubUrl.nullable() }), output: HubStatus },
+  'hub.register': {
+    input: z.object({
+      name: z.string().trim().min(1).max(100),
+      email: z.email(),
+      password: z.string().min(8).max(200),
+      invitationToken: z.string().optional(),
+    }),
+    output: HubStatus,
+  },
+  'hub.login': {
+    input: z.object({ email: z.email(), password: z.string().min(1).max(200) }),
+    output: HubStatus,
+  },
+  /** Revokes this device's token at the hub (best effort) and forgets it. */
+  'hub.logout': { input: z.undefined(), output: HubStatus },
+  /** A REST call with the stored token; the hub's JSON comes back as is. */
+  'hub.request': { input: HubRequest, output: z.unknown() },
+  /** Starts forwarding a channel's events as `hub.event` (reference counted). */
+  'hub.subscribe': { input: z.object({ channel: HubChannel }), output: z.void() },
+  'hub.unsubscribe': { input: z.object({ channel: HubChannel }), output: z.void() },
+  /**
+   * A turn in a workspace conversation, run by this desktop and published to
+   * the hub. Rejects before anything is stored with conversation_busy,
+   * agent_not_linked, connection_disabled, model_required or secret_missing.
+   */
+  'hubRuns.send': { input: ByConversation.extend({ content: UserContent }), output: z.void() },
+  'hubRuns.retry': { input: ByConversation, output: z.void() },
+  /** Cancels this desktop's run, or asks the hub to have the running desktop stop. */
+  'hubRuns.cancel': { input: ByConversation, output: z.void() },
+  'hubRuns.decide': {
+    input: ByConversation.extend({ toolUseId: z.string(), decision: ApprovalDecision }),
+    output: z.void(),
+  },
+  /** How this machine runs a workspace's shared agents (never sent to the hub). */
+  'hubLinks.list': { input: z.object({ workspaceId: Id }), output: z.array(AgentLink) },
+  'hubLinks.set': { input: AgentLink, output: AgentLink },
+  /** Names of a workspace tool server's secret headers that have a value on this machine. */
+  'hubToolSecrets.names': { input: z.object({ toolServerId: Id }), output: z.array(z.string()) },
+  'hubToolSecrets.set': { input: HubToolSecretsInput, output: z.array(z.string()) },
 } as const;
 
 export type IpcInvokeChannel = keyof typeof ipcInvoke;
@@ -679,6 +762,11 @@ export const ipcEvents = {
   'updates.status': UpdateStatus,
   /** A native menu item: the renderer runs the command (desktop shortcuts). */
   'menu.command': z.object({ command: z.string() }),
+  'hub.status': HubStatus,
+  /** An event on a channel the renderer subscribed to. */
+  'hub.event': z.object({ channel: z.string(), event: HubEvent }),
+  /** Who is online on a presence channel, whenever it changes. */
+  'hub.presence': z.object({ channel: z.string(), members: z.array(PresenceMember) }),
 } as const;
 
 export type IpcEventChannel = keyof typeof ipcEvents;

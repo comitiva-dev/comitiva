@@ -1,0 +1,2910 @@
+{
+  "$id": "https://comitiva.dev/schema/HubEvent.json",
+  "title": "HubEvent",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workspace.joined"
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "role",
+            "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspace"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workspace.updated"
+        },
+        "workspace": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 100
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "name",
+            "role",
+            "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspace"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "workspace.left"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "member.added"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "member": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "email"
+              ]
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            },
+            "joinedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "user",
+            "role",
+            "joinedAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "member"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "member.updated"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "member": {
+          "type": "object",
+          "properties": {
+            "user": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "email": {
+                  "type": "string",
+                  "format": "email",
+                  "pattern": "^(?:[A-Za-z0-9_'+\\-]+\\.)*[A-Za-z0-9_'+\\-]*[A-Za-z0-9_+-]@(?:[A-Za-z0-9][A-Za-z0-9\\-]*\\.)+[A-Za-z]{2,}$"
+                }
+              },
+              "required": [
+                "id",
+                "name",
+                "email"
+              ]
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "owner",
+                "admin",
+                "member"
+              ]
+            },
+            "joinedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "user",
+            "role",
+            "joinedAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "member"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "member.removed"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "userId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "agent.created"
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspaceId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "avatar": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "indigo",
+                    "violet",
+                    "pink",
+                    "rose",
+                    "orange",
+                    "amber",
+                    "emerald",
+                    "teal",
+                    "sky",
+                    "slate"
+                  ]
+                },
+                "emoji": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16
+                }
+              },
+              "required": [
+                "color"
+              ]
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "anthropic",
+                "openai-compatible",
+                "google",
+                "ollama",
+                "claude-code",
+                "codex",
+                "gemini-cli"
+              ]
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "role": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "maxTokens": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "topP": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "maxToolIterations": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            },
+            "toolServerIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "permissionPolicy": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "allow-writes",
+                "read-only"
+              ]
+            },
+            "tags": {
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              }
+            },
+            "createdBy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "workspaceId",
+            "name",
+            "avatar",
+            "provider",
+            "model",
+            "role",
+            "params",
+            "toolServerIds",
+            "permissionPolicy",
+            "tags",
+            "createdBy",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "agent"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "agent.updated"
+        },
+        "agent": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspaceId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "avatar": {
+              "type": "object",
+              "properties": {
+                "color": {
+                  "type": "string",
+                  "enum": [
+                    "indigo",
+                    "violet",
+                    "pink",
+                    "rose",
+                    "orange",
+                    "amber",
+                    "emerald",
+                    "teal",
+                    "sky",
+                    "slate"
+                  ]
+                },
+                "emoji": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 16
+                }
+              },
+              "required": [
+                "color"
+              ]
+            },
+            "provider": {
+              "type": "string",
+              "enum": [
+                "anthropic",
+                "openai-compatible",
+                "google",
+                "ollama",
+                "claude-code",
+                "codex",
+                "gemini-cli"
+              ]
+            },
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "role": {
+              "type": "string"
+            },
+            "params": {
+              "type": "object",
+              "properties": {
+                "temperature": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 2
+                },
+                "maxTokens": {
+                  "type": "integer",
+                  "exclusiveMinimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "topP": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "maxToolIterations": {
+                  "type": "integer",
+                  "minimum": 1,
+                  "maximum": 200
+                }
+              }
+            },
+            "toolServerIds": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "permissionPolicy": {
+              "type": "string",
+              "enum": [
+                "ask",
+                "allow-writes",
+                "read-only"
+              ]
+            },
+            "tags": {
+              "maxItems": 20,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 32
+              }
+            },
+            "createdBy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "updatedAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "workspaceId",
+            "name",
+            "avatar",
+            "provider",
+            "model",
+            "role",
+            "params",
+            "toolServerIds",
+            "permissionPolicy",
+            "tags",
+            "createdBy",
+            "createdAt",
+            "updatedAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "agent"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "agent.deleted"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "agentId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "agentId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "tool_server.created"
+        },
+        "toolServer": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspaceId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "transport": {
+              "type": "string",
+              "const": "http"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "headers": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "secretRef": {
+                        "type": "string",
+                        "const": "member"
+                      }
+                    },
+                    "required": [
+                      "secretRef"
+                    ]
+                  }
+                ]
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "createdBy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "workspaceId",
+            "name",
+            "transport",
+            "url",
+            "headers",
+            "enabled",
+            "createdBy",
+            "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "toolServer"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "tool_server.updated"
+        },
+        "toolServer": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "workspaceId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "name": {
+              "type": "string",
+              "minLength": 1
+            },
+            "transport": {
+              "type": "string",
+              "const": "http"
+            },
+            "url": {
+              "type": "string",
+              "format": "uri"
+            },
+            "headers": {
+              "type": "object",
+              "propertyNames": {
+                "type": "string"
+              },
+              "additionalProperties": {
+                "anyOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "value"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "secretRef": {
+                        "type": "string",
+                        "const": "member"
+                      }
+                    },
+                    "required": [
+                      "secretRef"
+                    ]
+                  }
+                ]
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "createdBy": {
+              "type": "string",
+              "minLength": 1
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "workspaceId",
+            "name",
+            "transport",
+            "url",
+            "headers",
+            "enabled",
+            "createdBy",
+            "createdAt"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "toolServer"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "tool_server.deleted"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolServerId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "toolServerId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "conversation.created"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agentId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "running",
+                "awaiting-approval",
+                "error"
+              ]
+            },
+            "harnessSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "archived": {
+              "type": "boolean"
+            },
+            "lastActivityAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "agentId",
+            "title",
+            "status",
+            "harnessSessionId",
+            "archived",
+            "lastActivityAt",
+            "createdAt"
+          ]
+        },
+        "pendingApproval": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "toolUseId": {
+                  "type": "string"
+                },
+                "toolServerId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "input": {}
+              },
+              "required": [
+                "toolUseId",
+                "toolServerId",
+                "toolName",
+                "input"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runner": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "runId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "startedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "userId",
+                "name",
+                "runId",
+                "startedAt"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "conversation",
+        "pendingApproval",
+        "runner"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "conversation.updated"
+        },
+        "workspaceId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "conversation": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "agentId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "title": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "idle",
+                "running",
+                "awaiting-approval",
+                "error"
+              ]
+            },
+            "harnessSessionId": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "archived": {
+              "type": "boolean"
+            },
+            "lastActivityAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            }
+          },
+          "required": [
+            "id",
+            "agentId",
+            "title",
+            "status",
+            "harnessSessionId",
+            "archived",
+            "lastActivityAt",
+            "createdAt"
+          ]
+        },
+        "pendingApproval": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "toolUseId": {
+                  "type": "string"
+                },
+                "toolServerId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "toolName": {
+                  "type": "string"
+                },
+                "input": {}
+              },
+              "required": [
+                "toolUseId",
+                "toolServerId",
+                "toolName",
+                "input"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "runner": {
+          "anyOf": [
+            {
+              "type": "object",
+              "properties": {
+                "userId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "name": {
+                  "type": "string"
+                },
+                "runId": {
+                  "type": "string",
+                  "minLength": 1
+                },
+                "startedAt": {
+                  "type": "string",
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": [
+                "userId",
+                "name",
+                "runId",
+                "startedAt"
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "workspaceId",
+        "conversation",
+        "pendingApproval",
+        "runner"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "message.created"
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conversationId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "user",
+                "assistant",
+                "tool"
+              ]
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "text"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "image"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "document"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "name",
+                      "mediaType",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_use"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "toolServerId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "input": {},
+                      "signature": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id",
+                      "toolServerId",
+                      "name",
+                      "input"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_result"
+                      },
+                      "toolUseId": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "text"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "image"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "source"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "document"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "name",
+                                "mediaType",
+                                "source"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "isError": {
+                        "type": "boolean"
+                      },
+                      "durationMs": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "toolUseId",
+                      "content",
+                      "isError"
+                    ]
+                  }
+                ]
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "streaming",
+                "complete",
+                "cancelled",
+                "error"
+              ]
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "error": {
+              "default": null,
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "rate_limited",
+                        "provider_unavailable",
+                        "provider_error",
+                        "binary_not_found",
+                        "not_logged_in",
+                        "sandbox_unavailable",
+                        "outside_roots",
+                        "read_only_root",
+                        "approval_denied",
+                        "tool_failed",
+                        "tool_server_failed",
+                        "invalid_request",
+                        "not_implemented",
+                        "unknown_provider",
+                        "not_found",
+                        "unsupported_content",
+                        "attachment_too_large",
+                        "unsupported_attachment",
+                        "attachment_too_many",
+                        "update_failed",
+                        "connection_in_use",
+                        "connection_disabled",
+                        "model_required",
+                        "secret_missing",
+                        "secret_store_unavailable",
+                        "oauth_not_configured",
+                        "oauth_failed",
+                        "oauth_cancelled",
+                        "google_not_connected",
+                        "google_reconnect_required",
+                        "runner_crashed",
+                        "runner_unavailable",
+                        "conversation_busy",
+                        "interrupted",
+                        "hub_unreachable",
+                        "hub_auth_required",
+                        "hub_incompatible",
+                        "forbidden",
+                        "run_expired",
+                        "agent_not_linked",
+                        "invitation_invalid",
+                        "timeout",
+                        "internal"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "retryable": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "retryable"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "conversationId",
+            "role",
+            "content",
+            "status",
+            "seq",
+            "createdAt"
+          ]
+        },
+        "rev": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "message",
+        "rev"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "message.updated"
+        },
+        "message": {
+          "type": "object",
+          "properties": {
+            "id": {
+              "type": "string",
+              "minLength": 1
+            },
+            "conversationId": {
+              "type": "string",
+              "minLength": 1
+            },
+            "role": {
+              "type": "string",
+              "enum": [
+                "user",
+                "assistant",
+                "tool"
+              ]
+            },
+            "content": {
+              "type": "array",
+              "items": {
+                "oneOf": [
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "text"
+                      },
+                      "text": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "text"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "image"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      },
+                      "name": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "document"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "mediaType": {
+                        "type": "string"
+                      },
+                      "source": {
+                        "oneOf": [
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "base64"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              },
+                              "data": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "mediaType",
+                              "data"
+                            ]
+                          },
+                          {
+                            "type": "object",
+                            "properties": {
+                              "kind": {
+                                "type": "string",
+                                "const": "file"
+                              },
+                              "path": {
+                                "type": "string"
+                              },
+                              "mediaType": {
+                                "type": "string"
+                              }
+                            },
+                            "required": [
+                              "kind",
+                              "path"
+                            ]
+                          }
+                        ]
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "name",
+                      "mediaType",
+                      "source"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_use"
+                      },
+                      "id": {
+                        "type": "string"
+                      },
+                      "toolServerId": {
+                        "type": "string"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "input": {},
+                      "signature": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "id",
+                      "toolServerId",
+                      "name",
+                      "input"
+                    ]
+                  },
+                  {
+                    "type": "object",
+                    "properties": {
+                      "type": {
+                        "type": "string",
+                        "const": "tool_result"
+                      },
+                      "toolUseId": {
+                        "type": "string"
+                      },
+                      "content": {
+                        "type": "array",
+                        "items": {
+                          "oneOf": [
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "text"
+                                },
+                                "text": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "text"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "image"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                },
+                                "name": {
+                                  "type": "string"
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "source"
+                              ]
+                            },
+                            {
+                              "type": "object",
+                              "properties": {
+                                "type": {
+                                  "type": "string",
+                                  "const": "document"
+                                },
+                                "name": {
+                                  "type": "string"
+                                },
+                                "mediaType": {
+                                  "type": "string"
+                                },
+                                "source": {
+                                  "oneOf": [
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "base64"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        },
+                                        "data": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "mediaType",
+                                        "data"
+                                      ]
+                                    },
+                                    {
+                                      "type": "object",
+                                      "properties": {
+                                        "kind": {
+                                          "type": "string",
+                                          "const": "file"
+                                        },
+                                        "path": {
+                                          "type": "string"
+                                        },
+                                        "mediaType": {
+                                          "type": "string"
+                                        }
+                                      },
+                                      "required": [
+                                        "kind",
+                                        "path"
+                                      ]
+                                    }
+                                  ]
+                                }
+                              },
+                              "required": [
+                                "type",
+                                "name",
+                                "mediaType",
+                                "source"
+                              ]
+                            }
+                          ]
+                        }
+                      },
+                      "isError": {
+                        "type": "boolean"
+                      },
+                      "durationMs": {
+                        "type": "number",
+                        "minimum": 0
+                      }
+                    },
+                    "required": [
+                      "type",
+                      "toolUseId",
+                      "content",
+                      "isError"
+                    ]
+                  }
+                ]
+              }
+            },
+            "status": {
+              "type": "string",
+              "enum": [
+                "streaming",
+                "complete",
+                "cancelled",
+                "error"
+              ]
+            },
+            "seq": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "createdAt": {
+              "type": "string",
+              "format": "date-time",
+              "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d:[0-5]\\d(?:\\.\\d+)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+            },
+            "error": {
+              "default": null,
+              "anyOf": [
+                {
+                  "type": "object",
+                  "properties": {
+                    "code": {
+                      "type": "string",
+                      "enum": [
+                        "auth_failed",
+                        "rate_limited",
+                        "provider_unavailable",
+                        "provider_error",
+                        "binary_not_found",
+                        "not_logged_in",
+                        "sandbox_unavailable",
+                        "outside_roots",
+                        "read_only_root",
+                        "approval_denied",
+                        "tool_failed",
+                        "tool_server_failed",
+                        "invalid_request",
+                        "not_implemented",
+                        "unknown_provider",
+                        "not_found",
+                        "unsupported_content",
+                        "attachment_too_large",
+                        "unsupported_attachment",
+                        "attachment_too_many",
+                        "update_failed",
+                        "connection_in_use",
+                        "connection_disabled",
+                        "model_required",
+                        "secret_missing",
+                        "secret_store_unavailable",
+                        "oauth_not_configured",
+                        "oauth_failed",
+                        "oauth_cancelled",
+                        "google_not_connected",
+                        "google_reconnect_required",
+                        "runner_crashed",
+                        "runner_unavailable",
+                        "conversation_busy",
+                        "interrupted",
+                        "hub_unreachable",
+                        "hub_auth_required",
+                        "hub_incompatible",
+                        "forbidden",
+                        "run_expired",
+                        "agent_not_linked",
+                        "invitation_invalid",
+                        "timeout",
+                        "internal"
+                      ]
+                    },
+                    "message": {
+                      "type": "string"
+                    },
+                    "retryable": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "code",
+                    "message",
+                    "retryable"
+                  ]
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            }
+          },
+          "required": [
+            "id",
+            "conversationId",
+            "role",
+            "content",
+            "status",
+            "seq",
+            "createdAt"
+          ]
+        },
+        "rev": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        }
+      },
+      "required": [
+        "type",
+        "message",
+        "rev"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.started"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "userId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "userId"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.text_delta"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "text": {
+          "type": "string"
+        },
+        "ts": {
+          "type": "number"
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "rev",
+        "text"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.block"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "block": {
+          "oneOf": [
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "text"
+                },
+                "text": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "text"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "image"
+                },
+                "source": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "base64"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mediaType",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "file"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "path"
+                      ]
+                    }
+                  ]
+                },
+                "name": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "source"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "document"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "mediaType": {
+                  "type": "string"
+                },
+                "source": {
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "base64"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        },
+                        "data": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "mediaType",
+                        "data"
+                      ]
+                    },
+                    {
+                      "type": "object",
+                      "properties": {
+                        "kind": {
+                          "type": "string",
+                          "const": "file"
+                        },
+                        "path": {
+                          "type": "string"
+                        },
+                        "mediaType": {
+                          "type": "string"
+                        }
+                      },
+                      "required": [
+                        "kind",
+                        "path"
+                      ]
+                    }
+                  ]
+                }
+              },
+              "required": [
+                "type",
+                "name",
+                "mediaType",
+                "source"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "tool_use"
+                },
+                "id": {
+                  "type": "string"
+                },
+                "toolServerId": {
+                  "type": "string"
+                },
+                "name": {
+                  "type": "string"
+                },
+                "input": {},
+                "signature": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "type",
+                "id",
+                "toolServerId",
+                "name",
+                "input"
+              ]
+            },
+            {
+              "type": "object",
+              "properties": {
+                "type": {
+                  "type": "string",
+                  "const": "tool_result"
+                },
+                "toolUseId": {
+                  "type": "string"
+                },
+                "content": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "text"
+                          },
+                          "text": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "text"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "image"
+                          },
+                          "source": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "base64"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  },
+                                  "data": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "mediaType",
+                                  "data"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "file"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "path"
+                                ]
+                              }
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "source"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "type": {
+                            "type": "string",
+                            "const": "document"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "mediaType": {
+                            "type": "string"
+                          },
+                          "source": {
+                            "oneOf": [
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "base64"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  },
+                                  "data": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "mediaType",
+                                  "data"
+                                ]
+                              },
+                              {
+                                "type": "object",
+                                "properties": {
+                                  "kind": {
+                                    "type": "string",
+                                    "const": "file"
+                                  },
+                                  "path": {
+                                    "type": "string"
+                                  },
+                                  "mediaType": {
+                                    "type": "string"
+                                  }
+                                },
+                                "required": [
+                                  "kind",
+                                  "path"
+                                ]
+                              }
+                            ]
+                          }
+                        },
+                        "required": [
+                          "type",
+                          "name",
+                          "mediaType",
+                          "source"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "isError": {
+                  "type": "boolean"
+                },
+                "durationMs": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "type",
+                "toolUseId",
+                "content",
+                "isError"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "rev",
+        "block"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.tool_call"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolUseId": {
+          "type": "string"
+        },
+        "toolServerId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "input": {},
+        "requiresApproval": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "toolUseId",
+        "toolServerId",
+        "toolName",
+        "input",
+        "requiresApproval"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.tool_result"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "rev": {
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
+        },
+        "toolUseId": {
+          "type": "string"
+        },
+        "output": {
+          "type": "array",
+          "items": {
+            "oneOf": [
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "text"
+                  },
+                  "text": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "text"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "image"
+                  },
+                  "source": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "base64"
+                          },
+                          "mediaType": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "mediaType",
+                          "data"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "file"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "mediaType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "path"
+                        ]
+                      }
+                    ]
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "type",
+                  "source"
+                ]
+              },
+              {
+                "type": "object",
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "const": "document"
+                  },
+                  "name": {
+                    "type": "string"
+                  },
+                  "mediaType": {
+                    "type": "string"
+                  },
+                  "source": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "base64"
+                          },
+                          "mediaType": {
+                            "type": "string"
+                          },
+                          "data": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "mediaType",
+                          "data"
+                        ]
+                      },
+                      {
+                        "type": "object",
+                        "properties": {
+                          "kind": {
+                            "type": "string",
+                            "const": "file"
+                          },
+                          "path": {
+                            "type": "string"
+                          },
+                          "mediaType": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "kind",
+                          "path"
+                        ]
+                      }
+                    ]
+                  }
+                },
+                "required": [
+                  "type",
+                  "name",
+                  "mediaType",
+                  "source"
+                ]
+              }
+            ]
+          }
+        },
+        "isError": {
+          "type": "boolean"
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "rev",
+        "toolUseId",
+        "output",
+        "isError",
+        "durationMs"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.done"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "stopReason": {
+          "type": "string",
+          "enum": [
+            "end_turn",
+            "max_tokens",
+            "stop_sequence",
+            "tool_use",
+            "refusal",
+            "pause_turn",
+            "max_iterations",
+            "cancelled",
+            "other"
+          ]
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "stopReason"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.error"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "messageId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "code": {
+          "type": "string",
+          "enum": [
+            "auth_failed",
+            "rate_limited",
+            "provider_unavailable",
+            "provider_error",
+            "binary_not_found",
+            "not_logged_in",
+            "sandbox_unavailable",
+            "outside_roots",
+            "read_only_root",
+            "approval_denied",
+            "tool_failed",
+            "tool_server_failed",
+            "invalid_request",
+            "not_implemented",
+            "unknown_provider",
+            "not_found",
+            "unsupported_content",
+            "attachment_too_large",
+            "unsupported_attachment",
+            "attachment_too_many",
+            "update_failed",
+            "connection_in_use",
+            "connection_disabled",
+            "model_required",
+            "secret_missing",
+            "secret_store_unavailable",
+            "oauth_not_configured",
+            "oauth_failed",
+            "oauth_cancelled",
+            "google_not_connected",
+            "google_reconnect_required",
+            "runner_crashed",
+            "runner_unavailable",
+            "conversation_busy",
+            "interrupted",
+            "hub_unreachable",
+            "hub_auth_required",
+            "hub_incompatible",
+            "forbidden",
+            "run_expired",
+            "agent_not_linked",
+            "invitation_invalid",
+            "timeout",
+            "internal"
+          ]
+        },
+        "message": {
+          "type": "string"
+        },
+        "retryable": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "messageId",
+        "runId",
+        "code",
+        "message",
+        "retryable"
+      ]
+    },
+    {
+      "type": "object",
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "run.cancel_requested"
+        },
+        "conversationId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "runId": {
+          "type": "string",
+          "minLength": 1
+        },
+        "byUserId": {
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "type",
+        "conversationId",
+        "runId",
+        "byUserId"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "$id": "https://comitiva.dev/schema/HubRunApprovalInput.json",
+  "title": "HubRunApprovalInput",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "properties": {
+    "toolUseId": {
+      "type": "string"
+    },
+    "decision": {
+      "type": "string",
+      "enum": [
+        "allow",
+        "deny",
+        "allow-always"
+      ]
+    }
+  },
+  "required": [
+    "toolUseId",
+    "decision"
+  ]
+}

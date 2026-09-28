@@ -40,6 +40,13 @@ export const ErrorCode = z.enum([
   'runner_unavailable',
   'conversation_busy',
   'interrupted',
+  'hub_unreachable',
+  'hub_auth_required',
+  'hub_incompatible',
+  'forbidden',
+  'run_expired',
+  'agent_not_linked',
+  'invitation_invalid',
   'timeout',
   'internal',
 ]);

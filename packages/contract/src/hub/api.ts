@@ -134,11 +134,14 @@ export type SharedAgentDraft = z.input<typeof SharedAgentDraft>;
 export const SharedAgentPatch = z.object(sharedAgentFields).partial();
 export type SharedAgentPatch = z.input<typeof SharedAgentPatch>;
 
+/** http(s) only; the pattern survives into JSON Schema, which drops zod's protocol check. */
+const HttpUrl = z.url({ protocol: /^https?$/ }).regex(/^https?:\/\//i, 'must be an http(s) URL');
+
 const HeaderName = z.string().regex(/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/, 'invalid header name');
 
 export const WorkspaceToolServerDraft = z.object({
   name: z.string().trim().min(1).max(100),
-  url: z.url({ protocol: /^https?$/ }),
+  url: HttpUrl,
   headers: z.record(HeaderName, WorkspaceHeaderValue).default({}),
   enabled: z.boolean().default(true),
 });
@@ -147,7 +150,7 @@ export type WorkspaceToolServerDraft = z.input<typeof WorkspaceToolServerDraft>;
 export const WorkspaceToolServerPatch = z
   .object({
     name: z.string().trim().min(1).max(100),
-    url: z.url({ protocol: /^https?$/ }),
+    url: HttpUrl,
     headers: z.record(HeaderName, WorkspaceHeaderValue),
     enabled: z.boolean(),
   })

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 import { ui } from '../components/ui';
 import { UpdatesSection } from '../components/UpdatesSection';
+import { HubSection } from '../components/Hub/HubSection';
 import { LanguageSetting } from '@comitiva/contract';
 import { useSettings, useStoreApis, useTransfer } from '../store/context';
 
@@ -44,6 +45,8 @@ export function SettingsScreen() {
           </select>
         </label>
       </section>
+
+      <HubSection />
 
       <UpdatesSection />
 

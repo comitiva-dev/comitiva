@@ -20,6 +20,8 @@ const time = (iso: string, locale: string) =>
 export interface Approval {
   toolUseId: string;
   busy: boolean;
+  /** Someone else's desktop runs this turn: only they can answer (their name). */
+  waitingFor: string | null;
   onDecide(decision: ApprovalDecision): void;
 }
 
@@ -131,6 +133,7 @@ export const MessageBubble = memo(function MessageBubble({
                       serverName={serverName ?? ''}
                       agentName={agent.name}
                       busy={approval.busy}
+                      waitingFor={approval.waitingFor}
                       onDecide={approval.onDecide}
                     />
                   )}

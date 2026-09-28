@@ -12,6 +12,9 @@ import type { TransferState, TransferStore } from './transfer';
 import type { UiState, UiStore } from './ui';
 import type { UpdatesState, UpdatesStore } from './updates';
 import type { UsageState, UsageStore } from './usage';
+import type { HubState, HubStore } from './hub';
+import type { WorkspaceState, WorkspaceStore } from './workspace';
+import type { WorkspaceContext } from '../backend/Backend';
 
 export interface Stores {
   app: AppStore;
@@ -26,6 +29,8 @@ export interface Stores {
   transfer: TransferStore;
   settings: SettingsStore;
   updates: UpdatesStore;
+  /** The workspace on screen (members, presence); empty in Personal. */
+  workspace: WorkspaceStore;
 }
 
 const StoresContext = createContext<Stores | null>(null);
@@ -91,4 +96,40 @@ export function useUpdates<T>(selector: (state: UpdatesState) => T): T {
 /** For effects and handlers that need the current state without subscribing. */
 export function useStoreApis(): Stores {
   return useStores();
+}
+
+export function useWorkspaceStore<T>(selector: (state: WorkspaceState) => T): T {
+  return useStore(useStores().workspace, selector);
+}
+
+// The hub session sits above the per-workspace stores, which are rebuilt on a switch.
+const HubContext = createContext<{ hub: HubStore; workspace: WorkspaceContext | null } | null>(
+  null,
+);
+
+export function HubProvider({
+  hub,
+  workspace,
+  children,
+}: {
+  hub: HubStore;
+  workspace: WorkspaceContext | null;
+  children: ReactNode;
+}) {
+  return <HubContext.Provider value={{ hub, workspace }}>{children}</HubContext.Provider>;
+}
+
+function useHubContext() {
+  const value = useContext(HubContext);
+  if (!value) throw new Error('HubProvider is missing');
+  return value;
+}
+
+export function useHub<T>(selector: (state: HubState) => T): T {
+  return useStore(useHubContext().hub, selector);
+}
+
+/** The workspace on screen and the signed-in member's place in it; null in Personal. */
+export function useWorkspace(): WorkspaceContext | null {
+  return useHubContext().workspace;
 }

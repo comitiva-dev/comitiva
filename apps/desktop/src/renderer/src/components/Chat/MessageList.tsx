@@ -4,7 +4,7 @@ import { Virtuoso, type VirtuosoHandle } from 'react-virtuoso';
 import type { Agent, ApprovalDecision } from '@comitiva/contract';
 import { canRetry, firstItemIndex } from '../../lib/chat';
 import { serverDisplayName } from '../../lib/toolServerForm';
-import { useConversations, useMessages, useToolServers } from '../../store/context';
+import { useConversations, useMessages, useToolServers, useWorkspace } from '../../store/context';
 import { ui } from '../ui';
 import { MessageBubble, type Approval } from './MessageBubble';
 
@@ -56,6 +56,10 @@ export function MessageList({
   const busy = useConversations((s) => s.deciding[conversationId] ?? false);
   const decide = useConversations((s) => s.decide);
   const toolUseId = pending?.toolUseId;
+  // In a workspace, only the member whose desktop runs the turn answers: the call acts on their machine.
+  const workspace = useWorkspace();
+  const runner = useConversations((s) => s.runners[conversationId] ?? null);
+  const waitingFor = runner && workspace && runner.userId !== workspace.userId ? runner.name : null;
   const approval = useMemo<Approval | undefined>(
     () =>
       toolUseId === undefined
@@ -63,9 +67,10 @@ export function MessageList({
         : {
             toolUseId,
             busy,
+            waitingFor,
             onDecide: (d: ApprovalDecision) => void decide(conversationId, toolUseId, d),
           },
-    [toolUseId, busy, decide, conversationId],
+    [toolUseId, busy, waitingFor, decide, conversationId],
   );
   const servers = useToolServers((s) => s.items);
   const serverNames = useMemo(

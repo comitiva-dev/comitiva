@@ -25,7 +25,8 @@
     "connections": "Connections",
     "tools": "Tools",
     "usage": "Usage",
-    "settings": "Settings"
+    "settings": "Settings",
+    "workspace": "Workspace"
   },
   "sidebar": {
     "noAgents": "No agents yet.",
@@ -662,5 +663,70 @@
       "env": "Updates are turned off for this run.",
       "unsupported": "This build cannot update itself: download new versions from the releases page."
     }
+  },
+  "hub": {
+    "title": "Hub",
+    "body": "A hub lets your team share agents and conversations and see replies as they stream. Each member runs agents with their own connections; keys, folders and local tools stay on this computer.",
+    "address": "Hub address",
+    "addressPlaceholder": "https://hub.example.com",
+    "check": "Connect",
+    "connected": "Connected to a {{edition}} hub (contract {{version}}).",
+    "editions": {
+      "community": "community",
+      "cloud": "Comitiva cloud"
+    },
+    "signedInAs": "Signed in as {{name}} ({{email}}).",
+    "signOut": "Sign out",
+    "signIn": "Sign in",
+    "createAccount": "Create account",
+    "name": "Name",
+    "email": "Email",
+    "password": "Password",
+    "passwordHint": "At least 8 characters.",
+    "personal": "Personal",
+    "personalHint": "On this computer only",
+    "workspaceScope": "Workspace",
+    "roles": {
+      "owner": "Owner",
+      "admin": "Admin",
+      "member": "Member"
+    },
+    "connectToHub": "Connect to a hub…",
+    "newWorkspace": "New workspace…",
+    "joinWithLink": "Join with a link…",
+    "workspaceName": "Workspace name",
+    "invitationLink": "Invitation link",
+    "create": "Create",
+    "join": "Join",
+    "presence": {
+      "alone": "No one else online",
+      "online": "Online: {{names}}"
+    },
+    "workspace": {
+      "body": "Everyone here sees the workspace's agents and conversations live. Each member runs agents on their own computer, with their own connection.",
+      "members": "Members",
+      "you": "you",
+      "role": "Role",
+      "remove": "Remove",
+      "invite": "Invite",
+      "inviteBody": "Create a link and send it to the person. They open it in Comitiva with this email address.",
+      "createLink": "Create link",
+      "linkReady": "Send this link to the person you invited. It works once and for 7 days.",
+      "copy": "Copy",
+      "copied": "Copied",
+      "revoke": "Revoke",
+      "leave": "Leave workspace",
+      "leaveConfirm": "Leave this workspace? You will need a new invitation to come back.",
+      "delete": "Delete workspace",
+      "deleteConfirm": "Delete this workspace with all its agents and conversations, for everyone? This cannot be undone."
+    },
+    "share": {
+      "to": "Workspace",
+      "hint": "Copies this agent to the workspace. You run it with this connection; the others choose theirs. This agent and its conversations stay here.",
+      "action": "Share",
+      "done": "{{agent}} is now shared in {{workspace}}."
+    },
+    "runningOn": "Running on {{name}}'s computer",
+    "approvalWaiting": "Waiting for {{name}}'s answer: the call runs on their computer."
   }
 }

@@ -31,6 +31,10 @@ import type {
   ToolServerTestTarget,
   GoogleDriveConfigureInput,
   GoogleDriveStatus,
+  HubRunner,
+  HubStatus,
+  PresenceMember,
+  WorkspaceRole,
   ToolServer,
   ToolServerDraft,
   ToolServerPatch,
@@ -44,12 +48,41 @@ import type {
   UsageTotals,
 } from '@comitiva/contract';
 
+/** The hub workspace a RemoteBackend shows; Personal has none. */
+export interface WorkspaceContext {
+  id: string;
+  name: string;
+  /** The signed-in member's role in it. */
+  role: WorkspaceRole;
+  userId: string;
+}
+
+/** A conversation as a list shows it; in a workspace, also whose desktop is running it. */
+export type ConversationListItem = ConversationSummary & { runner?: HubRunner | null };
+
 /**
- * The only thing the UI knows about. LocalBackend implements it over IPC
- * today; RemoteBackend (Phase 8) will implement it over HTTP + WebSocket.
+ * The only thing the UI knows about. LocalBackend implements it over IPC for
+ * Personal (this machine); RemoteBackend implements it over the hub for a
+ * workspace (Phase 8), delegating what stays local (connections, dialogs…).
  * It grows phase by phase (docs/design.md §7; the seam: docs/architecture.md).
  */
 export interface Backend {
+  /** The workspace shown, or null for Personal. */
+  workspace(): WorkspaceContext | null;
+  /** The hub this desktop is signed in to (the token stays in main). */
+  hub: {
+    getStatus(): Promise<HubStatus>;
+    /** Checks the address answers like a supported hub; null forgets it. */
+    configure(url: string | null): Promise<HubStatus>;
+    register(input: {
+      name: string;
+      email: string;
+      password: string;
+      invitationToken?: string;
+    }): Promise<HubStatus>;
+    login(input: { email: string; password: string }): Promise<HubStatus>;
+    logout(): Promise<HubStatus>;
+  };
   app: {
     getVersion(): Promise<string>;
   };
@@ -85,7 +118,7 @@ export interface Backend {
   };
   conversations: {
     /** Non-archived by default, newest activity first, with unread replies. */
-    list(filter?: ConversationListInput): Promise<ConversationSummary[]>;
+    list(filter?: ConversationListInput): Promise<ConversationListItem[]>;
     create(agentId: string): Promise<Conversation>;
     rename(id: string, title: string): Promise<Conversation>;
     archive(id: string, archived: boolean): Promise<Conversation>;
@@ -152,6 +185,8 @@ export interface Backend {
      * for Google Drive, google_not_connected / google_reconnect_required.
      */
     test(target: ToolServerTestTarget): Promise<ToolDef[]>;
+    /** Whether a server is this machine's or the workspace's (shared, http only). */
+    scope(id: string): 'local' | 'workspace';
   };
   /** The Google account behind the built-in Drive server. Tokens never reach the UI. */
   googleDrive: {
@@ -195,13 +230,20 @@ export interface Backend {
  */
 export type BackendEvent =
   | { type: 'runner.status'; status: RunnerStatus }
-  | ({ type: 'conversation.updated' } & IpcEventPayload<'conversation.updated'>)
+  | ({ type: 'conversation.updated' } & IpcEventPayload<'conversation.updated'> & {
+        runner?: HubRunner | null;
+      })
   | ({ type: 'message.updated' } & IpcEventPayload<'message.updated'>)
   | ({ type: 'message.delta' } & IpcEventPayload<'message.delta'>)
   | ({ type: 'message.block' } & IpcEventPayload<'message.block'>)
   | { type: 'updates.status'; status: UpdateStatus }
   /** The desktop's native menu asked for a command (see shared/shortcuts.ts). */
-  | { type: 'menu.command'; command: string };
+  | { type: 'menu.command'; command: string }
+  | { type: 'hub.status'; status: HubStatus }
+  /** Who is online in the workspace shown. */
+  | { type: 'presence.updated'; members: PresenceMember[] }
+  /** Someone else changed shared data: the stores concerned reload. */
+  | { type: 'workspace.changed'; what: 'agents' | 'conversations' | 'toolServers' | 'members' };
 
 export type MessageEvent = Extract<
   BackendEvent,

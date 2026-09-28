@@ -1,10 +1,12 @@
 import { useTranslation } from 'react-i18next';
 import type { Section } from '../../store/app';
-import { useAgents, useApp, useConnections, useUpdates } from '../../store/context';
+import { useAgents, useApp, useConnections, useUpdates, useWorkspace } from '../../store/context';
+import { PresenceBar } from '../Hub/PresenceBar';
+import { WorkspaceSwitcher } from '../Hub/WorkspaceSwitcher';
 import { ui } from '../ui';
 import { AgentList } from './AgentList';
 
-const settingsSections: Array<Exclude<Section, 'agents'>> = [
+const settingsSections: Array<Exclude<Section, 'agents' | 'workspace'>> = [
   'connections',
   'tools',
   'usage',
@@ -22,6 +24,7 @@ export function Sidebar() {
   const hasConnections = useConnections((s) => s.items.length > 0);
   const openCreate = useAgents((s) => s.openCreate);
   const select = useAgents((s) => s.select);
+  const workspace = useWorkspace();
 
   const item = (id: Section, label: string) => (
     <button
@@ -44,7 +47,8 @@ export function Sidebar() {
       aria-label={t('nav.label')}
       className="flex w-60 shrink-0 flex-col border-r border-neutral-200 bg-neutral-50 dark:border-neutral-800 dark:bg-neutral-950"
     >
-      <div className="px-4 py-4 text-lg font-bold tracking-tight">{t('app.title')}</div>
+      <WorkspaceSwitcher />
+      <PresenceBar />
 
       <div className="flex-1 overflow-y-auto px-2">
         <div className="flex items-center gap-1">
@@ -70,6 +74,7 @@ export function Sidebar() {
       </div>
 
       <div className="flex flex-col gap-0.5 border-t border-neutral-200 px-2 py-2 dark:border-neutral-800">
+        {workspace && item('workspace', t('nav.workspace'))}
         {settingsSections.map((id) => item(id, t(`nav.${id}`)))}
       </div>
 

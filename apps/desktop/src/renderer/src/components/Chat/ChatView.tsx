@@ -8,6 +8,7 @@ import { providerLabel } from '../../lib/connectionForm';
 import {
   useConnections,
   useConversations,
+  useWorkspace,
   useMessages,
   useStoreApis,
   useTransfer,
@@ -38,6 +39,12 @@ export function ChatView({
   );
   const running = useConversations((s) => (conversationId ? isRunning(s, conversationId) : false));
   const setVisible = useConversations((s) => s.setVisible);
+  const workspace = useWorkspace();
+  const runner = useConversations((s) =>
+    conversationId ? (s.runners[conversationId] ?? null) : null,
+  );
+  const runningElsewhere =
+    runner && workspace && runner.userId !== workspace.userId ? runner : null;
   const draftKey = conversationId ?? newDraftKey(agent.id);
   const draft = useMessages((s) => s.drafts[draftKey] ?? '');
   const sending = useMessages((s) => s.sending[draftKey] ?? false);
@@ -112,6 +119,11 @@ export function ChatView({
               <span className="truncate">
                 · {providerLabel(connection.provider)}
                 {agent.model && ` · ${agent.model}`}
+              </span>
+            )}
+            {runningElsewhere && (
+              <span data-testid="chat-runner" className="truncate">
+                · {t('hub.runningOn', { name: runningElsewhere.name })}
               </span>
             )}
           </p>

@@ -13,6 +13,7 @@ export function ApprovalCard({
   serverName,
   agentName,
   busy,
+  waitingFor = null,
   onDecide,
 }: {
   use: ToolUseBlock;
@@ -20,6 +21,8 @@ export function ApprovalCard({
   agentName: string;
   /** A decision is on its way: the buttons are disabled. */
   busy: boolean;
+  /** In a workspace, the member whose desktop runs the turn; only they can answer. */
+  waitingFor?: string | null;
   onDecide: (decision: ApprovalDecision) => void;
 }) {
   const { t } = useTranslation();
@@ -55,33 +58,39 @@ export function ApprovalCard({
       ) : (
         input
       )}
-      <div className="flex flex-wrap gap-2">
-        <button
-          data-testid="approve-allow"
-          className={ui.primary}
-          disabled={busy}
-          onClick={() => onDecide('allow')}
-        >
-          {t('approval.allow')}
-        </button>
-        <button
-          data-testid="approve-deny"
-          className={ui.button}
-          disabled={busy}
-          onClick={() => onDecide('deny')}
-        >
-          {t('approval.deny')}
-        </button>
-        <button
-          data-testid="approve-always"
-          className={ui.button}
-          disabled={busy}
-          title={t('approval.alwaysHint', { tool, agent: agentName })}
-          onClick={() => onDecide('allow-always')}
-        >
-          {t('approval.always')}
-        </button>
-      </div>
+      {waitingFor ? (
+        <p data-testid="approval-waiting" className="text-xs">
+          {t('hub.approvalWaiting', { name: waitingFor })}
+        </p>
+      ) : (
+        <div className="flex flex-wrap gap-2">
+          <button
+            data-testid="approve-allow"
+            className={ui.primary}
+            disabled={busy}
+            onClick={() => onDecide('allow')}
+          >
+            {t('approval.allow')}
+          </button>
+          <button
+            data-testid="approve-deny"
+            className={ui.button}
+            disabled={busy}
+            onClick={() => onDecide('deny')}
+          >
+            {t('approval.deny')}
+          </button>
+          <button
+            data-testid="approve-always"
+            className={ui.button}
+            disabled={busy}
+            title={t('approval.alwaysHint', { tool, agent: agentName })}
+            onClick={() => onDecide('allow-always')}
+          >
+            {t('approval.always')}
+          </button>
+        </div>
+      )}
     </div>
   );
 }

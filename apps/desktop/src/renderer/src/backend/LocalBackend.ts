@@ -23,8 +23,13 @@ import type {
   UsageRange,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
+import type { HubExecutor, HubTransport } from './hub/HubTransport';
 
-/** Backend over the preload bridge. The only module allowed to touch window.api. */
+/**
+ * Backend over the preload bridge, for Personal (this machine). The only
+ * module allowed to touch window.api: it also hands RemoteBackend its hub
+ * transport and executor, both over IPC to main, which holds the token.
+ */
 export class LocalBackend implements Backend {
   private readonly api = {
     invoke: async <C extends IpcInvokeChannel>(
@@ -37,6 +42,60 @@ export class LocalBackend implements Backend {
     },
     on: window.api.on,
   };
+
+  workspace() {
+    return null;
+  }
+
+  hub = {
+    getStatus: () => this.api.invoke('hub.getStatus', undefined),
+    configure: (url: string | null) => this.api.invoke('hub.configure', { url }),
+    register: (input: {
+      name: string;
+      email: string;
+      password: string;
+      invitationToken?: string;
+    }) => this.api.invoke('hub.register', input),
+    login: (input: { email: string; password: string }) => this.api.invoke('hub.login', input),
+    logout: () => this.api.invoke('hub.logout', undefined),
+  };
+
+  /** The hub over IPC: main adds the token to requests and holds the socket. */
+  hubTransport(): HubTransport {
+    return {
+      request: async <T>(
+        method: 'GET' | 'POST' | 'PATCH' | 'DELETE',
+        path: string,
+        options: { query?: Record<string, string>; body?: unknown } = {},
+      ) => (await this.api.invoke('hub.request', { method, path, ...options })) as T,
+      subscribe: (channel) => this.api.invoke('hub.subscribe', { channel }),
+      unsubscribe: (channel) => this.api.invoke('hub.unsubscribe', { channel }),
+      onEvent: (handler) =>
+        this.api.on('hub.event', ({ channel, event }) => handler(channel, event)),
+      onPresence: (handler) =>
+        this.api.on('hub.presence', ({ channel, members }) => handler(channel, members)),
+    };
+  }
+
+  /** What this desktop does for workspaces: runs, links, secret headers. */
+  hubExecutor(): HubExecutor {
+    return {
+      send: (conversationId, content) =>
+        this.api.invoke('hubRuns.send', { conversationId, content }),
+      retry: (conversationId) => this.api.invoke('hubRuns.retry', { conversationId }),
+      cancel: (conversationId) => this.api.invoke('hubRuns.cancel', { conversationId }),
+      decide: (conversationId, toolUseId, decision) =>
+        this.api.invoke('hubRuns.decide', { conversationId, toolUseId, decision }),
+      links: (workspaceId) => this.api.invoke('hubLinks.list', { workspaceId }),
+      setLink: (link) => this.api.invoke('hubLinks.set', link),
+      secretNames: (toolServerId, names) =>
+        this.api.invoke('hubToolSecrets.names', { toolServerId, names }),
+      setSecrets: (toolServerId, headers) =>
+        this.api.invoke('hubToolSecrets.set', { toolServerId, headers }),
+      // Served by main from its cache of the hub's attachments (main/attachmentProtocol.ts).
+      attachmentUrl: (id) => `comitiva-hub-attachment://file/${encodeURIComponent(id)}`,
+    };
+  }
 
   app = {
     getVersion: () => this.api.invoke('app.getVersion', undefined),
@@ -126,6 +185,7 @@ export class LocalBackend implements Backend {
       this.api.invoke('toolServers.update', { id, patch }),
     delete: (id: string) => this.api.invoke('toolServers.delete', { id }),
     test: (target: ToolServerTestTarget) => this.api.invoke('toolServers.test', target),
+    scope: () => 'local' as const,
   };
 
   googleDrive = {
@@ -165,6 +225,7 @@ export class LocalBackend implements Backend {
       this.api.on('message.block', (p) => handler({ type: 'message.block', ...p })),
       this.api.on('updates.status', (status) => handler({ type: 'updates.status', status })),
       this.api.on('menu.command', ({ command }) => handler({ type: 'menu.command', command })),
+      this.api.on('hub.status', (status) => handler({ type: 'hub.status', status })),
     ];
     return () => offs.forEach((off) => off());
   }

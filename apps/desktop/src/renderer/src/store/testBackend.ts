@@ -14,6 +14,7 @@ import type {
   ImportReport,
   GoogleDriveConfigureInput,
   GoogleDriveStatus,
+  HubStatus,
   Message,
   MessagePage,
   ToolDef,
@@ -28,7 +29,15 @@ import type {
   UsageSummaryRow,
   UsageTotals,
 } from '@comitiva/contract';
-import type { Backend } from '../backend/Backend';
+import type { Backend, WorkspaceContext } from '../backend/Backend';
+
+export const hubStatus = (overrides: Partial<HubStatus> = {}): HubStatus => ({
+  url: 'https://hub.example.com',
+  meta: null,
+  user: null,
+  realtime: 'off',
+  ...overrides,
+});
 
 export const summary = (
   id: string,
@@ -159,6 +168,18 @@ export const updateStatus = (over: Partial<UpdateStatus> = {}): UpdateStatus => 
 
 export function fakeBackend() {
   const backend = {
+    workspace: vi.fn((): WorkspaceContext | null => null),
+    hub: {
+      getStatus: vi.fn(async (): Promise<HubStatus> => hubStatus()),
+      configure: vi.fn(async (url: string | null) => hubStatus({ url })),
+      register: vi.fn(async (input: { name: string; email: string }) =>
+        hubStatus({ user: { id: 'u1', name: input.name, email: input.email } }),
+      ),
+      login: vi.fn(async (input: { email: string }) =>
+        hubStatus({ user: { id: 'u1', name: 'Ana', email: input.email } }),
+      ),
+      logout: vi.fn(async () => hubStatus()),
+    },
     app: { getVersion: vi.fn(async () => '0.1.0') },
     runner: { getStatus: vi.fn(async () => 'ready' as const) },
     secrets: { getStatus: vi.fn(async () => ({ available: true, weak: false })) },
@@ -239,6 +260,7 @@ export function fakeBackend() {
       update: vi.fn(async (id: string) => toolServer(id)),
       delete: vi.fn(async () => {}),
       test: vi.fn(async (): Promise<ToolDef[]> => [{ name: 'read_file', inputSchema: {} }]),
+      scope: vi.fn((): 'local' | 'workspace' => 'local'),
     },
     googleDrive: {
       getStatus: vi.fn(async (): Promise<GoogleDriveStatus> => driveStatus()),

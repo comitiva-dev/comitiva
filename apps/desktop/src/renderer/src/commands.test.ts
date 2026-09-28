@@ -14,6 +14,8 @@ import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
 import { createUpdatesStore } from './store/updates';
 import { createUsageStore } from './store/usage';
+import { createWorkspaceStore } from './store/workspace';
+import type { HubApi } from './backend/hub/HubApi';
 
 let backend: ReturnType<typeof fakeBackend>;
 let stores: Stores;
@@ -33,6 +35,10 @@ beforeEach(() => {
     transfer: createTransferStore(backend),
     settings: createSettingsStore(backend),
     updates: createUpdatesStore(backend),
+    workspace: createWorkspaceStore(null, {} as HubApi, {
+      gone: async () => {},
+      renamed: async () => {},
+    }),
   };
 });
 

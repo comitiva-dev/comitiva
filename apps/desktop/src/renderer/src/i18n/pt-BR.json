@@ -25,7 +25,8 @@
     "connections": "Conexões",
     "tools": "Ferramentas",
     "usage": "Uso",
-    "settings": "Configurações"
+    "settings": "Configurações",
+    "workspace": "Workspace"
   },
   "sidebar": {
     "noAgents": "Nenhum agente ainda.",
@@ -662,5 +663,70 @@
       "env": "Atualizações estão desligadas nesta execução.",
       "unsupported": "Este build não se atualiza sozinho: baixe novas versões na página de releases."
     }
+  },
+  "hub": {
+    "title": "Hub",
+    "body": "Um hub permite que sua equipe compartilhe agentes e conversas e veja as respostas enquanto chegam. Cada membro roda os agentes com as próprias conexões; chaves, pastas e ferramentas locais ficam neste computador.",
+    "address": "Endereço do hub",
+    "addressPlaceholder": "https://hub.exemplo.com",
+    "check": "Conectar",
+    "connected": "Conectado a um hub {{edition}} (contrato {{version}}).",
+    "editions": {
+      "community": "comunitário",
+      "cloud": "Comitiva cloud"
+    },
+    "signedInAs": "Conectado como {{name}} ({{email}}).",
+    "signOut": "Sair",
+    "signIn": "Entrar",
+    "createAccount": "Criar conta",
+    "name": "Nome",
+    "email": "E-mail",
+    "password": "Senha",
+    "passwordHint": "Pelo menos 8 caracteres.",
+    "personal": "Pessoal",
+    "personalHint": "Só neste computador",
+    "workspaceScope": "Workspace",
+    "roles": {
+      "owner": "Dono",
+      "admin": "Admin",
+      "member": "Membro"
+    },
+    "connectToHub": "Conectar a um hub…",
+    "newWorkspace": "Novo workspace…",
+    "joinWithLink": "Entrar com um link…",
+    "workspaceName": "Nome do workspace",
+    "invitationLink": "Link do convite",
+    "create": "Criar",
+    "join": "Entrar",
+    "presence": {
+      "alone": "Mais ninguém on-line",
+      "online": "On-line: {{names}}"
+    },
+    "workspace": {
+      "body": "Todos aqui veem os agentes e as conversas do workspace ao vivo. Cada membro roda os agentes no próprio computador, com a própria conexão.",
+      "members": "Membros",
+      "you": "você",
+      "role": "Papel",
+      "remove": "Remover",
+      "invite": "Convidar",
+      "inviteBody": "Crie um link e envie para a pessoa. Ela abre no Comitiva com este e-mail.",
+      "createLink": "Criar link",
+      "linkReady": "Envie este link para a pessoa convidada. Ele vale uma vez, por 7 dias.",
+      "copy": "Copiar",
+      "copied": "Copiado",
+      "revoke": "Revogar",
+      "leave": "Sair do workspace",
+      "leaveConfirm": "Sair deste workspace? Você vai precisar de um novo convite para voltar.",
+      "delete": "Excluir workspace",
+      "deleteConfirm": "Excluir este workspace com todos os agentes e conversas, para todos? Não dá para desfazer."
+    },
+    "share": {
+      "to": "Workspace",
+      "hint": "Copia este agente para o workspace. Você o roda com esta conexão; os outros escolhem a deles. Este agente e as conversas dele ficam aqui.",
+      "action": "Compartilhar",
+      "done": "{{agent}} agora está compartilhado em {{workspace}}."
+    },
+    "runningOn": "Rodando no computador de {{name}}",
+    "approvalWaiting": "Aguardando a resposta de {{name}}: a chamada roda no computador dessa pessoa."
   }
 }

@@ -17,6 +17,7 @@ import {
 } from '../store/context';
 import { AgentAvatar } from './AgentAvatar';
 import { ui } from './ui';
+import { ShareAgent } from './Hub/ShareAgent';
 
 /** Right panel: the selected agent's details, with its role editable in place. */
 export function AgentPanel({
@@ -102,6 +103,7 @@ export function AgentPanel({
           {t('agents.export')}
         </button>
       </div>
+      <ShareAgent agent={agent} />
 
       <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1.5 text-sm">
         <dt className={ui.muted}>{t('agents.form.connection')}</dt>

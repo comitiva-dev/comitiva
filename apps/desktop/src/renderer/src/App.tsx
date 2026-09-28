@@ -10,6 +10,7 @@ import { ConnectionsScreen } from './screens/ConnectionsScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { ToolsScreen } from './screens/ToolsScreen';
 import { UsageScreen } from './screens/UsageScreen';
+import { WorkspaceScreen } from './screens/WorkspaceScreen';
 import { useApp, useStoreApis } from './store/context';
 
 export function App() {
@@ -41,6 +42,8 @@ export function App() {
           <ToolsScreen />
         ) : section === 'usage' ? (
           <UsageScreen />
+        ) : section === 'workspace' ? (
+          <WorkspaceScreen />
         ) : (
           <SettingsScreen />
         )}

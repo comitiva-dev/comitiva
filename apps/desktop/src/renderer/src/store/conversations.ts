@@ -3,6 +3,7 @@ import type {
   ApprovalDecision,
   Conversation,
   ErrorCode,
+  HubRunner,
   PendingApproval,
 } from '@comitiva/contract';
 import { errorCode, type Backend, type BackendEvent } from '../backend/Backend';
@@ -26,6 +27,8 @@ export interface ConversationsState {
   unread: Record<string, number>;
   /** The tool call each conversation waits on, if any (from main, with the status). */
   pending: Record<string, PendingApproval | null>;
+  /** In a workspace: whose desktop is running each conversation, if any. */
+  runners: Record<string, HubRunner | null>;
   /** Conversations whose decision is on its way to main. */
   deciding: Record<string, boolean>;
   loaded: boolean;
@@ -103,6 +106,7 @@ export function createConversationsStore(backend: Backend) {
       visibleId: null,
       unread: {},
       pending: {},
+      runners: {},
       deciding: {},
       loaded: false,
       notice: null,
@@ -120,6 +124,10 @@ export function createConversationsStore(backend: Backend) {
             pending: {
               ...s.pending,
               ...Object.fromEntries(summaries.map((x) => [x.conversation.id, x.pendingApproval])),
+            },
+            runners: {
+              ...s.runners,
+              ...Object.fromEntries(summaries.map((x) => [x.conversation.id, x.runner ?? null])),
             },
           }));
         }),
@@ -185,6 +193,7 @@ export function createConversationsStore(backend: Backend) {
             byId: keep(s.byId),
             unread: keep(s.unread),
             pending: keep(s.pending),
+            runners: keep(s.runners),
             idsByAgent: keep(s.idsByAgent),
             archivedIdsByAgent: keep(s.archivedIdsByAgent),
             archivedLoad: keep(s.archivedLoad),
@@ -212,6 +221,9 @@ export function createConversationsStore(backend: Backend) {
           put([event.conversation]);
           set((s) => ({
             pending: { ...s.pending, [event.conversation.id]: event.pendingApproval },
+            ...(event.runner !== undefined
+              ? { runners: { ...s.runners, [event.conversation.id]: event.runner } }
+              : {}),
           }));
           return;
         }

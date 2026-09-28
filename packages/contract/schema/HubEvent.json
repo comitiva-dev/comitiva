@@ -383,8 +383,15 @@
               }
             },
             "createdBy": {
-              "type": "string",
-              "minLength": 1
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "createdAt": {
               "type": "string",
@@ -541,8 +548,15 @@
               }
             },
             "createdBy": {
-              "type": "string",
-              "minLength": 1
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "createdAt": {
               "type": "string",
@@ -667,8 +681,15 @@
               "type": "boolean"
             },
             "createdBy": {
-              "type": "string",
-              "minLength": 1
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "createdAt": {
               "type": "string",
@@ -761,8 +782,15 @@
               "type": "boolean"
             },
             "createdBy": {
-              "type": "string",
-              "minLength": 1
+              "anyOf": [
+                {
+                  "type": "string",
+                  "minLength": 1
+                },
+                {
+                  "type": "null"
+                }
+              ]
             },
             "createdAt": {
               "type": "string",

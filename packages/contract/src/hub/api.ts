@@ -8,6 +8,7 @@ import { ApprovalDecision } from '../entities/tool-approval.js';
 import { AppErrorShape } from '../errors.js';
 import { ProviderId } from '../provider-config.js';
 import {
+  StopReason,
   RunBlockEvent,
   RunTextDeltaEvent,
   RunToolCallEvent,
@@ -223,6 +224,8 @@ export type HubRunApprovalInput = z.infer<typeof HubRunApprovalInput>;
  */
 export const HubRunFinishInput = z.object({
   status: z.enum(['complete', 'cancelled', 'error']),
+  /** Why the runner stopped (`run.done`); members see it as the run's end. */
+  stopReason: StopReason.nullable().optional(),
   content: z.array(Block),
   error: AppErrorShape.nullable(),
   usage: HubUsageInput.nullable(),

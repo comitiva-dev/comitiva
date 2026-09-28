@@ -12,6 +12,27 @@
         "error"
       ]
     },
+    "stopReason": {
+      "anyOf": [
+        {
+          "type": "string",
+          "enum": [
+            "end_turn",
+            "max_tokens",
+            "stop_sequence",
+            "tool_use",
+            "refusal",
+            "pause_turn",
+            "max_iterations",
+            "cancelled",
+            "other"
+          ]
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
     "content": {
       "type": "array",
       "items": {

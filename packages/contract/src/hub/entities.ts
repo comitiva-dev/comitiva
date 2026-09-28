@@ -77,7 +77,8 @@ export const SharedAgent = z.object({
   toolServerIds: z.array(Id),
   permissionPolicy: PermissionPolicy,
   tags: AgentTags,
-  createdBy: Id,
+  /** Null once that account is deleted. */
+  createdBy: Id.nullable(),
   createdAt: IsoDate,
   updatedAt: IsoDate,
 });
@@ -102,7 +103,7 @@ export const WorkspaceToolServer = z.object({
   url: z.url(),
   headers: z.record(z.string(), WorkspaceHeaderValue),
   enabled: z.boolean(),
-  createdBy: Id,
+  createdBy: Id.nullable(),
   createdAt: IsoDate,
 });
 export type WorkspaceToolServer = z.infer<typeof WorkspaceToolServer>;
@@ -144,7 +145,8 @@ export type HubConversationSummary = z.infer<typeof HubConversationSummary>;
  */
 export const HubUsageRecord = UsageRecord.omit({ connectionId: true }).extend({
   workspaceId: Id,
-  userId: Id,
+  /** The member whose desktop ran it; null once that account is deleted. */
+  userId: Id.nullable(),
 });
 export type HubUsageRecord = z.infer<typeof HubUsageRecord>;
 

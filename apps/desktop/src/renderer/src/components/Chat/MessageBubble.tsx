@@ -2,7 +2,7 @@ import { memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import type { Agent, ApprovalDecision, Message } from '@comitiva/contract';
 import { imageSrc, renderParts, toolState } from '../../lib/chat';
-import { useMessages } from '../../store/context';
+import { useMessages, useWorkspace } from '../../store/context';
 import { ApprovalCard } from '../ApprovalCard/ApprovalCard';
 import { AgentAvatar } from '../AgentAvatar';
 import { ToolCallBlock } from '../ToolBlock/ToolCallBlock';
@@ -49,12 +49,19 @@ export const MessageBubble = memo(function MessageBubble({
   const attachmentUrl = useMessages((s) => s.attachmentUrl);
   const mine = message.role === 'user';
   const streaming = message.status === 'streaming';
+  // In a workspace, someone else's message carries their name.
+  const workspace = useWorkspace();
+  const other =
+    mine && message.author && workspace && message.author.id !== workspace.userId
+      ? message.author
+      : null;
 
   return (
     <article
       data-testid="message"
       data-role={message.role}
       data-status={message.status}
+      data-author={other?.name}
       data-highlighted={highlighted || undefined}
       className={`flex gap-3 px-6 py-2 transition-colors duration-700 ${
         highlighted ? 'bg-amber-50 dark:bg-amber-900/30' : ''
@@ -66,7 +73,7 @@ export const MessageBubble = memo(function MessageBubble({
             aria-hidden
             className="flex h-8 w-8 items-center justify-center rounded-md bg-neutral-200 text-xs font-semibold text-neutral-700 dark:bg-neutral-700 dark:text-neutral-200"
           >
-            {t('chat.youInitial')}
+            {other ? other.name.slice(0, 1).toUpperCase() : t('chat.youInitial')}
           </span>
         ) : (
           <AgentAvatar avatar={agent.avatar} name={agent.name} />
@@ -74,7 +81,9 @@ export const MessageBubble = memo(function MessageBubble({
       </div>
       <div className="min-w-0 flex-1">
         <header className="flex items-baseline gap-2">
-          <span className="text-sm font-semibold">{mine ? t('chat.you') : agent.name}</span>
+          <span className="text-sm font-semibold">
+            {other ? other.name : mine ? t('chat.you') : agent.name}
+          </span>
           <time dateTime={message.createdAt} className={`text-xs ${ui.muted}`}>
             {time(message.createdAt, i18n.language)}
           </time>

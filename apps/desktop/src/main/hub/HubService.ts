@@ -51,6 +51,8 @@ export class HubService extends EventEmitter<HubServiceEvents> {
   private meta: HubMeta | null = null;
   private socket: PusherSocket | null = null;
   private readonly subscriptions = new Map<string, number>();
+  /** The last members seen on each presence channel, for a listener that comes later. */
+  private readonly presence = new Map<string, PresenceMember[]>();
 
   constructor(private readonly deps: HubServiceDeps) {
     super();
@@ -184,10 +186,16 @@ export class HubService extends EventEmitter<HubServiceEvents> {
     const count = this.subscriptions.get(channel) ?? 0;
     if (count <= 1) {
       this.subscriptions.delete(channel);
+      this.presence.delete(channel);
       this.socket?.unsubscribe(channel);
     } else {
       this.subscriptions.set(channel, count - 1);
     }
+  }
+
+  /** Who was online on a presence channel, as last reported. */
+  presenceOf(channel: string): PresenceMember[] | undefined {
+    return this.presence.get(channel);
   }
 
   /** Before quitting. */
@@ -263,7 +271,10 @@ export class HubService extends EventEmitter<HubServiceEvents> {
       ...(this.deps.log ? { log: this.deps.log } : {}),
     });
     socket.on('state', () => this.changed());
-    socket.on('presence', (channel, members) => this.emit('presence', channel, members));
+    socket.on('presence', (channel, members) => {
+      this.presence.set(channel, members);
+      this.emit('presence', channel, members);
+    });
     socket.on('event', (channel, name, data) => {
       const parsed = HubEvent.safeParse(data);
       if (!parsed.success || parsed.data.type !== name) {

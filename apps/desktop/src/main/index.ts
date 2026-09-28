@@ -375,9 +375,13 @@ async function bootstrap(): Promise<void> {
       'hub.logout': () => hub.logout(),
       'hub.request': (req) => hub.request(req),
       'hub.subscribe': ({ channel }) => {
-        if (windowChannels.has(channel)) return;
-        windowChannels.add(channel);
-        hub.subscribe(channel);
+        if (!windowChannels.has(channel)) {
+          windowChannels.add(channel);
+          hub.subscribe(channel);
+        }
+        // A reloaded window listens again: tell it who is online now.
+        const members = hub.presenceOf(channel);
+        if (members) setImmediate(() => router.broadcast('hub.presence', { channel, members }));
       },
       'hub.unsubscribe': ({ channel }) => {
         if (windowChannels.delete(channel)) hub.unsubscribe(channel);

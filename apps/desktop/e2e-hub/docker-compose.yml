@@ -1,0 +1,69 @@
+# The hub for the two-desktop e2e (ADR 0015): the hub's production image,
+# pinned by HUB_IMAGE, with Postgres and Reverb. Nothing is kept between runs.
+# Build a local image with: docker build --target production -t comitiva-hub:local ../../../hub
+
+x-env: &env
+  APP_KEY: base64:w5x2mqBa2Mpc8r2pIeJb0Qe2c7cN9CNmaPvtq6X0p5Y=
+  APP_ENV: production
+  APP_DEBUG: 'false'
+  APP_URL: http://localhost:8830
+  LOG_CHANNEL: stderr
+  DB_CONNECTION: pgsql
+  DB_HOST: postgres
+  DB_DATABASE: hub
+  DB_USERNAME: hub
+  DB_PASSWORD: hub
+  CACHE_STORE: file
+  SESSION_DRIVER: file
+  QUEUE_CONNECTION: sync
+  BROADCAST_CONNECTION: reverb
+  REVERB_APP_ID: '1001'
+  REVERB_APP_KEY: e2e-key
+  REVERB_APP_SECRET: e2e-secret
+  REVERB_HOST: reverb
+  REVERB_PORT: '8080'
+  REVERB_SCHEME: http
+  HUB_REALTIME_HOST: localhost
+  HUB_REALTIME_PORT: '8831'
+  HUB_REALTIME_SCHEME: http
+  HUB_REGISTRATION: open
+
+x-hub: &hub
+  image: ${HUB_IMAGE:-comitiva-hub:local}
+  environment: *env
+  depends_on:
+    postgres:
+      condition: service_healthy
+
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: hub
+      POSTGRES_USER: hub
+      POSTGRES_PASSWORD: hub
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'hub', '-d', 'hub']
+      interval: 1s
+      timeout: 3s
+      retries: 60
+
+  web:
+    <<: *hub
+    environment:
+      <<: *env
+      HUB_MIGRATE: '1'
+    ports:
+      - '8830:80'
+
+  reverb:
+    <<: *hub
+    command: ['php', 'artisan', 'reverb:start', '--host=0.0.0.0', '--port=8080']
+    ports:
+      - '8831:8080'
+
+  scheduler:
+    <<: *hub
+    command: ['php', 'artisan', 'schedule:work']

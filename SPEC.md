@@ -69,7 +69,7 @@ Sibling repositories under `comitiva-dev` (ADR 0015): `hub` (Phase 8, the Larave
 
 **Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists. The desktop runs it with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE`, ADR 0002); any Node ≥ 22 can run it standalone.
 
-**Hub stack:** Laravel 12+, Reverb, Sanctum, Postgres, Pest, in its own repository (`comitiva-dev/hub`, AGPL-3.0 with a CLA). Implements the `contract` in PHP (validation via generated JSON Schema, copied from a pinned release). Billing, plans, usage policies, identity and audit sit behind interfaces with community defaults; the private enterprise package rebinds them for the hosted hub (ADR 0015).
+**Hub stack:** Laravel 13, Reverb, Sanctum, Postgres, Pest, in its own repository (`comitiva-dev/hub`, AGPL-3.0 with a CLA). Implements the `contract` in PHP (validation via generated JSON Schema, copied from a pinned release). Billing, plans, usage policies, identity and audit sit behind interfaces with community defaults; the private enterprise package rebinds them for the hosted hub (ADR 0015).
 
 #### 4.1 Runner protocol
 

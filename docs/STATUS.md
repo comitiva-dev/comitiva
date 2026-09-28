@@ -151,12 +151,15 @@ publishes it (below, "Hand-off").
 Auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend`
 in the desktop. Done when two desktops see the same conversation live.
 
-The hub lives in its own repository (ADR 0015). First steps, before any hub
-code:
+The hub lives in its own repository (ADR 0015) and keeps its own
+`docs/STATUS.md` for work inside the hub. This file keeps tracking the phases,
+their exit criteria and the work here; when a phase closes, it links to the
+hub's status rather than copying it. First steps, before any hub code:
 
-1. Create `comitiva-dev/hub`: Laravel 12, AGPL-3.0, CLA Assistant on pull
-   requests (license and CLA text reviewed by a lawyer first), CI publishing
-   `ghcr.io/comitiva-dev/hub` for every commit on `main` and every tag.
+1. Create `comitiva-dev/hub`: Laravel 13, AGPL-3.0, its own `CLAUDE.md` and
+   `docs/STATUS.md`, CLA Assistant on pull requests (license and CLA text
+   reviewed by a lawyer first), CI publishing `ghcr.io/comitiva-dev/hub` for
+   every commit on `main` and every tag.
 2. Define the hub's extension interfaces and events with community defaults,
    and the metadata endpoint (`apiVersion`, `edition`, capabilities).
 3. Add the contract sync to the hub: copy `packages/contract/schema/*.json`

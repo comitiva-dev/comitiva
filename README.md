@@ -19,6 +19,7 @@ It is not a coding tool. Agents research, write, review and organize files; code
 - **Know what it costs.** Every run's tokens and cost, by connection, agent and model, with your own price corrections and a CSV export.
 - **Yours to move.** Export a conversation as Markdown; export agents with their connections and tools as a file (never with keys) and import them elsewhere.
 - **Local-first.** Everything stays on your computer in SQLite. Keys live in the OS keychain, never in the database.
+- **Teams, optionally.** Connect to a [Comitiva hub](https://github.com/comitiva-dev/hub) to share agents and conversations in workspaces and watch replies stream in on everyone's screen. Each member runs agents with their own connection; keys and folders never leave their computer ([docs/hub.md](docs/hub.md)).
 - **English and Português (Brasil)**, light and dark, keyboard shortcuts for everything (Cmd/Ctrl+/ lists them).
 
 <!-- Screenshot placeholder: docs/images/quick-switcher.png — Cmd/Ctrl+K searching messages. -->

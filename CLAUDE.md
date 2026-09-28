@@ -1,6 +1,6 @@
 # Comitiva
 
-Agentic chat for your whole team. Open source desktop app (Electron + TypeScript) where users register LLM connections (APIs or CLI harnesses such as Claude Code and Codex), create agents with a role and a set of tools (local folders, Google Drive, any MCP server), and talk to all of them in a Slack-style chat with many conversations running in parallel. Later: a Laravel hub for teams (separate repository, ADR 0015) and a web UI.
+Agentic chat for your whole team. Open source desktop app (Electron + TypeScript) where users register LLM connections (APIs or CLI harnesses such as Claude Code and Codex), create agents with a role and a set of tools (local folders, Google Drive, any MCP server), and talk to all of them in a Slack-style chat with many conversations running in parallel. Teams share agents and conversations through a Laravel hub (separate repository `comitiva-dev/hub`, ADR 0015); a web UI comes later.
 
 ## Read first
 
@@ -10,24 +10,29 @@ Agentic chat for your whole team. Open source desktop app (Electron + TypeScript
 - `docs/providers.md` — how to add a provider adapter (rules, shared helpers, conformance tests).
 - `docs/tools.md` — tools, roots, the permission gate and approvals, the CLI MCP proxy, Google Drive (OAuth client setup), adding MCP servers.
 - `docs/usage.md` — how usage is recorded and costed, the pricing table, price corrections, the reports.
+- `docs/hub.md` — workspaces on a hub: what users see, the pieces here, changing the hub's payloads, running a hub locally, the e2e.
 - `docs/STATUS.md` — what is done and what is next. Update at the end of every phase.
 - `docs/adr/` — one file per decision that affects more than one package.
 
 ## Layout
 
 ```
-packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed)
+packages/contract     @comitiva/contract    zod schemas + generated JSON Schema (schema/*.json, committed);
+                                            hub/ = the hub's payloads, released as contract-v* tags (ADR 0016)
 packages/runner       @comitiva/runner      JSON-lines runner process (dist/bin.cjs, dist/mcp-proxy.cjs) + RunnerClient
                                             + usage/ (pricing.json, UsageCalculator, Tokenizer) + testing/ fakes
 packages/mcp-servers  @comitiva/mcp-servers built-in MCP servers (dist/filesystem.cjs, dist/google-drive.cjs) + testing/ fake Google
-apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC), preload, renderer
+apps/desktop          desktop               Electron: main (SQLite, SecretStore, RunnerSupervisor, IPC, hub/), preload, renderer
+                                            (LocalBackend for Personal, RemoteBackend for a hub workspace)
 ```
 
 ## Non-negotiable rules
 
 - `packages/runner` and `packages/mcp-servers` have zero Electron dependencies. They are plain Node processes with a JSON-lines protocol. (ESLint enforces it.)
 - Secrets never touch SQLite, IPC payloads to the renderer, or logs. Only `secretRef` travels; values go to the runner per request and are not persisted there.
-- The renderer depends only on the `Backend` interface, never on IPC or the runner directly. (ESLint enforces it; `window.api` is used only in `backend/LocalBackend.ts`.)
+- The renderer depends only on the `Backend` interface, never on IPC or the runner directly. (ESLint enforces it; `window.api` is used only in `backend/LocalBackend.ts`, which also hands RemoteBackend its hub transport.)
+- The hub token stays in main (SecretStore `hub:token`), like every other secret. Workspace turns run on this desktop with the member's own connection; the hub never gets a key, a folder or a secret header value (ADR 0017).
+- A change to the hub's payloads starts in `packages/contract`, is tagged `contract-vX.Y.Z`, and only then reaches the hub (`php artisan contract:sync`, ADR 0016).
 - The filesystem MCP server rejects any path outside the agent's roots at the server level, including symlink escapes.
 - Implementation order inside a phase: contract → runner → main → renderer, with tests at each layer before the next. A topic is done only when an integration or e2e test exercises the whole path.
 - Nothing in the core assumes code, Git or terminals. Comitiva is generic.
@@ -51,6 +56,7 @@ pnpm dev                            # desktop in dev; on Ubuntu 24.04+: pnpm dev
 pnpm build                          # all packages (turbo, dependency order)
 pnpm lint | pnpm typecheck | pnpm test | pnpm format:check
 pnpm --filter desktop test:e2e      # builds the app and runs Playwright against the fake four-provider server
+pnpm --filter desktop test:e2e:hub  # two apps against the hub's image in Docker (HUB_IMAGE, default comitiva-hub:local)
 pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate   # generate a Drizzle migration from schema.ts
 pnpm package                        # electron-builder for the current platform → apps/desktop/release/

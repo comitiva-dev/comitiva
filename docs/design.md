@@ -156,6 +156,8 @@ packages/contract/src/
 ├── ipc.ts             desktop IPC contract (channels + input/output schemas, DesktopApi, IpcResult;
 │                      ConnectionDraft/Probe/Patch/Target/Summary, SecretStorageStatus)
 ├── ipc-channels.ts    channel names only (no zod) for the sandboxed preload
+├── hub/               the hub's entities, REST payloads and HubEvent (P8, ADR 0016/0017):
+│                      entities.ts api.ts events.ts, published as schema/*.json for the hub
 ├── portable.ts        PortableBundle, ImportReport: export/import of agents (P7, ADR 0013)
 └── schema.ts          zod → JSON Schema; scripts/write-schema.ts writes ../schema/*.json
 
@@ -187,6 +189,7 @@ packages/mcp-servers/src/            index.ts
 └── testing/           fakeGoogle.ts: OAuth + Drive v3 subset over HTTP (exported as @comitiva/mcp-servers/testing, P5b)
 
 apps/desktop/
+├── e2e-hub/two-desktops.spec.ts docker-compose.yml global-setup.ts + playwright.hub.config.ts (P8: two apps, the hub's image)
 ├── electron.vite.config.ts electron-builder.yml drizzle.config.ts playwright.config.ts
 │   playwright.packaged.config.ts e2e-packaged/smoke.spec.ts (P7: the packaged app on each OS)
 │   build/ icon.svg icon.png (placeholder) entitlements.mac.plist (P7)
@@ -205,7 +208,9 @@ apps/desktop/
     │   ├── db/                      schema.ts Database.ts migrations/ (0000_init, 0001_connection_last_test,
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
     │   │                            0005_google_drive_tool_server (P5b), 0006_usage_reports (P6),
-    │   │                            0007_message_search (P7: FTS5 table + triggers, custom SQL), meta/)
+    │   │                            0007_message_search (P7: FTS5 table + triggers, custom SQL),
+    │   │                            0008_hub (P8: agent links, harness sessions, allow-always), meta/)
+    │   │                            repositories/HubLocalRepository.ts HubSettingsRepository.ts (P8)
     │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
     │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4)
     │   │                            ToolServerRepository.ts ToolApprovalRepository.ts (P5)
@@ -217,7 +222,10 @@ apps/desktop/
     │   │                            GoogleDriveService.ts (P5b) AttachmentService.ts BundleService.ts
     │   │                            ExportService.ts exporters/markdown.ts (P7)
     │   │            usage/           UsageService.ts Pricing.ts csv.ts (P6)
-    │   ├── testing/                 MemorySecrets.ts (P5; tests only)
+    │   │            chat/            ChatStore.ts RunEngine.ts LocalChatStore.ts (P8: one engine, a store per scope)
+    │   ├── hub/                     HubClient.ts PusherSocket.ts HubService.ts HubChatStore.ts HubRunService.ts
+    │   │                            HubAttachments.ts (P8, ADR 0017; no Electron import)
+    │   ├── testing/                 MemorySecrets.ts (P5; tests only) FakeHub.ts (P8: REST + a Pusher-protocol server)
     │   ├── ipc/                     IpcRouter.ts invoke.ts (runInvoke: validate in, strip out)
     │   └── oauth/                   GoogleOAuth.ts (P5b: loopback + PKCE, no Electron import)
     ├── shared/shortcuts.ts          commands and keys, one list for the menu, the key handler and the dialog (P7)
@@ -225,9 +233,12 @@ apps/desktop/
     └── renderer/
         ├── index.html               CSP
         └── src/
-            ├── backend/             Backend.ts LocalBackend.ts (RemoteBackend.ts in Phase 8)
+            ├── Root.tsx             picks LocalBackend (Personal) or RemoteBackend (a workspace) and rebuilds the stores (P8)
+            ├── backend/             Backend.ts LocalBackend.ts RemoteBackend.ts (P8)
+            │                        hub/HubTransport.ts (HubTransport, HubExecutor) hub/HubApi.ts (P8)
             ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4)
             │                        toolServers.ts (P5)   googleDrive.ts (P5b)
+            │                        hub.ts workspace.ts createStores.ts (P8)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
             │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)   toolServerForm.ts (P5)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
@@ -237,8 +248,9 @@ apps/desktop/
             │                        Composer/Composer.tsx ToolBlock/ToolCallBlock.tsx (P4)
             │                        ApprovalCard/ApprovalCard.tsx Forms/ToolServerForm.tsx Switch.tsx (P5)
             │                        ToolList.tsx Forms/GoogleDriveSetup.tsx (P5b)   Settings/ (later)
+            │                        Hub/ (WorkspaceSwitcher PresenceBar HubSection ShareAgent) (P8)
             ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)
-            │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)
+            │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)   WorkspaceScreen (P8)
             └── i18n/                index.ts (applyLanguage) language.ts (resolveLanguage, shared with main) en.json pt-BR.json
 ```
 
@@ -387,8 +399,22 @@ CREATE VIRTUAL TABLE messages_fts USING fts5(text, message_id UNINDEXED, convers
 -- triggers: AFTER INSERT (not streaming), AFTER UPDATE OF content, status (unless streaming → streaming,
 -- so checkpoints never touch it), AFTER DELETE; the migration backfills existing rows.
 
+-- 0008_hub (P8, ADR 0017): what this machine keeps about hub workspaces. The hub has the
+-- shared data; none of this is sent to it.
+CREATE TABLE hub_agent_links (           -- how this member runs a shared agent
+  agent_id TEXT PRIMARY KEY, workspace_id TEXT NOT NULL, connection_id TEXT,
+  roots TEXT NOT NULL DEFAULT '[]', tool_server_ids TEXT NOT NULL DEFAULT '[]', updated_at TEXT NOT NULL
+);
+CREATE TABLE hub_harness_sessions (conversation_id TEXT PRIMARY KEY, harness_session_id TEXT NOT NULL,
+  connection_id TEXT NOT NULL);
+CREATE TABLE hub_always_allowed (agent_id TEXT NOT NULL, tool_server_id TEXT NOT NULL, tool_name TEXT NOT NULL,
+  decided_at TEXT NOT NULL, PRIMARY KEY (agent_id, tool_server_id, tool_name));
+-- app_settings also keeps `hub.url` and `hub.user`; the token is in the SecretStore (`hub:token`).
+
 -- applied migrations are tracked by Drizzle in __drizzle_migrations
 ```
+
+The hub's own data model (Postgres) is in the hub repository (`docs/api.md` there): workspaces, memberships, invitations, shared agents, http tool servers, conversations (with `rev`), messages (with `author_id`), runs (one active per conversation, with a lease), usage records, attachments.
 
 `agents.avatar` holds JSON `AgentAvatar` (`{ color, emoji? }`: a palette color name, and an optional emoji; without one the UI shows the name's initials). The column stayed TEXT, so no DDL change was needed.
 
@@ -913,6 +939,38 @@ class ConversationService extends EventEmitter<ConversationEvents> {
   // Events → IpcRouter.broadcast: conversation.updated, message.updated, message.delta, message.block (rev per conversation)
 }
 
+// main/services/chat/ (P8) — one engine for Personal and workspace conversations
+interface ChatStore {            // where turns are persisted and published
+  target(conversationId): Promise<RunTarget /* agent as the runner sees it, connection, launches() */>;
+  checkRetry?(conversationId); alwaysAllowed(agentId); harnessSession(...); setHarnessSession(...);
+  resolveHistory(messages); beginTurn({ conversationId, runId, content | null, target }): Promise<{ reply, history, session }>;
+}
+interface RunSession {           // one live turn: text(), block(), toolCall(), awaitingApproval(), decided(),
+  flush(); finish(outcome); close(); titleCandidate(reply); applyTitle(title, placeholder);
+}
+class RunEngine {                // busy guard, runner events → blocks, cancel grace, approvals, title flow
+  send(conversationId, content); retry(conversationId); cancel(conversationId): boolean; decide(...);
+  forgetAgent(agentId); shutdown(); liveRun(conversationId); pendingOf(conversationId);
+}
+// LocalChatStore: SQLite + IPC events (16 ms UI flush, 250 ms checkpoints, rev per conversation).
+// ConversationService keeps its API and delegates runs to RunEngine + LocalChatStore.
+
+// main/hub/ (P8, ADR 0017) — no Electron import
+class HubClient { request(method, path, { query, body }); download(path); meta(); authorizeChannel(socketId, channel) }
+// errors → AppError with the hub's code; unreachable → hub_unreachable (retryable)
+class PusherSocket {             // Pusher protocol 7 over Node's WebSocket (Reverb)
+  connect(); close(); subscribe(channel); unsubscribe(channel);   // keepalive, reconnect with backoff, presence
+}
+class HubService {               // the token in the SecretStore (`hub:token`), REST + socket; emits status, event, presence
+  init(); status(); configure(url | null) /* checks /meta, apiVersion */; register(); login(); logout();
+  request(HubRequest); client(); call(fn) /* 401 signs out */; subscribe(channel); unsubscribe(channel); presenceOf(channel);
+}
+class HubChatStore implements ChatStore {   // run lock, batches every 100 ms (retried, numbered), heartbeat, finish with usage
+  // target: GET conversation + shared agent + this member's link (agent_not_linked) + workspace http servers
+}
+class HubRunService { send(); retry(); cancel() /* own run, or ask the hub */; decide(); forgetAgent(); shutdown() }
+class HubAttachments { get(id) /* cached download */; resolve(messages) /* file sources → base64 */ }
+
 // main/services/ToolServerService.ts (P5)
 class ToolServerService {
   constructor(deps: { repo; secrets: SecretStore; runner: Pick<RunnerClient, 'startToolServer' | 'stopToolServer'>;
@@ -995,9 +1053,13 @@ search.query                                                        (P7; { conve
 approvals.decide                                                    (P5)
 usage.summary | timeseries | conversation | export | prices | setPrice | clearPrice   (P6)
 dialogs.pickFolder                                                  (P2)
+hub.getStatus | configure | register | login | logout | request | subscribe | unsubscribe   (P8; the token stays in main)
+hubRuns.send | retry | cancel | decide                               (P8: workspace turns run here, published to the hub)
+hubLinks.list | set; hubToolSecrets.names | set                      (P8: this machine's links and secret headers)
 events: runner.status (P0); conversation.updated, message.updated, message.delta, message.block (P4, ADR 0008);
         menu.command (P7: a native menu item; the renderer runs the command);
-        conversation.updated carries the pending approval (P5; no separate approval event)
+        conversation.updated carries the pending approval (P5; no separate approval event);
+        hub.status, hub.event { channel, event: HubEvent }, hub.presence { channel, members } (P8)
 ```
 
 ---
@@ -1007,6 +1069,8 @@ events: runner.status (P0); conversation.updated, message.updated, message.delta
 ```ts
 // renderer/src/backend/Backend.ts — the UI only knows this
 interface Backend {
+  workspace(): { id; name; role; userId } | null;              // (P8) null = Personal
+  hub: { getStatus(); configure(url | null); register(input); login(input); logout() };   // (P8)
   app: { getVersion() };
   runner: { getStatus() };
   secrets: { getStatus() };                                    // { available, weak }
@@ -1029,7 +1093,15 @@ interface Backend {
            prices(); setPrice(provider, model, prices); clearPrice(provider, model) };
   onEvent(handler: (e: BackendEvent) => void): () => void;
 }
-class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels */ }
+class LocalBackend implements Backend { /* delegates to window.api; onEvent subscribes to the event channels;
+                                         hubTransport() and hubExecutor() over IPC for RemoteBackend (P8) */ }
+class RemoteBackend implements Backend { // (P8) a workspace: shared data from the hub, turns through the executor,
+  // the stream from the hub's events; what is local (connections, dialogs, settings…) from LocalBackend.
+  // A shared agent appears as an Agent whose connection, folders and local tools are this member's link.
+  // Events: message.created/updated → message.updated, run.text_delta → message.delta,
+  // run.block/run.tool_result → message.block, conversation.* → conversation.updated (+ runner),
+  // agent.*/tool_server.*/member.* → workspace.changed; presence → presence.updated.
+}
 // Phase 1 implements app, runner, secrets, connections and onEvent (runner.status); Phase 2 dialogs; Phase 3 agents and settings;
 // Phase 4 conversations, messages and their events; Phase 5 toolServers and approvals; Phase 6 usage.
 
@@ -1063,6 +1135,12 @@ settingsStore (P7):     settings (AppSettings), notice; load, update. onChange a
 transferStore (P7):     busy, saved (path), report (ImportReport), notice; exportConversation, exportAgents, importBundle
                         (afterImport reloads connections, agents and tool servers).
 uiStore (P7):           quickSwitcherOpen, shortcutsOpen, search (the switcher's query and result; stale answers dropped)
+hubStore (P8):          status, workspaces, activeWorkspaceId (in settings), busy, notice; configure, register, login,
+                        logout, createWorkspace, switchTo, preview/join (invitation link), shareAgent. Session-level:
+                        above the per-scope stores, which Root rebuilds on a switch.
+workspaceStore (P8):    members, invitations, online (presence), created (the link, once); invite, revoke, setRole,
+                        remove, rename, leave, deleteWorkspace.
+conversationsStore (P8): + runners (whose computer runs each workspace conversation).
 ```
 
 Phase 1 components: `Sidebar/Sidebar` (Agents placeholder, Connections/Tools/Usage/Settings, version and runner status), `screens/ConnectionsScreen`, `Forms/ConnectionForm` (built from `providerDescriptors`; its pure logic is `lib/connectionForm.ts`), `ProviderIcon` (monograms, no brand logos), `ConfirmDialog`.

@@ -18,6 +18,7 @@ flowchart LR
   H["CLI harnesses (one child per turn)<br/>claude -p · codex exec"]
   MCP["MCP servers (runner is the only client)<br/>filesystem (built-in) · third-party stdio / http"]
   PX["mcp-proxy.cjs<br/>(launched by the harness)"]
+  HUB["Hub (comitiva-dev/hub, optional)<br/>Laravel REST · Reverb WebSocket · Postgres"]
 
   R -- "LocalBackend → invoke / on" --> P
   P -- "ipcRenderer (contract/ipc.ts)" --> M
@@ -31,9 +32,11 @@ flowchart LR
   RN -- "MCP client (stdio / Streamable HTTP)" --> MCP
   H -- "MCP over stdio" --> PX
   PX -- "local socket + run token (ToolBridge)" --> RN
+  M -- "REST (device token) · Pusher protocol over WebSocket" --> HUB
 ```
 
-- **Renderer** — React 19, Zustand, Tailwind, i18next. It depends only on the `Backend` interface (`renderer/src/backend/Backend.ts`). `LocalBackend` implements it over `window.api`; `RemoteBackend` (Phase 8) will implement it over HTTP + WebSocket, against a hub from `comitiva-dev/hub`: a self-hosted community edition or the official hosted hub (ADR 0015).
+- **Renderer** — React 19, Zustand, Tailwind, i18next. It depends only on the `Backend` interface (`renderer/src/backend/Backend.ts`). `LocalBackend` implements it over `window.api` for Personal; `RemoteBackend` (Phase 8) implements it for a hub workspace (a self-hosted community edition or the official hosted hub, ADR 0015) over a `HubTransport` and a `HubExecutor`, both over IPC to main. Switching between Personal and a workspace rebuilds every store (`Root.tsx`).
+- **Hub** (Phase 8, optional) — `comitiva-dev/hub`. Main talks to it (`main/hub/`): `HubService` keeps the device token in the SecretStore and holds the REST client and the WebSocket (`PusherSocket`, the Pusher protocol Reverb speaks, over Node's WebSocket); `HubRunService` runs workspace turns on this desktop and publishes them (below). The renderer never sees the token.
 - **Preload** — Exposes `window.api = { invoke, on }` through `contextBridge`, allowlisted against the channel names in `@comitiva/contract/ipc-channels`. The window runs with `contextIsolation: true`, `sandbox: true`, `nodeIntegration: false`, a strict CSP, no navigation and no popups.
 - **Main** — Validates every IPC input with the zod schemas in `contract/ipc.ts` and strips every output to its schema (`runInvoke`). Owns SQLite (Drizzle), the `SecretStore`, and the `RunnerSupervisor`. It is the only process that sees secret values; it sends them to the runner per request.
 - **CLI harnesses** — Claude Code and Codex, spawned by the runner for each turn in the conversation's working directory, in their own process group. They run non-interactively with auto-accept and use their own login (ADR 0007, `docs/providers.md` → CLI harnesses).
@@ -116,12 +119,29 @@ provider stream → adapter (Anthropic / OpenAI-compatible / Gemini / Ollama) �
 
 Main forwards deltas to the renderer at most once per frame (16 ms) per conversation, instead of once per token (measured in Phase 0). SQLite gets a checkpoint of the streaming reply about every 250 ms. The final state, the usage record and the conversation status are written in one transaction when the run ends. Every message event carries the conversation's `rev`, and `messages.list` returns the `rev` of its page, so a conversation opened mid-stream lines up with the stream (ADR 0008). Each conversation runs on its own, with no global queue, and at most one reply runs per conversation at a time (`conversation_busy`). Measured latencies are in `docs/STATUS.md`.
 
+## Workspace runs (Phase 8, ADR 0017)
+
+The hub is the source of truth for a workspace; turns still run on a desktop, with that member's own connection. Personal and workspace conversations share one engine, `RunEngine` (`main/services/chat/`), over a `ChatStore`: `LocalChatStore` (SQLite, events to this window) or `HubChatStore` (the hub).
+
+```
+renderer (RemoteBackend) --hubRuns.send--> main: RunEngine + HubChatStore
+  POST /conversations/{id}/runs      run lock (409 conversation_busy), user message + empty reply, history
+  runner events → batches every 100 ms → POST /runs/{id}/events {batch, events}   (retried; a repeated batch is ignored)
+  heartbeat every 10 s while quiet; approvals only from this desktop → POST /runs/{id}/approvals
+  terminal event → POST /runs/{id}/finish {content, status, stopReason, error, usage costed here}
+hub: applies each event to the reply under the conversation's row lock, gives it the next rev,
+     broadcasts it on private-conversation.{id} (run.text_delta, run.block, run.tool_result …)
+every member's main (PusherSocket) → hub.event → RemoteBackend → message.delta / message.block / message.updated
+```
+
+The executing member's own window gets the stream from the hub too: one ordering (`rev`) for everyone, and the page-then-stream reconciliation of ADR 0008. A run holds a 30-second lease; a desktop that goes away leaves its reply `error { interrupted }` and frees the conversation. `run.cancel_requested` (the runner's member or an admin) reaches the executing desktop, which cancels. Attachments of workspace messages live on the hub; main caches them for runs and serves them to the window as `comitiva-hub-attachment://file/<id>`.
+
 ## Boundaries (non-negotiable)
 
 | Rule | Enforced by |
 |---|---|
 | `packages/runner` and `packages/mcp-servers` have zero Electron dependencies. | ESLint `no-restricted-imports` on those paths; the runner is tested under plain Node. |
-| Secrets never touch SQLite, IPC payloads to the renderer, or logs. | The DB schema has only `secret_ref` (tested). `runInvoke` strips outputs to their schema; connection outputs carry `hasSecret`, never a key (tested). pino redacts `secret`/`apiKey`. The form's typed key dies with the form, and the stored key is never sent back. The e2e scans `comitiva.db*` and `secrets.bin` for the keys. |
+| Secrets never touch SQLite, IPC payloads to the renderer, or logs (the hub token included). | The DB schema has only `secret_ref` (tested). `runInvoke` strips outputs to their schema; connection outputs carry `hasSecret`, never a key (tested). pino redacts `secret`/`apiKey`. The form's typed key dies with the form, and the stored key is never sent back. The e2e scans `comitiva.db*` and `secrets.bin` for the keys. |
 | The renderer depends only on the `Backend` interface. | ESLint bans `electron`, `main/`, `preload/` and `@comitiva/runner` imports in the renderer, and `window.api` outside `LocalBackend.ts`. |
 | The filesystem MCP server rejects paths outside the agent's roots, including symlink escapes. | `RootGuard` in the server (realpath of candidate and roots), on every call; escape attempts tested against a temp dir and through the built app. Write tools exist only with `--gated-by-client`. |
 | Tool calls that change things wait for the user (policy `ask`). | `PermissionGate` in the runner, for API runs and CLI harnesses (through the MCP proxy); tested per decision and in the e2e. |
@@ -129,7 +149,7 @@ Main forwards deltas to the renderer at most once per frame (16 ms) per conversa
 
 ## Secrets
 
-`ElectronSecretStore` encrypts values with `safeStorage` (Keychain / DPAPI / libsecret) and writes a JSON map of base64 blobs to `<userData>/secrets.bin`. Writes are atomic (tmp + rename, mode 0600) and serialized. Keys are stored under `connection:<id>`; the `connections` row holds only that ref. Secret env vars and headers of tool servers are stored under `toolServer:<id>:env:<NAME>` / `toolServer:<id>:header:<NAME>`, and their rows hold only `{ secretRef }`. The Google OAuth client and the Drive account's tokens are stored under `google:oauthClient` and `google:tokens` (ADR 0010); the access token reaches the Drive server as env when it starts.
+`ElectronSecretStore` encrypts values with `safeStorage` (Keychain / DPAPI / libsecret) and writes a JSON map of base64 blobs to `<userData>/secrets.bin`. Writes are atomic (tmp + rename, mode 0600) and serialized. Keys are stored under `connection:<id>`; the `connections` row holds only that ref. Secret env vars and headers of tool servers are stored under `toolServer:<id>:env:<NAME>` / `toolServer:<id>:header:<NAME>`, and their rows hold only `{ secretRef }`. The Google OAuth client and the Drive account's tokens are stored under `google:oauthClient` and `google:tokens` (ADR 0010); the access token reaches the Drive server as env when it starts. The hub's device token is stored under `hub:token`, and a workspace tool server's secret header values (which the hub never stores) under `hubToolServer:<id>:header:<NAME>`.
 
 When the OS offers no keyring (Linux `basic_text` backend), the store **refuses** to save keys (`secret_store_unavailable`). The Connections screen shows a banner explaining how to get a keyring, and keyless connections (Ollama, LM Studio) keep working. This is the Phase 1 decision (SPEC §7). Tests and CI opt into obfuscated storage with `COMITIVA_ALLOW_WEAK_SECRET_STORAGE=1`.
 
@@ -143,6 +163,7 @@ When the OS offers no keyring (Linux `basic_text` backend), the store **refuses*
 | `secrets.bin` | Encrypted secrets |
 | `logs/runner.log` | Runner stderr and supervisor events (rotates at 5 MB) |
 | `attachments/<ULID><ext>` | Files attached in the composer (0600); served to the renderer only through `comitiva-attachment://` (ADR 0012) |
+| `hub-cache/<attachmentId>` | Attachments of workspace messages, downloaded from the hub (Phase 8) |
 | `workspaces/<conversationId>/` | Default working directory of a CLI harness conversation (unless the agent has a read-write root or the connection sets one) |
 
 Outside `<userData>`: the runner's `ToolBridge` keeps its socket and, per harness turn, an MCP config and a token file in `<tmp>/comitiva-bridge-*/` (0700 dir, 0600 files, removed when the turn and the runner end).

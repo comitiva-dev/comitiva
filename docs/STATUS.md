@@ -2,7 +2,114 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 7 — Polish and v0.1.0 (done, release pending the tag)
+## Current phase: 8 — Laravel hub (done)
+
+Done when two desktops see the same conversation live: **yes**. `e2e-hub/two-desktops.spec.ts`
+runs two Comitiva apps, each with its own data and its own connection, against the hub's
+production image in Docker. Both sign up in the UI. Ana creates a workspace and invites Bea, and
+Bea joins with the link. Each sees the other online. Ana creates an agent in the workspace and Bea
+links it to her own connection. Ana asks, and Bea watches the reply stream in (the header says it
+runs on Ana's computer, and the message is under Ana's name). Then Bea replies from her computer
+and Ana watches it stream in. Each turn ran on the desktop that sent it.
+
+The hub is its own repository (`../hub`, AGPL-3.0, ADR 0015). Its status is in `hub/docs/STATUS.md`.
+
+### Done
+
+1. **Decisions.**
+   - ADR 0016: the hub copies the contract's JSON Schemas at a pinned `contract-v*` tag, with a
+     drift check (no Composer path repository).
+   - ADR 0017: the hub is the source of truth for workspaces, with no offline merge. Desktops
+     execute turns with their own connections and publish them under a run lock and a lease.
+     Approvals are answered only on the executing desktop, sharing is a copy, and the token lives
+     in main.
+2. **Contract** (`contract-v0.3.0`, `packages/contract/src/hub/`).
+   - Entities: workspaces, members, invitations, shared agents (a provider and model, no
+     connection), http-only workspace tool servers (secret headers as `{ secretRef: 'member' }`),
+     conversation summaries with the runner, usage records.
+   - The REST bodies and `HubEvent`, whose run events mirror RunnerEvent and carry `rev`.
+   - New error codes: `hub_unreachable`, `hub_auth_required`, `hub_incompatible`, `forbidden`,
+     `run_expired`, `agent_not_linked`, `invitation_invalid`, `invalid_credentials`, `email_taken`.
+   - An optional `author` on Message, `activeWorkspaceId` in settings, and the desktop's `hub.*`
+     IPC.
+3. **The hub** (`../hub`): Laravel 13, Sanctum, Reverb, Postgres. Workspaces and roles, invitation
+   links, shared agents, workspace tool servers, conversations with unread per member, the run
+   ledger (run lock, numbered event batches, approvals, heartbeats, finish, lease expiry), search,
+   attachments, usage, the extension points with community defaults, Docker Compose and one
+   production image.
+4. **Desktop, main.**
+   - `RunEngine` behind a `ChatStore` port (`services/chat/`): Personal conversations keep their
+     exact behavior through `LocalChatStore`, and workspace conversations run through
+     `HubChatStore`.
+   - `HubService` keeps the token in the SecretStore (`hub:token`), with REST and a Pusher-protocol
+     `PusherSocket`. `HubRunService` handles workspace turns: batches every 100 ms (retried and
+     numbered), heartbeats, cancel requests, approvals, and a finish costed here.
+   - `HubAttachments` with `comitiva-hub-attachment://`, and migration `0008_hub` for links,
+     harness sessions and allow-always.
+5. **Desktop, renderer.**
+   - `RemoteBackend` over `HubTransport` and `HubExecutor` (IPC to main). A shared agent appears
+     as an Agent whose connection, folders and local tools are this member's link, and an edit
+     sends the hub only the shared fields that changed.
+   - `Root` rebuilds the stores on a switch, below a session-level `hubStore`.
+   - Settings → Hub, the workspace switcher (new, join by link), the Workspace screen (members,
+     roles, invitations, leave, delete), presence, "Share" on Personal agents, whose computer runs
+     a reply, members' names on their messages, and approvals only on the running computer. No
+     sample-agent offer inside a workspace. Strings in en and pt-BR.
+6. **Docs:** `docs/hub.md` (new), ADRs 0016 and 0017, SPEC §3, §4.4, §5 and §7, `design.md`,
+   `architecture.md`, and the hub's README, `docs/api.md` and `docs/extension-points.md`.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 776 tests: contract 69, runner 270, mcp-servers 40, desktop 397 (Phase 7: 751). The 38 ConversationService tests pass unchanged over the new engine. |
+| `pnpm contract:schema` | No diff. 52 schemas, 39 of them new for the hub. `contract-v0.3.0` tagged. |
+| Integration (`src/main/hub/twoDesktops.test.ts`, FakeHub) | Two complete desktop stacks, each with its own DB, secrets, runner and hub session, in one workspace: presence both ways; Ana's turn streams to Bea (deltas, final reply, usage costed at Ana's); Bea is refused with `agent_not_linked`, links her connection, and her runner gets the whole history; `conversation_busy` across desktops; a stop request refused for a member, honored for the owner, reaching Ana's runner; a pending approval visible to Bea, answerable only by Ana, with the tool result streamed to Bea; the token never in status. |
+| Units | HubClient (codes, statuses, unreachable, not-a-hub), HubService (unreachable and incompatible hubs, the token only in the secret store, a rejected token signs out, a new hub signs out, session restored at start), RemoteBackend (links, secret headers, event mapping, only listened channels, reload after a reply elsewhere, edits sending only changed shared fields), invitation links. |
+| Hub (`php artisan test`, Postgres) | 47 passed, 1 skipped (the sibling-clone check inside the container). Every response is validated against its schema, and every broadcast against `HubEvent`. Pint and Larastan (level 6) are clean, and `contract:check` matches `contract-v0.3.0`. |
+| `pnpm --filter desktop test:e2e` | 58/58. One run failed at launch while a Docker image built on the same machine, and passed alone and in a full rerun. |
+| `pnpm --filter desktop test:e2e:hub` | 1/1 against the hub's production image (the exit criterion above). Latency, sent → chunk 5 on the other desktop: 1.3 s, where the provider emits chunk 5 at about 0.6 s. That is an upper bound, because it includes Bea opening the conversation. |
+| UI | Screenshots of the Hub settings (pt-BR), the switcher, the Workspace screen in dark mode, and both chats (`apps/desktop/test-results/hub-*.png`). |
+| `pnpm dev` by hand, two instances | **Not done.** The same path ran through the built app in Playwright, against the real hub. |
+
+### Deviations from the plan (all reflected in the docs)
+
+1. The IPC transport and executor are methods of LocalBackend (`hubTransport()`, `hubExecutor()`).
+   `window.api` still has one home, so the ESLint rule did not change.
+2. There is no separate "Your connection" form: the regular agent form edits a shared agent. The
+   connection, folders and local tools go to the member's link, and changed shared fields go to
+   the hub.
+3. Workspace turns have their own `HubRunService` over the shared `RunEngine`. `ConversationService`
+   keeps its API for Personal.
+4. The contract grew while the hub was built: `HubMeta.realtime`, `GET /conversations/{id}`,
+   nullable creators, `stopReason` on finish, an http-only URL pattern (a zod refinement JSON Schema
+   drops), `invalid_credentials`/`email_taken`, and `author` on Message. `contract-v0.2.0` was
+   re-tagged before anything was pushed; from `contract-v0.3.0` on, tags stay put.
+5. The hub numbers only message-changing events with `rev` (`run.started`, `run.tool_call` and the
+   terminal events carry none), so a client never sees a gap that is not one.
+6. Title generation for a workspace conversation runs with the member's connection and records its
+   usage in that member's Personal usage.
+
+### Open
+
+- Push both repositories, create `comitiva-dev/hub`, install CLA Assistant, and publish the image
+  (the CI is written, not run). The license and CLA text need legal review first.
+- In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a
+  workspace tool server by id answer `not_implemented`.
+- Unread counts of conversations not open are refreshed by a reload when a reply finishes, not
+  counted live.
+- No offline editing of workspaces (ADR 0017), and no invitation mail (links only).
+- Web sessions (for the Phase 9 web UI) are implemented and tested on the hub only.
+- Carried over: Phase 7's open items (signing, the icon, the manual installer checks, the real
+  providers, CLIs and Google account).
+
+## Next: Phase 9 — Web and hub execution
+
+The same UI served by the hub (`apps/web` with a fetch/cookie `HubTransport`), API connections and
+`http` MCP servers run by the hub, team keys, and a desktop registered as the workspace runner.
+Done when a user without the desktop talks to a team API agent.
+
+## Phase 7 — Polish and v0.1.0 (done)
 
 Done when the release is published: **not yet**, by decision. Everything the
 release needs is in `main`; the user makes the repository public and pushes
@@ -145,30 +252,6 @@ publishes it (below, "Hand-off").
 2. `git tag v0.1.0 && git push origin v0.1.0`.
 3. The Release workflow publishes Comitiva 0.1.0 with its notes. Installed
    builds find later versions from then on.
-
-## Next: Phase 8 — Laravel hub
-
-Auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend`
-in the desktop. Done when two desktops see the same conversation live.
-
-The hub lives in its own repository (ADR 0015) and keeps its own
-`docs/STATUS.md` for work inside the hub. This file keeps tracking the phases,
-their exit criteria and the work here; when a phase closes, it links to the
-hub's status rather than copying it. First steps, before any hub code:
-
-1. Create `comitiva-dev/hub`: Laravel 13, AGPL-3.0, its own `CLAUDE.md` and
-   `docs/STATUS.md`, CLA Assistant on pull requests (license and CLA text
-   reviewed by a lawyer first), CI publishing `ghcr.io/comitiva-dev/hub` for
-   every commit on `main` and every tag.
-2. Define the hub's extension interfaces and events with community defaults,
-   and the metadata endpoint (`apiVersion`, `edition`, capabilities).
-3. Add the contract sync to the hub: copy `packages/contract/schema/*.json`
-   from a pinned release tag, with a drift check in CI.
-4. Here: the hub's HTTP and WebSocket payloads in `@comitiva/contract`, a fake
-   hub for unit and integration tests, and a `RemoteBackend` e2e against the
-   pinned hub image.
-5. Separately: `comitiva-dev/hub-enterprise` (private) when billing starts, and
-   `comitiva-dev/comitiva.dev` for the site at `comitiva.dev`.
 
 ## Phase 6 — Usage: records, pricing, dashboard, export (done)
 

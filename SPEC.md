@@ -47,6 +47,8 @@ Blocks follow the Anthropic Messages API format as canonical: `text`, `image`, `
 **UsageRecord** — `id`, `connectionId`, `agentId`, `conversationId`, `messageId`, `provider`, `model`, `inputTokens`, `outputTokens`, `cacheReadTokens`, `cacheWriteTokens`, `estimated` (bool), `estimatedCostUsd`, `costSource` (`table` | `override` | `harness`), `costEstimated` (bool), `latencyMs`, `createdAt`.
 `inputTokens` is always net of `cacheReadTokens`; adapters normalize, because providers disagree. Cost is computed when the row is written, from the versioned table in `packages/runner` plus the user's corrections, and a cost a CLI harness reported itself wins (ADR 0011).
 
+**Hub workspaces** (Phase 8, ADR 0017) — a **Workspace** on a hub has **members** (`owner` | `admin` | `member`), joined by **invitation** links. It holds **shared agents** (the agent without its connection, folders and local tools: a provider and model instead), **workspace tool servers** (`http` only; secret header values stay on each desktop), and their conversations, messages and reported usage. Each member **links** a shared agent to one of their own connections (plus, optionally, their own folders and local tools); the link stays on their desktop. Whoever sends a message runs the turn on their desktop and publishes it to the hub. Everything else (connections and keys, Personal agents and conversations, stdio servers, harness sessions) stays on the machine: the window shows either **Personal** or one workspace at a time.
+
 ### 4. Architecture
 
 ```
@@ -138,7 +140,8 @@ interface ProviderAdapter {
 
 #### 4.4 Boundaries
 
-- Renderer → `Backend` (interface): `LocalBackend` over IPC today; `RemoteBackend` over HTTP + WebSocket in Phase 8. The UI knows nothing beyond `Backend`.
+- Renderer → `Backend` (interface): `LocalBackend` over IPC for Personal; `RemoteBackend` over the hub's REST API and WebSocket for a workspace (Phase 8), through a `HubTransport` that goes over IPC on the desktop (main holds the token and the socket) and will be fetch in the web UI. The UI knows nothing beyond `Backend`.
+- Hub (Phase 8) → the source of truth for workspaces, with no offline merge. In this phase it runs nothing: a desktop takes a conversation's run lock, publishes its runner's events in numbered batches under a lease, and finishes with the final content and usage; the hub numbers every event with the conversation's `rev` and broadcasts it, so every member sees one ordered stream (ADR 0017). Its payloads are the contract's, copied at a pinned `contract-v*` tag (ADR 0016).
 - Main → `RunnerClient`: the single point that talks to the runner process. Persists events, resolves secrets, handles restarts.
 - Hub → runs only API connections and `http` MCP servers. `stdio` servers and CLI harnesses only exist on desktops. An online desktop can register as the **workspace runner** (Phase 9+) to execute those on behalf of the team.
 
@@ -152,7 +155,8 @@ Three columns, Slack style:
 - **Composer**: Enter sends, Shift+Enter adds a line break, Esc stops, text and image attachments (button, drop, paste).
 - **Quick switcher** (`Cmd/Ctrl+K`): agents, conversations and full-text search over messages.
 - **Keyboard shortcuts** for every menu command, listed with `Cmd/Ctrl+/`; a native menu.
-- **Settings**: language, updates, export and import of agents, shortcuts.
+- **Settings**: language, the hub (address, sign in or create an account), updates, export and import of agents, shortcuts.
+- **Workspace switcher** (top of the sidebar): Personal, the hub's workspaces, new workspace, join with a link; who is online. A **Workspace** screen for members, roles, invitations, leaving. A shared conversation shows who wrote each message and whose computer runs a reply; only that member answers its approvals.
 - Light/dark theme (follows the system); i18n (en, pt-BR), chosen in Settings or from the system.
 
 ### 6. Roadmap
@@ -185,6 +189,8 @@ Resolved in Phase 5b: the `google-drive` server is our own, not a community one;
 Resolved in Phase 7: attachments are stored file blocks under the shell's data folder, resolved to base64 before each run, and providers without image support get a note instead of an error (ADR 0012); agents, connections and tool servers move between installs as a versioned portable bundle with no secrets (ADR 0013); installers for macOS, Windows and Linux update themselves from GitHub Releases, signing waits for certificates (ADR 0014).
 
 Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is frozen into the row at write time rather than computed on read, and a CLI harness's cost is shown as an *equivalent* that a subscription may not bill (ADR 0011).
+
+Resolved in Phase 8: the hub consumes the contract as a build-time copy of its JSON Schemas at a pinned `contract-v*` tag, with a drift check, not a Composer path repository (ADR 0016); the hub is the source of truth for workspaces with no offline merge, desktops execute turns with their own connections and publish them under a run lock and a lease, and only the executing member answers approvals (ADR 0017).
 
 Resolved after v0.1.0: the hub lives in its own repository as an AGPL-3.0 community edition with a CLA; a private Laravel package adds billing and the other enterprise features for the official hosted hub at `app.comitiva.dev`; the contract and the web UI stay in this repository, and the hub pins their releases (ADR 0015).
 

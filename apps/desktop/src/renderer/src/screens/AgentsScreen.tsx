@@ -15,6 +15,7 @@ import {
   useConnections,
   useConversations,
   useStoreApis,
+  useWorkspace,
 } from '../store/context';
 import type { ErrorCode } from '@comitiva/contract';
 
@@ -152,10 +153,12 @@ function NoSelection() {
   const hasConnections = useConnections((s) => s.items.length > 0);
   const firstEnabled = useConnections((s) => s.items.find((c) => c.connection.enabled));
   const setSection = useApp((s) => s.setSection);
+  // The sample agent is a first-run offer for this machine, not something to share with a team.
+  const inWorkspace = useWorkspace() !== null;
 
   if (!loaded || !connectionsLoaded) return null;
 
-  if (!hasAgents && settings?.sampleAgentOffer === 'pending' && firstEnabled) {
+  if (!inWorkspace && !hasAgents && settings?.sampleAgentOffer === 'pending' && firstEnabled) {
     const connection = firstEnabled.connection;
     return (
       <div data-testid="sample-offer" className={`${ui.card} flex flex-col gap-3 p-6`}>

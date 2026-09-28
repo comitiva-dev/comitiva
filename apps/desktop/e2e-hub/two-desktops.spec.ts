@@ -110,6 +110,7 @@ test.afterAll(async () => {
 test('two desktops see the same conversation live', async () => {
   // Ana signs up, creates a workspace and invites Bea.
   await signUp(ana.page, 'Ana', anaEmail);
+  await shot(ana.page, 'hub-settings');
   await ana.page.getByTestId('workspace-switcher').click();
   await ana.page.getByTestId('workspace-new').click();
   await ana.page.getByTestId('workspace-create-name').fill('Research');
@@ -120,6 +121,9 @@ test('two desktops see the same conversation live', async () => {
   await ana.page.getByTestId('invite-submit').click();
   const link = await ana.page.getByTestId('invite-link').inputValue();
   expect(link).toContain('/invite/');
+  await ana.page.emulateMedia({ colorScheme: 'dark' });
+  await shot(ana.page, 'hub-workspace-dark');
+  await ana.page.emulateMedia({ colorScheme: 'light' });
 
   // Bea signs up and joins with the link.
   await signUp(bea.page, 'Bea', beaEmail);
@@ -128,6 +132,9 @@ test('two desktops see the same conversation live', async () => {
   await bea.page.getByTestId('workspace-join-link').fill(link);
   await bea.page.getByTestId('workspace-join-submit').click();
   await expect(bea.page.getByTestId('workspace-switcher')).toContainText('Research');
+  await bea.page.getByTestId('workspace-switcher').click();
+  await shot(bea.page, 'hub-switcher');
+  await bea.page.getByTestId('workspace-switcher').click();
 
   // Each sees the other online.
   await expect(ana.page.getByTestId('presence')).toHaveAttribute('data-online', 'Bea', {

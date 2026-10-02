@@ -92,8 +92,12 @@ The hub is its own repository (`../hub`, AGPL-3.0, ADR 0015). Its status is in `
 
 ### Open
 
-- Push both repositories, create `comitiva-dev/hub`, install CLA Assistant, and publish the image
-  (the CI is written, not run). The license and CLA text need legal review first.
+- Published: both repositories are public, the `contract-v*` tags are pushed, and the hub's CI is
+  green with its image on `ghcr.io/comitiva-dev/hub` (still a private package; see
+  `hub/docs/STATUS.md`). Still to do before the first outside contribution to the hub: CLA
+  Assistant and the legal review of AGPL-3.0 and the CLA text.
+- v0.1.0 is out as a prerelease whose notes still read "Building…": the release workflow's
+  publish step failed (setup-node looked for pnpm), fixed in `release.yml` since.
 - In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a
   workspace tool server by id answer `not_implemented`.
 - Unread counts of conversations not open are refreshed by a reload when a reply finishes, not
@@ -101,7 +105,7 @@ The hub is its own repository (`../hub`, AGPL-3.0, ADR 0015). Its status is in `
 - No offline editing of workspaces (ADR 0017), and no invitation mail (links only).
 - Web sessions (for the Phase 9 web UI) are implemented and tested on the hub only.
 - Carried over: Phase 7's open items (signing, the icon, the manual installer checks, the real
-  providers, CLIs and Google account).
+  providers, CLIs and Google account). The repository is public now, so updates need no token.
 
 ## Next: Phase 9 — Web and hub execution
 

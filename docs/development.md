@@ -120,8 +120,10 @@ and Windows icons.
 
 ### Code signing (to do)
 
-Builds are unsigned today. People see Gatekeeper's warning on macOS (right-click
-→ Open, once) and SmartScreen's on Windows (More info → Run anyway). An
+Builds are unsigned today. On macOS, Gatekeeper blocks the first launch
+(macOS 15 and later: System Settings → Privacy & Security → Open Anyway, once;
+right-click → Open no longer bypasses it). On Windows, SmartScreen warns (More
+info → Run anyway). An
 unsigned macOS build also cannot install updates itself: it shows that a
 version is available and links to it.
 

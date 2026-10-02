@@ -31,7 +31,7 @@ Download the file for your system from the [latest release](https://github.com/c
 
 | System | File | Notes |
 |---|---|---|
-| macOS (Apple silicon / Intel) | `Comitiva-…-mac-arm64.dmg` / `…-mac-x64.dmg` | The app is not signed yet: the first time, right-click it → **Open** → **Open**. New versions are announced in the app with a download link. |
+| macOS (Apple silicon / Intel) | `Comitiva-…-mac-arm64.dmg` / `…-mac-x64.dmg` | The app is not signed yet: the first time, macOS blocks it; open **System Settings → Privacy & Security** and click **Open Anyway**. New versions are announced in the app with a download link. |
 | Windows 10/11 | `Comitiva-…-win-x64-setup.exe` | Not signed yet: SmartScreen shows **More info → Run anyway**. Installs for your user; updates install on restart. |
 | Linux (Debian, Ubuntu) | `.deb` | `sudo apt install ./Comitiva-…-linux-amd64.deb`. Updates install on restart. |
 | Linux (Fedora, openSUSE) | `.rpm` | `sudo dnf install ./Comitiva-…-linux-x86_64.rpm` |

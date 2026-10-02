@@ -145,6 +145,9 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version-file: .nvmrc
+          # No pnpm here: setup-node v5 would cache for the packageManager
+          # field and fail to find pnpm (the v0.1.0 run did).
+          package-manager-cache: false
       - name: Release notes from conventional commits
         env:
           VERSION: ${{ needs.prepare.outputs.version }}

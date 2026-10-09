@@ -22,3 +22,4 @@ One file per decision that affects more than one package. Format: context, decis
 | [0016](0016-hub-contract-consumption.md) | The hub copies the contract's JSON Schemas at a pinned `contract-v*` tag, with a drift check; no Composer path repository | Accepted |
 | [0017](0017-hub-sync-model.md) | The hub is the source of truth for workspaces with no offline merge; desktops execute and publish run events under a run lock and a lease | Accepted |
 | [0018](0018-hub-under-apache.md) | The hub under Apache-2.0, contributions inbound = outbound, no CLA | Accepted |
+| [0019](0019-signing-publishers.md) | Windows signed through the SignPath Foundation, macOS with an individual Developer ID; no company in the installers | Accepted |

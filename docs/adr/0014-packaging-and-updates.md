@@ -1,6 +1,6 @@
 # 0014 — Packaging, signing later, and updates from GitHub Releases
 
-- Status: Accepted
+- Status: Accepted; signing amended by ADR 0019
 - Date: 2026-09-23
 
 ## Context

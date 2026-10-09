@@ -127,23 +127,65 @@ info → Run anyway). An
 unsigned macOS build also cannot install updates itself: it shows that a
 version is available and links to it.
 
-To sign, add these repository secrets; the release workflow uses them when
-present and builds unsigned otherwise:
+The plan (ADR 0019): Windows through the SignPath Foundation, macOS with an
+individual Apple Developer ID. What is left, in order:
+
+**macOS (individual Apple Developer Program)**
+
+1. Enroll as an individual at developer.apple.com/programs (an Apple ID with
+   two-factor authentication, your legal name, the yearly fee).
+2. As the account holder, create a **Developer ID Application** certificate
+   (Certificates, Identifiers & Profiles), install it in a Mac's keychain and
+   export it with its private key as a `.p12` with a password.
+3. Create an app-specific password at account.apple.com and note the Team ID
+   (Membership details).
+4. Add the repository secrets below. The release workflow already uses them.
+5. Run the release workflow by hand (dry run), download the dmg, and check
+   `spctl -a -vv Comitiva.app` (accepted, "Notarized Developer ID") and that an
+   update installs by itself.
 
 | Secret | What |
 |---|---|
-| `CSC_LINK` | macOS: the Developer ID Application certificate (.p12), base64 or an https URL |
+| `CSC_LINK` | the Developer ID Application certificate (.p12), base64 |
 | `CSC_KEY_PASSWORD` | its password |
-| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | macOS notarization (turns `mac.notarize` on) |
-| `WIN_CSC_LINK` | Windows: the code-signing certificate (.pfx) |
-| `WIN_CSC_KEY_PASSWORD` | its password |
+| `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | notarization (turns `mac.notarize` on) |
 
 With `CSC_LINK`, the workflow also records `comitiva.macSigned: true` in the
 packaged `package.json`, which lets the macOS build install its own updates.
 The hardened runtime and its entitlements (`build/entitlements.mac.plist`) are
-already configured. Windows certificates from a cloud HSM (Azure Trusted
-Signing, for example) need electron-builder's `win.azureSignOptions` instead of
-`WIN_CSC_LINK`.
+already configured.
+
+**Windows (SignPath Foundation)**
+
+1. Publish the code signing policy page on comitiva.dev (ADR 0019): roles
+   (committers, reviewers, approvers), the line "Free code signing provided by
+   SignPath.io, certificate by SignPath Foundation", and the privacy note (the
+   app talks to the network only for what the user configures, plus the update
+   check against GitHub Releases, which Settings → Updates turns off).
+2. Apply at signpath.org with the repository, the policy page and a release
+   built by the workflow. Mention the hub (Apache-2.0) and that the private
+   enterprise package is a separate product, not part of what is signed.
+3. Once accepted: in SignPath, connect GitHub Actions as the trusted build
+   system, create the project with an artifact configuration that signs
+   `Comitiva.exe` inside the app and the NSIS installer, and a `release-signing`
+   policy with you as approver. Turn on two-factor authentication there.
+4. Add the secrets `SIGNPATH_API_TOKEN` and `SIGNPATH_ORGANIZATION_ID` (and
+   the project and policy slugs as variables).
+5. Change `release.yml` (the Windows job): build unpacked, upload the artifact,
+   `SignPath/github-action-submit-signing-request` with
+   `wait-for-completion`, then build the installer from the signed app with
+   `--prepackaged`, sign the installer the same way, and only then write the
+   blockmap and `latest.yml` (their sha512 must be the signed file's). Set
+   `win.publisherName: SignPath Foundation`. Drop `WIN_CSC_LINK` and
+   `WIN_CSC_KEY_PASSWORD`, which CAs no longer issue.
+6. Dry run, then check the installer's signature (Properties → Digital
+   Signatures, or `Get-AuthenticodeSignature`) and that an update from the
+   previous version installs.
+
+**Both:** change the copyright from Softerize Sistemas Ltda to "The Comitiva
+contributors" (`electron-builder.yml`, `package.json`'s `author`, the About
+panel in `src/main/index.ts`, the deb/rpm `maintainer` and `vendor`), and the
+README's install table once a signed release is out.
 
 ## Releasing
 

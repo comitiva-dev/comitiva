@@ -104,8 +104,31 @@ The hub is its own repository (`../hub`, Apache-2.0 since ADR 0018). Its status 
   counted live.
 - No offline editing of workspaces (ADR 0017), and no invitation mail (links only).
 - Web sessions (for the Phase 9 web UI) are implemented and tested on the hub only.
-- Carried over: Phase 7's open items (signing, the icon, the manual installer checks, the real
-  providers, CLIs and Google account). The repository is public now, so updates need no token.
+- Carried over: Phase 7's open items (the icon, the manual installer checks, the real providers,
+  CLIs and Google account). The repository is public now, so updates need no token.
+
+### Before 1.0: distribution and trust
+
+Signing (ADR 0019; steps in `docs/development.md` → Code signing):
+
+- [ ] macOS: individual Apple Developer Program, Developer ID certificate, the five secrets, a
+      notarized dry run that updates itself.
+- [ ] Windows: the code signing policy page on comitiva.dev, the SignPath Foundation application,
+      the SignPath project and secrets, and `release.yml` signing the app and the installer before
+      writing `latest.yml`; `win.publisherName`.
+- [ ] Copyright "The Comitiva contributors" in place of Softerize Sistemas Ltda in the app and
+      its packages.
+- [ ] README: install steps for signed builds.
+
+Proof that a download is what the repository built:
+
+- [ ] Build provenance with `actions/attest-build-provenance` for every installer, and how to
+      check it (`gh attestation verify <file> -R comitiva-dev/comitiva`).
+- [ ] `SHA256SUMS` and an SBOM attached to each release.
+- [ ] OpenSSF Scorecard workflow and badge; CodeQL, Dependabot and dependency review.
+- [ ] `SECURITY.md` with a private way to report a vulnerability.
+- [ ] A `/security` page on comitiva.dev: verifying a download, what each OS shows, and what the
+      app does with keys and files (sourced from SPEC and the ADRs).
 
 ## Next: Phase 9 — Web and hub execution
 
@@ -235,7 +258,7 @@ publishes it (below, "Hand-off").
 
 ### Open
 
-- Signing and notarization (secrets documented, workflow ready).
+- Signing and notarization (secrets documented, workflow ready). Plan since: ADR 0019.
 - The real icon (a placeholder ships).
 - The repository must be public for updates without a token.
 - Hand checks not done: installing the deb and rpm, running the installers

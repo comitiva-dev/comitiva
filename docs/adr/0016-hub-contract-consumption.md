@@ -60,7 +60,7 @@ second release channel for no gain over a tag.
   here, `contract:sync` in the hub, commit. The drift check makes a skipped
   or partial step fail CI.
 - The hub's tree carries a readable copy of the contract it implements, so
-  an AGPL hub built from source needs nothing from this repository.
+  a hub built from source needs nothing from this repository.
 - zod refinements (`UserContent` must not be blank, for example) do not
   survive the conversion to JSON Schema. The hub repeats those few checks
   in PHP, and its tests name each one.

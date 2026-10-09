@@ -18,6 +18,7 @@ One file per decision that affects more than one package. Format: context, decis
 | [0012](0012-attachments-as-stored-file-blocks.md) | Attachments are stored file blocks, resolved to base64 by the shell before a run; providers without images get a note | Accepted |
 | [0013](0013-portable-bundle.md) | Agents, connections and tool servers travel as a versioned portable bundle in the contract, with no secrets and file-local refs | Accepted |
 | [0014](0014-packaging-and-updates.md) | electron-builder for dmg, nsis, AppImage, deb and rpm; signing from secrets when present; updates from GitHub Releases | Accepted |
-| [0015](0015-hub-repositories-and-editions.md) | The hub in its own repository: AGPL community edition, private enterprise package for the hosted hub; contract and web UI stay here | Accepted |
+| [0015](0015-hub-repositories-and-editions.md) | The hub in its own repository: AGPL community edition, private enterprise package for the hosted hub; contract and web UI stay here | Accepted; license and CLA superseded by 0018 |
 | [0016](0016-hub-contract-consumption.md) | The hub copies the contract's JSON Schemas at a pinned `contract-v*` tag, with a drift check; no Composer path repository | Accepted |
 | [0017](0017-hub-sync-model.md) | The hub is the source of truth for workspaces with no offline merge; desktops execute and publish run events under a run lock and a lease | Accepted |
+| [0018](0018-hub-under-apache.md) | The hub under Apache-2.0, contributions inbound = outbound, no CLA | Accepted |

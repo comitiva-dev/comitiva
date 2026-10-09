@@ -1,6 +1,6 @@
 # 0015 — The hub in its own repository: AGPL community edition, private enterprise package
 
-- Status: Accepted
+- Status: Accepted; the hub's license and CLA are superseded by ADR 0018 (Apache-2.0, no CLA)
 - Date: 2026-09-24
 
 ## Context

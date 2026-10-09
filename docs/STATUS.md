@@ -12,7 +12,7 @@ links it to her own connection. Ana asks, and Bea watches the reply stream in (t
 runs on Ana's computer, and the message is under Ana's name). Then Bea replies from her computer
 and Ana watches it stream in. Each turn ran on the desktop that sent it.
 
-The hub is its own repository (`../hub`, AGPL-3.0, ADR 0015). Its status is in `hub/docs/STATUS.md`.
+The hub is its own repository (`../hub`, Apache-2.0 since ADR 0018). Its status is in `hub/docs/STATUS.md`.
 
 ### Done
 
@@ -94,8 +94,8 @@ The hub is its own repository (`../hub`, AGPL-3.0, ADR 0015). Its status is in `
 
 - Published: both repositories are public, the `contract-v*` tags are pushed, and the hub's CI is
   green with its image on `ghcr.io/comitiva-dev/hub` (still a private package; see
-  `hub/docs/STATUS.md`). Still to do before the first outside contribution to the hub: CLA
-  Assistant and the legal review of AGPL-3.0 and the CLA text.
+  `hub/docs/STATUS.md`). The hub moved to Apache-2.0 with no CLA (ADR 0018), so outside
+  contributions need no agreement.
 - v0.1.0 is out as a prerelease whose notes still read "Building…": the release workflow's
   publish step failed (setup-node looked for pnpm), fixed in `release.yml` since.
 - In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a

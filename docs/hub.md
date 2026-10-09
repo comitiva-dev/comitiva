@@ -3,7 +3,7 @@
 A hub lets a team share agents and conversations and watch replies stream in, live, on
 everyone's screen. It is optional: without one, Comitiva works as before on your computer
 (**Personal**). The hub is a separate, self-hostable server,
-[comitiva-dev/hub](https://github.com/comitiva-dev/hub) (AGPL-3.0). The official hosted hub runs at
+[comitiva-dev/hub](https://github.com/comitiva-dev/hub) (Apache-2.0). The official hosted hub runs at
 `app.comitiva.dev`. Why it works this way: ADR 0015, 0016 and 0017.
 
 ## For users

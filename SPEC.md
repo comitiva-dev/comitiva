@@ -65,13 +65,13 @@ repo/
 └── CLAUDE.md
 ```
 
-Sibling repositories under `comitiva-dev` (ADR 0015): `hub` (Phase 8, the Laravel hub, community edition, AGPL-3.0), `hub-enterprise` (private: the enterprise package and the deployment of the hosted hub) and `comitiva.dev` (the static site).
+Sibling repositories under `comitiva-dev` (ADR 0015): `hub` (Phase 8, the Laravel hub, community edition, Apache-2.0), `hub-enterprise` (private: the enterprise package and the deployment of the hosted hub) and `comitiva.dev` (the static site).
 
 **Desktop stack:** Electron + electron-vite, React 19, TypeScript strict, Tailwind, Zustand, SQLite via better-sqlite3 with Drizzle migrations (ADR 0003), zod-typed IPC, vitest, Playwright.
 
 **Runner stack:** Node 22+, TypeScript, `@modelcontextprotocol/sdk`, official Anthropic SDK, OpenAI-compatible client, Gemini client, fetch for Ollama. No dependency on Electron or a database: the runner is stateless with respect to persistence; it receives the history and returns events. The shell persists. The desktop runs it with the Electron binary in Node mode (`ELECTRON_RUN_AS_NODE`, ADR 0002); any Node ≥ 22 can run it standalone.
 
-**Hub stack:** Laravel 13, Reverb, Sanctum, Postgres, Pest, in its own repository (`comitiva-dev/hub`, AGPL-3.0 with a CLA). Implements the `contract` in PHP (validation via generated JSON Schema, copied from a pinned release). Billing, plans, usage policies, identity and audit sit behind interfaces with community defaults; the private enterprise package rebinds them for the hosted hub (ADR 0015).
+**Hub stack:** Laravel 13, Reverb, Sanctum, Postgres, Pest, in its own repository (`comitiva-dev/hub`, Apache-2.0). Implements the `contract` in PHP (validation via generated JSON Schema, copied from a pinned release). Billing, plans, usage policies, identity and audit sit behind interfaces with community defaults; the private enterprise package rebinds them for the hosted hub (ADR 0015).
 
 #### 4.1 Runner protocol
 
@@ -194,6 +194,6 @@ Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is 
 
 Resolved in Phase 8: the hub consumes the contract as a build-time copy of its JSON Schemas at a pinned `contract-v*` tag, with a drift check, not a Composer path repository (ADR 0016); the hub is the source of truth for workspaces with no offline merge, desktops execute turns with their own connections and publish them under a run lock and a lease, and only the executing member answers approvals (ADR 0017).
 
-Resolved after v0.1.0: the hub lives in its own repository as an AGPL-3.0 community edition with a CLA; a private Laravel package adds billing and the other enterprise features for the official hosted hub at `app.comitiva.dev`; the contract and the web UI stay in this repository, and the hub pins their releases (ADR 0015).
+Resolved after v0.1.0: the hub lives in its own repository as an AGPL-3.0 community edition with a CLA; a private Laravel package adds billing and the other enterprise features for the official hosted hub at `app.comitiva.dev`; the contract and the web UI stay in this repository, and the hub pins their releases (ADR 0015). The hub is licensed under Apache-2.0 like this repository, with no CLA, so anyone can build an enterprise layer on its extension points (ADR 0018).
 
 ---

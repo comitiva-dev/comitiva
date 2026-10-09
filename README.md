@@ -8,7 +8,7 @@ It is not a coding tool. Agents research, write, review and organize files; code
 
 <!-- Screenshot placeholder: docs/images/chat.png — the three columns: agents in the sidebar, a conversation with a tool call waiting for approval, the agent's panel. -->
 
-> **Status: v0.1.0**, the first release: macOS, Windows and Linux. A hub for teams (self-hostable, in its own AGPL repository, or hosted at `app.comitiva.dev`) and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
+> **Status: v0.1.0**, the first release: macOS, Windows and Linux. A hub for teams (self-hostable, in its own repository, or hosted at `app.comitiva.dev`) and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
 
 ## What it does
 

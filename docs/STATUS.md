@@ -96,8 +96,8 @@ The hub is its own repository (`../hub`, Apache-2.0 since ADR 0018). Its status 
   green with its image on `ghcr.io/comitiva-dev/hub` (still a private package; see
   `hub/docs/STATUS.md`). The hub moved to Apache-2.0 with no CLA (ADR 0018), so outside
   contributions need no agreement.
-- v0.1.0 is out as a prerelease whose notes still read "Building…": the release workflow's
-  publish step failed (setup-node looked for pnpm), fixed in `release.yml` since.
+- v0.1.0's publish step failed (setup-node looked for pnpm, fixed in `release.yml` since), which
+  left it a prerelease with placeholder notes. It now has written notes and is the latest release.
 - In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a
   workspace tool server by id answer `not_implemented`.
 - Unread counts of conversations not open are refreshed by a reload when a reply finishes, not
@@ -113,9 +113,10 @@ Signing (ADR 0019; steps in `docs/development.md` → Code signing):
 
 - [ ] macOS: individual Apple Developer Program, Developer ID certificate, the five secrets, a
       notarized dry run that updates itself.
-- [ ] Windows: the code signing policy page on comitiva.dev, the SignPath Foundation application,
-      the SignPath project and secrets, and `release.yml` signing the app and the installer before
-      writing `latest.yml`; `win.publisherName`.
+- [x] Windows: the code signing policy page (https://comitiva.dev/code-signing/).
+- [ ] Windows: the SignPath Foundation application, the SignPath project and secrets, and
+      `release.yml` signing the app and the installer before writing `latest.yml`;
+      `win.publisherName`.
 - [ ] Copyright "The Comitiva contributors" in place of Softerize Sistemas Ltda in the app and
       its packages.
 - [ ] README: install steps for signed builds.

@@ -6,7 +6,7 @@
 
 ### 1. Vision
 
-An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop. The hub comes in two editions: an open source **community edition** teams host themselves, and the **official hosted hub** at `app.comitiva.dev`, billed by usage, which adds a closed enterprise layer (ADR 0015).
+An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop. The hub comes in two editions: an open source **community edition** teams host themselves, and the **official hosted hub** at `app.comitiva.dev`, billed by usage, which adds a closed enterprise layer (ADR 0015). Agents can then ask one another for help (`@Agent`), and an agent on a hub can be shared as a **contact**: a link another person's AI uses to talk to it.
 
 What it is not: a coding tool. Nothing in the core assumes Git, repositories or a terminal. Those can come in as an MCP server like any other tool.
 
@@ -175,6 +175,8 @@ Three columns, Slack style:
 | 8 | Laravel hub in `comitiva-dev/hub`: auth, workspaces, sync of agents and conversations, Reverb, `RemoteBackend` in the desktop | Two desktops see the same conversation live |
 | 9 | Web: same UI, built here and served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | Agent switches connection when it hits a limit |
+| 11 | Agents calling agents: mention `@Agent` or let an agent decide, and it asks another agent through a built-in tool; the called agent answers in a linked conversation with its own tools, approvals and usage; depth and cycle limits; each agent lists the agents it may call | An agent asks another agent and uses its answer, and the called agent's approval shows up in the caller's conversation |
+| 12 | Agent contacts: share an agent as a link; the hub serves it as a remote MCP server with an A2A Agent Card, so another person's AI (Comitiva, Claude, ChatGPT) can talk to it; a token per contact, revocation, Phase 10 limits, no write tools by default, the owner sees the conversations | Another person's Comitiva adds the link as a tool server, and its agent gets an answer from the shared agent run by the hub |
 
 ### 7. Decisions
 

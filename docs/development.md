@@ -33,6 +33,7 @@ pnpm dev                            # the desktop app, hot reload in the rendere
 pnpm build                          # every package, in dependency order (turbo)
 pnpm format:check && pnpm lint && pnpm typecheck && pnpm test
 pnpm --filter desktop test:e2e      # builds the app, runs Playwright against the fake providers
+pnpm --filter desktop screenshots   # stages agents with scripted replies → docs/images (light, dark, demo video)
 pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate   # a Drizzle migration from db/schema.ts (commit it)
 pnpm package                        # installers for this platform → apps/desktop/release/

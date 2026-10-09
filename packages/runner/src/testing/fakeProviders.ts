@@ -19,12 +19,24 @@ import type { AddressInfo } from 'node:net';
  * - `[tool:NAME {json}]` (repeatable) → the model calls these tools, one per
  *   response, in order; once every call has a result it answers
  *   `Result: <last tool result>` followed by the usual chunks
+ * A `script` option replaces the controls for prompts it recognizes: it gives
+ * the reply's text (streamed word by word) and the tool calls to make first,
+ * so screenshots can show real-looking conversations.
  * The key `bad-key` is rejected as the real provider would (401; Gemini: 400
  * API_KEY_INVALID). Errors carry `x-should-retry: false` so SDKs do not retry.
  */
 export interface FakeProvidersOptions {
   chunks?: number;
   intervalMs?: number;
+  /** A scripted reply for a prompt, or undefined to fall back to the controls. */
+  script?: (prompt: string) => FakeScript | undefined;
+}
+
+export interface FakeScript {
+  /** The final answer, streamed word by word once every tool call has a result. */
+  text: string;
+  /** Tool calls to make first, one per response, in order. */
+  tools?: ToolCallScript[];
 }
 
 export type FakeProviderId = 'anthropic' | 'openai' | 'google' | 'ollama';
@@ -117,7 +129,7 @@ async function handle(
   return anthropic(ctx, req.method ?? 'GET');
 }
 
-interface ToolCallScript {
+export interface ToolCallScript {
   name: string;
   input: unknown;
 }
@@ -132,6 +144,8 @@ interface Ctx {
   toolCall: (ToolCallScript & { n: number }) | null;
   /** The text of the last tool result the client sent back, if any. */
   lastResult: string | null;
+  /** A scripted answer from `opts.script`, streamed instead of the chunks. */
+  text: string | null;
   chunks: number;
   intervalMs: number;
   error: number | null;
@@ -157,7 +171,8 @@ function context(
         : bearer;
   const prompt = lastUserText(provider, body);
   const error = /\[error:(\d{3})\]/.exec(prompt);
-  const script = parseToolScript(prompt);
+  const scripted = opts.script?.(prompt);
+  const script = scripted ? (scripted.tools ?? []) : parseToolScript(prompt);
   const results = toolResultsSinceUser(provider, body);
   const next = script[results.length];
   return {
@@ -168,6 +183,7 @@ function context(
     prompt,
     toolCall: next ? { ...next, n: results.length } : null,
     lastResult: results.at(-1) ?? null,
+    text: scripted?.text ?? null,
     chunks: Number(/\[chunks:(\d+)\]/.exec(prompt)?.[1] ?? opts.chunks ?? 20),
     intervalMs: Number(/\[interval:(\d+)\]/.exec(prompt)?.[1] ?? opts.intervalMs ?? 10),
     error: apiKey === 'bad-key' ? 401 : error ? Number(error[1]) : null,
@@ -540,6 +556,14 @@ async function streamChunks(
   stream: Stream,
   send: (text: string) => void,
 ): Promise<boolean> {
+  if (ctx.text !== null) {
+    for (const word of ctx.text.match(/\S+\s*/g) ?? []) {
+      if (stream.closed) return false;
+      send(word);
+      await sleep(ctx.intervalMs);
+    }
+    return !stream.closed;
+  }
   if (ctx.lastResult !== null) send(`Result: ${ctx.lastResult.slice(0, 500)}\n`);
   for (let i = 0; i < ctx.chunks; i++) {
     if (stream.closed) return false;

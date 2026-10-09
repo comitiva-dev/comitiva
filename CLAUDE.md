@@ -56,6 +56,7 @@ pnpm dev                            # desktop in dev; on Ubuntu 24.04+: pnpm dev
 pnpm build                          # all packages (turbo, dependency order)
 pnpm lint | pnpm typecheck | pnpm test | pnpm format:check
 pnpm --filter desktop test:e2e      # builds the app and runs Playwright against the fake four-provider server
+pnpm --filter desktop screenshots   # README/site screenshots in docs/images (scripted fake replies; see e2e-screenshots/)
 pnpm --filter desktop test:e2e:hub  # two apps against the hub's image in Docker (HUB_IMAGE, default comitiva-hub:local)
 pnpm contract:schema                # regenerate packages/contract/schema/*.json (commit it)
 pnpm --filter desktop db:generate   # generate a Drizzle migration from schema.ts

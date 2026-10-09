@@ -25,7 +25,8 @@
     "db:generate": "drizzle-kit generate",
     "package": "electron-vite build && electron-builder --publish never",
     "package:dir": "electron-vite build && electron-builder --dir --publish never",
-    "test:packaged": "playwright test -c playwright.packaged.config.ts"
+    "test:packaged": "playwright test -c playwright.packaged.config.ts",
+    "screenshots": "electron-vite build && playwright test -c playwright.screenshots.config.ts"
   },
   "dependencies": {
     "better-sqlite3": "^13.0.3",

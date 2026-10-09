@@ -6,7 +6,9 @@ Comitiva is an open source desktop app where you connect LLMs — APIs (Anthropi
 
 It is not a coding tool. Agents research, write, review and organize files; code is just one case.
 
-<!-- Screenshot placeholder: docs/images/chat.png — the three columns: agents in the sidebar, a conversation with a tool call waiting for approval, the agent's panel. -->
+<p align="center">
+  <img src="docs/images/demo.gif" alt="Comitiva: the Writer reads a folder and asks before saving a file, while the Researcher and the Reviewer answer at the same time" width="900">
+</p>
 
 > **Status: v0.1.0**, the first release: macOS, Windows and Linux. A hub for teams (self-hostable, in its own repository, or hosted at `app.comitiva.dev`) and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
 
@@ -21,6 +23,11 @@ It is not a coding tool. Agents research, write, review and organize files; code
 - **Local-first.** Everything stays on your computer in SQLite. Keys live in the OS keychain, never in the database.
 - **Teams, optionally.** Connect to a [Comitiva hub](https://github.com/comitiva-dev/hub) to share agents and conversations in workspaces and watch replies stream in on everyone's screen. Each member runs agents with their own connection; keys and folders never leave their computer ([docs/hub.md](docs/hub.md)).
 - **English and Português (Brasil)**, light and dark, keyboard shortcuts for everything (Cmd/Ctrl+/ lists them).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/approval-dark.png">
+  <img src="docs/images/approval-light.png" alt="A write waiting for approval: the agent listed and read the folder freely, and asks before it saves onboarding-summary.md" width="900">
+</picture>
 
 <!-- Screenshot placeholder: docs/images/quick-switcher.png — Cmd/Ctrl+K searching messages. -->
 <!-- Screenshot placeholder: docs/images/usage.png — the Usage screen with the daily chart and the tables. -->

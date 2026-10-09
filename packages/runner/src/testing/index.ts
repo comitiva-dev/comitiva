@@ -5,6 +5,8 @@ export type {
   FakeProviders,
   FakeProvidersOptions,
   FakeRequest,
+  FakeScript,
+  ToolCallScript,
 } from './fakeProviders.js';
 export {
   anthropicConnection,

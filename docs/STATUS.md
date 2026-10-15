@@ -93,9 +93,8 @@ The hub is its own repository (`../hub`, Apache-2.0 since ADR 0018). Its status 
 ### Open
 
 - Published: both repositories are public, the `contract-v*` tags are pushed, and the hub's CI is
-  green with its image on `ghcr.io/comitiva-dev/hub` (still a private package; see
-  `hub/docs/STATUS.md`). The hub moved to Apache-2.0 with no CLA (ADR 0018), so outside
-  contributions need no agreement.
+  green with its image public on `ghcr.io/comitiva-dev/hub`. The hub moved to Apache-2.0 with no
+  CLA (ADR 0018), so outside contributions need no agreement.
 - v0.1.0's publish step failed (setup-node looked for pnpm, fixed in `release.yml` since), which
   left it a prerelease with placeholder notes. It now has written notes and is the latest release.
 - In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a

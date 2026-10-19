@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 import type { RunEvent } from '@comitiva/contract';
 import { RunnerClient } from '../src/client/RunnerClient.js';
+import { RUNNER_VERSION } from '../src/version.js';
 import {
   anthropicConnection,
   fakeConnections,
@@ -50,7 +51,7 @@ function payload(conversationId: string, text: string) {
 describe('RunnerClient + runner binary', () => {
   it('starts the process and pings it', async () => {
     const { client } = newClient();
-    expect(await client.start()).toEqual({ version: '0.1.0', protocolVersion: 1 });
+    expect(await client.start()).toEqual({ version: RUNNER_VERSION, protocolVersion: 1 });
   });
 
   it('streams two runs in parallel and cancels one independently', async () => {

@@ -2,6 +2,7 @@ import { PassThrough } from 'node:stream';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { RunEvent, RunnerEvent } from '@comitiva/contract';
 import { RunnerServer } from '../src/server/RunnerServer.js';
+import { RUNNER_VERSION } from '../src/version.js';
 import { LineSplitter, encodeLine } from '../src/util/jsonl.js';
 import { createLogger } from '../src/util/logger.js';
 import {
@@ -65,7 +66,7 @@ describe('RunnerServer', () => {
     h.send({ id: '1', type: 'ping' });
     expect(await h.response('1')).toMatchObject({
       ok: true,
-      result: { version: '0.1.0', protocolVersion: 1 },
+      result: { version: RUNNER_VERSION, protocolVersion: 1 },
     });
   });
 

@@ -5,7 +5,7 @@ import {
   type ElectronApplication,
   type Page,
 } from '@playwright/test';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
@@ -27,6 +27,9 @@ import {
  */
 
 const release = join(__dirname, '..', 'release');
+const appVersion: string = JSON.parse(
+  readFileSync(join(__dirname, '..', 'package.json'), 'utf8'),
+).version;
 const bins = fakeHarnessBinaries(dirname(require.resolve('@comitiva/runner/package.json')));
 
 /** The packaged executable for this platform (electron-builder's unpacked output). */
@@ -169,7 +172,7 @@ test('the updater loads and reads its feed', async () => {
     .poll(async () => (await invoke('updates.getStatus')).version, { timeout: 30_000 })
     .toBe('9.9.9');
   const status = await invoke('updates.getStatus');
-  expect(status.currentVersion).toBe('0.1.0');
+  expect(status.currentVersion).toBe(appVersion);
   expect(status.lastCheckedAt).not.toBeNull();
 });
 

@@ -1,6 +1,6 @@
 {
   "name": "@comitiva/mcp-servers",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Built-in MCP servers for Comitiva (filesystem with roots, google-drive)",
   "license": "Apache-2.0",
   "type": "module",

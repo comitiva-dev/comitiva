@@ -4,7 +4,7 @@
 //   node scripts/changelog.mjs [--from <ref>] [--to <ref>] [--version <x.y.z>]
 //                              [--date <yyyy-mm-dd>] [--prepend CHANGELOG.md]
 //
-// --from defaults to the tag before --to (every commit when there is none);
+// --from defaults to the app tag (v*) before --to (every commit when there is none);
 // --to defaults to HEAD. Prints the notes, or prepends them to a file.
 // Features, fixes, performance and docs are listed by scope; breaking changes
 // (`feat!:` or a `BREAKING CHANGE:` footer) come first; chores, CI, tests,
@@ -87,9 +87,10 @@ export function readCommits(from, to) {
     });
 }
 
+// App tags only: the contract's `contract-v*` tags live in the same history.
 function previousTag(to) {
   try {
-    return git('describe', '--tags', '--abbrev=0', `${to}^`);
+    return git('describe', '--tags', '--abbrev=0', '--match', 'v[0-9]*', `${to}^`);
   } catch {
     return null;
   }

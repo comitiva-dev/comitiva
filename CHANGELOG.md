@@ -22,6 +22,7 @@ All notable changes, from conventional commits (`pnpm changelog`).
 - **desktop:** no sample-agent offer inside a workspace ([e526989](https://github.com/comitiva-dev/comitiva/commit/e526989646e80e97d33541634d43893edf1f15da))
 - **desktop:** editing a shared agent sends the hub only what changed ([4778a22](https://github.com/comitiva-dev/comitiva/commit/4778a22b263d113442ff1db38c0d0caf45880b17))
 - **desktop:** name the Linux packages comitiva ([c525a42](https://github.com/comitiva-dev/comitiva/commit/c525a42210747743074ee592c2316f871f6dc9cd))
+- **desktop:** the comitiva deb and rpm replace 0.1.0's desktop package ([8aa4a5c](https://github.com/comitiva-dev/comitiva/commit/8aa4a5c44626b01d995aac6b8d2567ee3b336549))
 
 ### Documentation
 
@@ -37,6 +38,8 @@ All notable changes, from conventional commits (`pnpm changelog`).
 - README demo and screenshots from a scripted run ([0144db0](https://github.com/comitiva-dev/comitiva/commit/0144db0f860bc5f8f9d3c7018d96c2a2754df189))
 - v0.1.0 is the latest release; the code signing policy page is up ([476eac6](https://github.com/comitiva-dev/comitiva/commit/476eac6e6f3af1e9b67fddaa5d88a0a1cd8215a1))
 - the hub image is public ([b4859f6](https://github.com/comitiva-dev/comitiva/commit/b4859f6169844ac528222a2067fa2cc2dc66e33a))
+- changelog for 0.2.0 ([ff4828c](https://github.com/comitiva-dev/comitiva/commit/ff4828c852bd89ae16fd314279e958cd10e7e64a))
+- README for v0.2.0 with workspaces on the hub ([0372eb5](https://github.com/comitiva-dev/comitiva/commit/0372eb55b242c1cd959dea020094aee414649723))
 
 ## 0.1.0 (2026-09-23)
 

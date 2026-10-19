@@ -57,7 +57,8 @@ const form = () => page.getByTestId('connection-form');
 const row = (name: string) => page.locator(`[data-testid="connection-row"][data-name="${name}"]`);
 
 test('boots into the app shell with a ready runner', async () => {
-  await expect(page.getByTestId('version')).toHaveText('v0.1.0');
+  const { version } = JSON.parse(await readFile(join(appDir, 'package.json'), 'utf8'));
+  await expect(page.getByTestId('version')).toHaveText(`v${version}`);
   await expect(page.getByTestId('runner-status')).toHaveAttribute('data-status', 'ready', {
     timeout: 20_000,
   });

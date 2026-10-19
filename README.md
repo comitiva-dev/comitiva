@@ -10,7 +10,7 @@ It is not a coding tool. Agents research, write, review and organize files; code
   <img src="docs/images/demo.gif" alt="Comitiva: the Writer reads a folder and asks before saving a file, while the Researcher and the Reviewer answer at the same time" width="900">
 </p>
 
-> **Status: v0.1.0**, the first release: macOS, Windows and Linux. A hub for teams (self-hostable, in its own repository, or hosted at `app.comitiva.dev`) and a web UI come next ([roadmap](CONTRIBUTING.md#roadmap)).
+> **Status: v0.2.0**: macOS, Windows and Linux, and workspaces for teams on a self-hostable [hub](https://github.com/comitiva-dev/hub). A web UI and agents run by the hub come next ([roadmap](CONTRIBUTING.md#roadmap)).
 
 ## What it does
 
@@ -62,7 +62,7 @@ Renderer (React) ──Backend──▶ Preload ──IPC──▶ Electron main
 
 - **The runner is the product.** All LLM execution — adapters, streaming, cancellation, usage, the tool loop, MCP clients and approvals — lives in `packages/runner`, a plain Node process with its own JSON-lines protocol. Electron is one client of it.
 - **Local-first.** SQLite for everything, the OS keychain for secrets.
-- **Shared contract.** `packages/contract` holds zod schemas and the JSON Schema the future Laravel hub, in its own repository, will read ([ADR 0015](docs/adr/0015-hub-repositories-and-editions.md)).
+- **Shared contract.** `packages/contract` holds zod schemas and the JSON Schema that the Laravel hub, in its own repository, copies at a tagged release ([ADR 0015](docs/adr/0015-hub-repositories-and-editions.md), [ADR 0016](docs/adr/0016-hub-contract-consumption.md)).
 
 Read more in [SPEC.md](SPEC.md), [docs/architecture.md](docs/architecture.md), [docs/design.md](docs/design.md) and the [ADRs](docs/adr/).
 

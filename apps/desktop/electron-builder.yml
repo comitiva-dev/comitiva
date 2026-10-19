@@ -75,10 +75,15 @@ linux:
     - rpm
 # The package name defaults to package.json's `name`, which is the workspace
 # name (`desktop`); installers such as Ubuntu's App Center show it as the title.
+# 0.1.0 shipped under that name, so the new package takes its place on update
+# instead of failing on the files both own (deb: Conflicts and Replaces; rpm:
+# fpm's --replaces is Obsoletes).
 deb:
   packageName: comitiva
+  fpm: ['--conflicts=desktop', '--replaces=desktop']
 rpm:
   packageName: comitiva
+  fpm: ['--replaces=desktop']
   # electron-builder's defaults plus libsecret: safeStorage needs a keyring.
   depends:
     - gtk3

@@ -2,6 +2,42 @@
 
 All notable changes, from conventional commits (`pnpm changelog`).
 
+## 0.2.0 (2026-10-19)
+
+### Features
+
+- **contract:** hub entities, REST payloads and events ([65f9038](https://github.com/comitiva-dev/comitiva/commit/65f9038a00776b1945038bc5275e0eb13c86a31d))
+- **contract:** the hub's realtime endpoint in HubMeta ([dbbc81e](https://github.com/comitiva-dev/comitiva/commit/dbbc81e92c96388150a6e72ad990e44d9d098002))
+- **contract:** invalid_credentials and email_taken for hub sign-in ([4982e60](https://github.com/comitiva-dev/comitiva/commit/4982e6047194bba1bb4ef0dd9e99ecf0a3606306))
+- **contract:** nullable creators, and the stop reason when a hub run finishes ([9e2c9ef](https://github.com/comitiva-dev/comitiva/commit/9e2c9ef571c21a4e3bced1277ac613ee8291e9c5))
+- **contract:** the author of a workspace message ([0b1bfd3](https://github.com/comitiva-dev/comitiva/commit/0b1bfd33df11dee81357f5bb68c0d4122e1834a1))
+- **desktop:** the hub in main: session, socket, workspace runs ([fcea8ad](https://github.com/comitiva-dev/comitiva/commit/fcea8adc68f301d9d8ee57c76ac5966c1cc6a562))
+- **desktop:** RemoteBackend, workspace switcher, hub settings and presence ([6231ffe](https://github.com/comitiva-dev/comitiva/commit/6231ffe4d98eb614c959d2bfdb1738772ea3f083))
+
+### Fixes
+
+- **ci:** no pnpm cache in the release publish step ([c31e0b0](https://github.com/comitiva-dev/comitiva/commit/c31e0b09e22fbd3210e79e1fadd0a5478fceaf7e))
+- **ci:** release notes start at the previous app tag, not a contract tag ([5e291c2](https://github.com/comitiva-dev/comitiva/commit/5e291c263408b3a6f46a786eaa1de4525167068e))
+- **contract:** keep the http(s)-only rule for workspace tool servers in JSON Schema ([60e6fe9](https://github.com/comitiva-dev/comitiva/commit/60e6fe9b0ab04f01b52ea0037c2ddaa9aaa5f839))
+- **desktop:** no sample-agent offer inside a workspace ([e526989](https://github.com/comitiva-dev/comitiva/commit/e526989646e80e97d33541634d43893edf1f15da))
+- **desktop:** editing a shared agent sends the hub only what changed ([4778a22](https://github.com/comitiva-dev/comitiva/commit/4778a22b263d113442ff1db38c0d0caf45880b17))
+- **desktop:** name the Linux packages comitiva ([c525a42](https://github.com/comitiva-dev/comitiva/commit/c525a42210747743074ee592c2316f871f6dc9cd))
+
+### Documentation
+
+- ADR 0015 hub repositories and editions ([f1566ac](https://github.com/comitiva-dev/comitiva/commit/f1566ace668f464997a96b6fec2e728422e196e5))
+- target Laravel 13 and give the hub its own status file ([65c0650](https://github.com/comitiva-dev/comitiva/commit/65c06501a98860fc9fc72494e364951cb6eb1480))
+- ADRs 0016 and 0017 for the hub's contract copy and sync model ([3135a25](https://github.com/comitiva-dev/comitiva/commit/3135a256db1661a62e3785b760f5231d32d65b41))
+- Phase 8 done — hub guide, status, spec, design and architecture ([8a7c5d2](https://github.com/comitiva-dev/comitiva/commit/8a7c5d283d467bd520a8a0e53daa67f3b48951ac))
+- macOS 15 first launch goes through Privacy & Security ([390a44a](https://github.com/comitiva-dev/comitiva/commit/390a44a5b858cb076951a38158484357f86125da))
+- status after publishing the repositories and the hub image ([d92432e](https://github.com/comitiva-dev/comitiva/commit/d92432eefbec49bac34d7ace5762e9d5aa01d4e5))
+- add agents calling agents and agent contacts to the roadmap ([e3a84d5](https://github.com/comitiva-dev/comitiva/commit/e3a84d51888ab7bd0f0efc026529571c20224a72))
+- license the hub under Apache-2.0 with no CLA (ADR 0018) ([af45e0f](https://github.com/comitiva-dev/comitiva/commit/af45e0fc3ab856b5dd92624ebee84e10516d8861))
+- sign through SignPath and an individual Developer ID (ADR 0019) ([0547bc5](https://github.com/comitiva-dev/comitiva/commit/0547bc5a42f87ba0fde8e7e6e26d266ca4e11ad0))
+- README demo and screenshots from a scripted run ([0144db0](https://github.com/comitiva-dev/comitiva/commit/0144db0f860bc5f8f9d3c7018d96c2a2754df189))
+- v0.1.0 is the latest release; the code signing policy page is up ([476eac6](https://github.com/comitiva-dev/comitiva/commit/476eac6e6f3af1e9b67fddaa5d88a0a1cd8215a1))
+- the hub image is public ([b4859f6](https://github.com/comitiva-dev/comitiva/commit/b4859f6169844ac528222a2067fa2cc2dc66e33a))
+
 ## 0.1.0 (2026-09-23)
 
 ### Features

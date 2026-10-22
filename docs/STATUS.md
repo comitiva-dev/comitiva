@@ -136,6 +136,64 @@ The same UI served by the hub (`apps/web` with a fetch/cookie `HubTransport`), A
 `http` MCP servers run by the hub, team keys, and a desktop registered as the workspace runner.
 Done when a user without the desktop talks to a team API agent.
 
+### Plan (proposed, not started)
+
+Decided (to be written down as ADR 0020):
+
+- The hub runs API turns with a **Node executor** built on `@comitiva/runner`, shipped in the
+  hub's image as an `executor` role. It claims runs and publishes them through the same run
+  ledger endpoints a desktop uses. No PHP reimplementation of the adapters.
+- Split: **9a** is `packages/ui`, `apps/web`, hub execution and team keys, ending at the exit
+  criterion. **9b** is a desktop registered as the workspace runner (CLI and `stdio` agents).
+- In a run the hub executes, the **sender, admins and owners** answer approvals and can stop it.
+- Team API keys and team secret headers are **encrypted in Postgres with `APP_KEY`, behind a
+  `SecretVault` extension point**, set by admins and never readable back. This revises ADR 0017's
+  "the hub never gets a key".
+
+Open, to confirm before step 1: an agent with a team connection always runs on the hub, desktop
+members included. An agent without one keeps running on each member's desktop, and the web UI
+cannot send to it until 9b.
+
+Design:
+
+- A shared agent may name a **team connection** (API kind only). `POST /conversations/{id}/runs`
+  takes `on: 'hub'`. The run lock is the same, the run still belongs to the sender (usage, author),
+  and `runs` records that the hub executes it.
+- The executor authenticates with a service token (`EXECUTOR_TOKEN`), claims a run, and gets the
+  history, the agent, the team connection with its key, and `http` tool server launches with the
+  team header values (`{ secretRef: 'team' }`). It hears about new runs, approvals and cancels on
+  a private `executor` Reverb channel, and also polls for unclaimed runs.
+- Testing a team connection goes through a small internal HTTP endpoint on the executor.
+- Hub runs are costed with the runner's own pricing table, without local overrides, and recorded
+  as `executedBy: 'hub'`: the only usage `UsageMeter` would bill by (ADR 0015).
+- The hub pins one comitiva tag for the contract copy, the web bundle and the executor. A Node
+  stage in its Dockerfile builds the last two.
+- The web UI is served at `/app`, for workspaces only. It signs in with a session cookie, sends
+  requests with fetch and XSRF, and authorizes the Reverb socket with the same cookie.
+
+Steps, each with its tests (contract → runner → main → renderer):
+
+1. ADR 0020; SPEC, `design.md`, ADR 0017 and the hub's CLAUDE.md updated.
+2. Contract 0.4.0: `TeamConnection` and its inputs, `SharedAgent.teamConnectionId`,
+   `secretRef: 'team'`, `on: 'hub'`, `HubRunner.kind`, the executor claim payloads,
+   `usage.executedBy`, new events. Tagged.
+3. `packages/engine`: move the Electron-free `RunEngine`, `ChatStore`, `HubClient`,
+   `PusherSocket` and the hub run session out of desktop main, without changing behavior.
+   The riskiest step: small commits, each with the full desktop suite.
+4. Hub: `contract:sync`, the vault, team connections, `teamConnectionId` on agents,
+   `runs.executor`, executor auth and claiming, approval and cancel rules for hub runs,
+   `capabilities.execution`.
+5. `apps/executor`: claim loop and socket, a `ChatStore` backed by the hub, `RunEngine` over the
+   runner. Integration test against a fake hub and the fake providers.
+6. Hub image: the Node stage, the `executor` role, a compose service, the `/app` route and its
+   fallback.
+7. `packages/ui`: the renderer moves out of the desktop, and `Backend.capabilities()` hides
+   desktop-only features. In the desktop, admins manage team connections on the Workspace screen,
+   and the agent form can pick a team connection.
+8. `apps/web`: a fetch/cookie `HubTransport`, a sign-in screen, a `WebBackend`, the build.
+9. e2e with a browser user and a desktop member against the hub image with the executor and the
+   fake providers; `STATUS.md` in both repositories.
+
 ## Phase 7 — Polish and v0.1.0 (done)
 
 Done when the release is published: **not yet**, by decision. Everything the

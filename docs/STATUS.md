@@ -96,7 +96,13 @@ The hub is its own repository (`../hub`, Apache-2.0 since ADR 0018). Its status 
   green with its image public on `ghcr.io/comitiva-dev/hub`. The hub moved to Apache-2.0 with no
   CLA (ADR 0018), so outside contributions need no agreement.
 - v0.1.0's publish step failed (setup-node looked for pnpm, fixed in `release.yml` since), which
-  left it a prerelease with placeholder notes. It now has written notes and is the latest release.
+  left it a prerelease with placeholder notes. It now has written notes.
+- **v0.2.0 is published** (2026-10-19, tag on `b3b8a2d`, Release run 39327392978): the latest
+  release, with written notes and the hub (`v0.1.0`) as its story. Fixes the release needed: the
+  changelog starts at the previous app tag, not a `contract-v*` tag; tests compare versions with
+  the package's own, not `0.1.0` (the first run stopped at the e2e); and the `comitiva` deb and rpm
+  replace 0.1.0's `desktop` package (the rpm's `Obsoletes` was never built locally). Still to check
+  by hand: an installed 0.1.0 offers the update.
 - In a workspace, exporting a conversation as Markdown, exporting usage as CSV, and testing a
   workspace tool server by id answer `not_implemented`.
 - Unread counts of conversations not open are refreshed by a reload when a reply finishes, not

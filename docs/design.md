@@ -209,18 +209,20 @@ apps/desktop/
     │   │                            0002_agent_settings (P3), 0003_chat (P4), 0004_builtin_tool_servers (P5),
     │   │                            0005_google_drive_tool_server (P5b), 0006_usage_reports (P6),
     │   │                            0007_message_search (P7: FTS5 table + triggers, custom SQL),
-    │   │                            0008_hub (P8: agent links, harness sessions, allow-always), meta/)
+    │   │                            0008_hub (P8: agent links, harness sessions, allow-always),
+    │   │                            0009_guidelines (P8b, ADR 0020: guidelines, agent_guidelines), meta/)
     │   │                            repositories/HubLocalRepository.ts HubSettingsRepository.ts (P8)
     │   │                            repositories/ConnectionRepository.ts (P1) AgentRepository.ts SettingsRepository.ts (P3)
     │   │                            ConversationRepository.ts MessageRepository.ts UsageRepository.ts (P4)
     │   │                            ToolServerRepository.ts ToolApprovalRepository.ts (P5)
-    │   │                            SearchRepository.ts (P7)
+    │   │                            SearchRepository.ts (P7) GuidelineRepository.ts (P8b)
     │   ├── secrets/                 SecretStore.ts ElectronSecretStore.ts
     │   ├── services/                ConnectionService.ts (P1) workingDirectory.ts (P2) AgentService.ts (P3)
     │   │                            ConversationService.ts TitleService.ts (P4)
     │   │                            ToolServerService.ts (P5; approvals live in ConversationService)
     │   │                            GoogleDriveService.ts (P5b) AttachmentService.ts BundleService.ts
     │   │                            ExportService.ts exporters/markdown.ts (P7)
+    │   │                            GuidelineService.ts (P8b: AGENTS.md import/export, forAgent for runs)
     │   │            usage/           UsageService.ts Pricing.ts csv.ts (P6)
     │   │            chat/            ChatStore.ts RunEngine.ts LocalChatStore.ts (P8: one engine, a store per scope)
     │   ├── hub/                     HubClient.ts PusherSocket.ts HubService.ts HubChatStore.ts HubRunService.ts
@@ -238,18 +240,20 @@ apps/desktop/
             │                        hub/HubTransport.ts (HubTransport, HubExecutor) hub/HubApi.ts (P8)
             ├── store/               app.ts connections.ts context.tsx (P1)   agents.ts (P3)   conversations.ts messages.ts (P4)
             │                        toolServers.ts (P5)   googleDrive.ts (P5b)
-            │                        hub.ts workspace.ts createStores.ts (P8)
+            │                        hub.ts workspace.ts createStores.ts (P8)   guidelines.ts (P8b)
             ├── lib/                 connectionForm.ts cliConnectionForm.ts (P2) time.ts
             │                        agentForm.ts roleTemplates.ts async.ts (P3)   chat.ts (P4)   toolServerForm.ts (P5)
+            │                        guidelines.ts (P8b)
             ├── components/          ui.ts ProviderIcon.tsx ConfirmDialog.tsx Sidebar/ Forms/ConnectionForm.tsx (P1)
             │                        Forms/CliConnectionForm.tsx Forms/FormShell.tsx (P2)
             │                        AgentAvatar.tsx AgentPanel.tsx Sidebar/AgentList.tsx Forms/AgentForm.tsx (P3)
             │                        Chat/ (ChatView ConversationList MessageList MessageBubble Markdown StatusDot)
             │                        Composer/Composer.tsx ToolBlock/ToolCallBlock.tsx (P4)
             │                        ApprovalCard/ApprovalCard.tsx Forms/ToolServerForm.tsx Switch.tsx (P5)
-            │                        ToolList.tsx Forms/GoogleDriveSetup.tsx (P5b)   Settings/ (later)
+            │                        ToolList.tsx Forms/GoogleDriveSetup.tsx (P5b)   Forms/GuidelineForm.tsx (P8b)
+            │                        Settings/ (later)
             │                        Hub/ (WorkspaceSwitcher PresenceBar HubSection ShareAgent) (P8)
-            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)
+            ├── screens/             ConnectionsScreen PlaceholderScreen (P1)   AgentsScreen (P3)   ToolsScreen (P5)   GuidelinesScreen (P8b)
             │                        UsageScreen SettingsScreen (later; chat lives in AgentsScreen)   WorkspaceScreen (P8)
             └── i18n/                index.ts (applyLanguage) language.ts (resolveLanguage, shared with main) en.json pt-BR.json
 ```
@@ -927,6 +931,7 @@ class ConversationService extends EventEmitter<ConversationEvents> {
   cancel(conversationId): void;               // runner cancel; finalized locally as cancelled after a grace period
   forgetAgent(agentId): void;                 // before deleting an agent: stop its runs, write nothing
   decide(conversationId, toolUseId, decision): void;   // (P5) records a tool_approvals row, run.approval, status running
+  // (P8b) run.start carries guidelines (GuidelineService.forAgent; the runner's systemPrompt appends them to the role)
   // (P5) run.start carries toolServers (ToolServerService.launchesFor) and alwaysAllowed; run.tool_call with
   // requiresApproval → status awaiting-approval + pendingApproval (conversation.updated, list); run.tool_result →
   // a tool_result block in the reply (with durationMs)
@@ -1040,6 +1045,7 @@ secrets.getStatus                                                    (P1)
 connections.list | create | update | delete | test | listModels     (P1)
 connections.detectBinary                                            (P2)
 toolServers.list | create | update | delete | test                  (P5; test takes { id } | { spec, id? } in 5b)
+guidelines.list | create | update | delete | move | import | export   (P8b; ADR 0020; import → Guideline[] | null, export → path | null)
 googleDrive.getStatus | configure | connect | cancelConnect | disconnect   (P5b; replaces the sketched connectGoogle)
 agents.list | create | update | delete | duplicate                   (P3)
 settings.get | update                                               (P3; AppSettings: sampleAgentOffer; P7: language, autoUpdate)
@@ -1080,6 +1086,7 @@ interface Backend {
   attachments: { add(input); url(path) };                      // (P7) url: comitiva-attachment:// here, HTTP in RemoteBackend
   search: { query({ query, limit? }) };                        // (P7)
   toolServers: { list(); create(d); update(id, d); delete(id); test({ id } | { spec, id? }) };
+  guidelines: { list(); create(d); update(id, p); delete(id); move(id, index); import(); export() };   // (P8b) none in RemoteBackend
   googleDrive: { getStatus(); configure(input); connect(); cancelConnect(); disconnect() };   // (P5b)
   agents: { list(); create(d); update(id, d); delete(id); duplicate(id, name?) };   // (P3)
   settings: { get(); update(patch) };                                               // (P3)
@@ -1130,6 +1137,8 @@ toolServersStore (P5):  items, loaded, tests (per server: its tools or the error
 googleDriveStore (P5b):  status, busy (connect | disconnect), notice (a cancel is not one), setupOpen, confirmDisconnect;
                         load, openSetup, configure, connect (shows "connecting" at once), cancelConnect, disconnect.
 toolServersStore (P5b): + probe(target) for unsaved settings, clearTest(id).
+guidelinesStore (P8b):  items (prompt order), loaded, notice, feedback (imported count | exported path), editor,
+                        confirmDelete; load, save, move(id, ±1), importFile, exportFile, delete.
 updatesStore (P7):      status (UpdateStatus, pushed by main), notice; load, check, install.
 settingsStore (P7):     settings (AppSettings), notice; load, update. onChange applies the language (i18n/index.ts).
 transferStore (P7):     busy, saved (path), report (ImportReport), notice; exportConversation, exportAgents, importBundle

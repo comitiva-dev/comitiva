@@ -69,8 +69,11 @@ v0.1.0 closes the desktop phases. What comes next, by phase ([SPEC.md §6](SPEC.
 | Phase | Deliverable | Done when |
 |---|---|---|
 | 8 | Laravel hub, in its own repository (`comitiva-dev/hub`, Apache-2.0, [ADR 0015](docs/adr/0015-hub-repositories-and-editions.md)): auth, workspaces, sync of agents and conversations, Reverb, a `RemoteBackend` in the desktop | Two desktops see the same conversation live |
-| 9 | Web: the same UI served by the hub, API and `http` MCP execution in the hub, team keys; a desktop as the workspace runner | A user without the desktop talks to a team API agent |
+| 8b | Guidelines: Markdown blocks for every agent, agents with a tag, or agents that pick them, added to the system prompt after the role; `AGENTS.md` import and export ([ADR 0020](docs/adr/0020-guidelines.md)) | Done in `main`, for the next release |
+| 9 | Web: the same UI served by the hub, API and `http` MCP execution in the hub, team keys; a desktop as the workspace runner; workspace guidelines | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | An agent switches connection when it hits a limit |
+
+Comitiva is early: it is in development and testing, and bug reports from real use help most.
 
 Known gaps you can pick up (see [docs/STATUS.md](docs/STATUS.md) for the details):
 
@@ -79,6 +82,7 @@ Known gaps you can pick up (see [docs/STATUS.md](docs/STATUS.md) for the details
 - Revoking "Always allow" decisions from the UI.
 - Images in tool results for providers other than Anthropic, and PDFs as attachments.
 - MCP `tools/list_changed` notifications.
+- Guidelines in the portable bundle (agents export without them today).
 - A Gemini CLI harness (`gemini-cli` is in the contract, without an adapter).
 - Hand-run checks against real providers, the real CLIs and a real Google account, on Windows and macOS too.
 

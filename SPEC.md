@@ -6,7 +6,7 @@
 
 ### 1. Vision
 
-An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop. The hub comes in two editions: an open source **community edition** teams host themselves, and the **official hosted hub** at `app.comitiva.dev`, billed by usage, which adds a closed enterprise layer (ADR 0015). Agents can then ask one another for help (`@Agent`), and an agent on a hub can be shared as a **contact**: a link another person's AI uses to talk to it.
+An open source desktop application where users register **connections** to LLMs (APIs or command-line harnesses such as Claude Code and Codex), create **agents** with a role and a set of **tools** (local folders, Google Drive, any MCP server), and talk to all of them in a **Slack-style chat** interface, with many conversations running in parallel. Later, a **hub** in Laravel lets teams share agents and conversations, and a **web interface** reaches the hub without the desktop. The hub comes in two editions: an open source **community edition** teams host themselves, and the **official hosted hub** at `app.comitiva.dev`, billed by usage, which adds a closed enterprise layer (ADR 0015). **Guidelines** written once (or imported from an `AGENTS.md`) give each agent only the instructions that apply to it. Agents can then ask one another for help (`@Agent`), and an agent on a hub can be shared as a **contact**: a link another person's AI uses to talk to it.
 
 What it is not: a coding tool. Nothing in the core assumes Git, repositories or a terminal. Those can come in as an MCP server like any other tool.
 
@@ -25,6 +25,7 @@ What it is not: a coding tool. Nothing in the core assumes Git, repositories or 
 Connection ──1:N──▶ Agent ──1:N──▶ Conversation ──1:N──▶ Message
                       │                                      │
                       ├── N:M ── ToolServer               UsageRecord
+                      ├── N:M ── Guideline (also by scope: all, tags)
                       └── roots[] (directories + mode)
 ```
 
@@ -35,7 +36,10 @@ Connection ──1:N──▶ Agent ──1:N──▶ Conversation ──1:N─
 `id`, `name`, `transport` (`stdio` | `http`), `command`, `args`, `env` (sensitive values via `secretRef`), `url`, `headers`, `builtin` (bool), `enabled`. Built-ins in v1: `filesystem` and `google-drive`. The user can register any other.
 
 **Agent** — a persistent persona.
-`id`, `name`, `avatar` (`{ color, emoji? }`: a palette color and an optional emoji, else initials), `connectionId`, `model` (optional; else the connection's default), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Phase 10), `tags`.
+`id`, `name`, `avatar` (`{ color, emoji? }`: a palette color and an optional emoji, else initials), `connectionId`, `model` (optional; else the connection's default), `role` (system prompt), `params`, `toolServerIds[]`, `roots[]` (`{ path, mode: 'read' | 'readwrite' }`), `permissionPolicy` (`ask` | `allow-writes` | `read-only`), `fallbackConnectionIds[]` (Phase 10), `tags`, `guidelineIds[]`.
+
+**Guideline** — a named block of Markdown (instructions, rules or reference data) added to the system prompt of the agents it reaches, after their role (ADR 0020).
+`id`, `name`, `content`, `scope` (`all` | `tags` | `agents`), `agentTags[]`, `position`. It reaches every agent (`all`), the agents with any of its tags (`tags`), and any agent that picks it (`guidelineIds`); `agents` means picks only. Each agent gets only the guidelines that reach it, in `position` order. They come in from an `AGENTS.md` or `CLAUDE.md` (one per `##` section) and go out as one. Personal only until Phase 9.
 
 **Conversation** — `id`, `agentId`, `title`, `status` (`idle` | `running` | `awaiting-approval` | `error`), `harnessSessionId`, `archived`, `lastActivityAt`.
 
@@ -151,6 +155,7 @@ Three columns, Slack style:
 
 - **Sidebar**: agents with avatar, status (idle / responding / awaiting approval / error) and unread count. Shortcuts to Connections, Tools, Usage, Settings.
 - **Center**: conversations of the selected agent and the open chat. Markdown, code with copy, collapsible tool blocks, approval cards, streaming cursor, cancel, retry.
+- **Guidelines** screen: the list in prompt order (move up and down), each with its scope and how many agents it reaches; add, edit, delete; import and export an `AGENTS.md`. The agent form lists them with checkboxes, and shows which ones already reach the agent by scope or tag.
 - **Right panel**: agent details with editable role, active roots and tools, conversation usage.
 - **Composer**: Enter sends, Shift+Enter adds a line break, Esc stops, text and image attachments (button, drop, paste).
 - **Quick switcher** (`Cmd/Ctrl+K`): agents, conversations and full-text search over messages.
@@ -173,7 +178,8 @@ Three columns, Slack style:
 | 6 | Usage: records, pricing, dashboard, export | Dashboard matches the records |
 | 7 | Polish and v0.1.0: attachments, search, export/import, i18n, packaging, auto-update | Release published |
 | 8 | Laravel hub in `comitiva-dev/hub`: auth, workspaces, sync of agents and conversations, Reverb, `RemoteBackend` in the desktop | Two desktops see the same conversation live |
-| 9 | Web: same UI, built here and served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner | A user without the desktop talks to a team API agent |
+| 8b | Guidelines: Markdown blocks for every agent, agents with a tag, or agents that pick them, added to the system prompt after the role; import and export as `AGENTS.md` (Personal) | An agent's run gets the role and then exactly the guidelines that reach it, in order, after importing them from an `AGENTS.md` |
+| 9 | Web: same UI, built here and served by the hub, API and `http` MCP execution in the hub, team keys; desktop as workspace runner; workspace guidelines | A user without the desktop talks to a team API agent |
 | 10 | Usage policies: limits, concurrency, fallback and connection switching | Agent switches connection when it hits a limit |
 | 11 | Agents calling agents: mention `@Agent` or let an agent decide, and it asks another agent through a built-in tool; the called agent answers in a linked conversation with its own tools, approvals and usage; depth and cycle limits; each agent lists the agents it may call | An agent asks another agent and uses its answer, and the called agent's approval shows up in the caller's conversation |
 | 12 | Agent contacts: share an agent as a link; the hub serves it as a remote MCP server with an A2A Agent Card, so another person's AI (Comitiva, Claude, ChatGPT) can talk to it; a token per contact, revocation, Phase 10 limits, no write tools by default, the owner sees the conversations | Another person's Comitiva adds the link as a tool server, and its agent gets an answer from the shared agent run by the hub |
@@ -193,6 +199,8 @@ Resolved in Phase 7: attachments are stored file blocks under the shell's data f
 Resolved in Phase 6: prices ship with the runner as one versioned JSON, cost is frozen into the row at write time rather than computed on read, and a CLI harness's cost is shown as an *equivalent* that a subscription may not bill (ADR 0011).
 
 Resolved in Phase 8: the hub consumes the contract as a build-time copy of its JSON Schemas at a pinned `contract-v*` tag, with a drift check, not a Composer path repository (ADR 0016); the hub is the source of truth for workspaces with no offline merge, desktops execute turns with their own connections and publish them under a run lock and a lease, and only the executing member answers approvals (ADR 0017).
+
+Resolved after v0.2.0: guidelines are named Markdown blocks with a scope (every agent, agents with a tag, or agents that pick them); the shell resolves which reach an agent and the runner appends them to the system prompt after the role; they move in and out as an `AGENTS.md`, and stay Personal until workspaces get their own in Phase 9 (ADR 0020).
 
 Resolved after v0.1.0: the hub lives in its own repository as an AGPL-3.0 community edition with a CLA; a private Laravel package adds billing and the other enterprise features for the official hosted hub at `app.comitiva.dev`; the contract and the web UI stay in this repository, and the hub pins their releases (ADR 0015). The hub is licensed under Apache-2.0 like this repository, with no CLA, so anyone can build an enterprise layer on its extension points (ADR 0018).
 

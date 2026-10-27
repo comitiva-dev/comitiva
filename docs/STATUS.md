@@ -2,7 +2,55 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 8 — Laravel hub (done)
+## Current phase: 8b — Guidelines (done, in `main`, not released)
+
+Done when an agent's run gets the role and then exactly the guidelines that reach it, in order,
+after importing them from an `AGENTS.md`: **yes**. `e2e/guidelines.spec.ts` imports an
+`AGENTS.md` through the open dialog (three sections, one for every agent, one by tag, one to pick),
+adds a fourth by hand and moves it up, picks one in Writer's form, and checks the system prompt
+the fake provider receives for Writer (role, then three guidelines in order) and for Helper (role,
+then the one for every agent). Export writes the four back as one `AGENTS.md` with their scopes.
+
+### Done
+
+1. **Decision:** ADR 0020. A guideline is a named Markdown block with a scope: every agent
+   (`all`), agents with a tag (`tags`; the agents' existing tags are the groups), or only agents
+   that pick it (`agents`). Picks work for any scope. Personal only: a workspace's shared agents get
+   none until Phase 9, so a shared agent's prompt never depends on who sent the message.
+2. **Contract:** `Guideline`, `RunGuideline`, `Agent.guidelineIds`, `RunStartRequest.guidelines`
+   (optional), `guidelines.*` IPC, and pure helpers `guidelinesFor`, `parseGuidelinesMarkdown`
+   and `guidelinesToMarkdown` (sections by `##`, code fences respected, a
+   `<!-- comitiva scope=… -->` marker for round trips). 53 schemas (`Guideline.json` new).
+3. **Runner:** `systemPrompt(role, guidelines)` appends `# Guidelines` and one `##` section each
+   after the role; with none, the prompt is exactly the role, as before. CLI harnesses get it
+   through the same flags as the role.
+4. **Desktop, main:** migration `0009_guidelines` (`guidelines`, `agent_guidelines`, cascades on
+   both sides), `GuidelineRepository` (dense positions, move), `GuidelineService` (import and
+   export through the native dialogs, `forAgent`), and `LocalChatStore` handing the resolved list
+   to `RunEngine`. `HubChatStore` sends none.
+5. **Desktop, renderer:** the Guidelines screen (Cmd/Ctrl+5, menu, sidebar; hidden in a
+   workspace) with scope badges, how many agents each reaches, move up and down, import and export;
+   the agent form's checklist, where guidelines that reach the agent by scope or tag show checked
+   and greyed with the reason; the agent panel lists the ones that reach it. Strings in en and
+   pt-BR. `pnpm --filter desktop screenshots` also shoots the Guidelines screen, a guideline's
+   form, the agent form's checklist, search and usage.
+
+### Verification
+
+| Check | Result |
+|---|---|
+| `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 802 tests: contract 76, runner 274, mcp-servers 40, desktop 412 (Phase 8: 776). |
+| `pnpm contract:schema` | No diff after the change is committed. 53 schemas. No hub payload changed, so no `contract-v*` tag is needed yet. |
+| `pnpm --filter desktop test:e2e` | 62/62 (Phase 8: 58), with `guidelines.spec.ts`'s four. |
+| `pnpm dev` by hand | **Not done.** |
+
+### Open
+
+- Workspace guidelines (Phase 9, above). The portable bundle does not carry guidelines yet; Export
+  AGENTS.md moves them.
+- A release (v0.3.0) with release notes, then the site can say guidelines are available.
+
+## Phase 8 — Laravel hub (done)
 
 Done when two desktops see the same conversation live: **yes**. `e2e-hub/two-desktops.spec.ts`
 runs two Comitiva apps, each with its own data and its own connection, against the hub's
@@ -144,7 +192,7 @@ Done when a user without the desktop talks to a team API agent.
 
 ### Plan (proposed, not started)
 
-Decided (to be written down as ADR 0020):
+Decided (to be written down as ADR 0021; 0020 went to guidelines):
 
 - The hub runs API turns with a **Node executor** built on `@comitiva/runner`, shipped in the
   hub's image as an `executor` role. It claims runs and publishes them through the same run
@@ -174,15 +222,18 @@ Design:
   as `executedBy: 'hub'`: the only usage `UsageMeter` would bill by (ADR 0015).
 - The hub pins one comitiva tag for the contract copy, the web bundle and the executor. A Node
   stage in its Dockerfile builds the last two.
+- **Workspace guidelines** (ADR 0020): stored on the hub per workspace and the same for every
+  member, so a shared agent's prompt does not depend on who sends. Shared agents pick them with
+  `guidelineIds`; the run claim (desktop or executor) carries them resolved, like the agent.
 - The web UI is served at `/app`, for workspaces only. It signs in with a session cookie, sends
   requests with fetch and XSRF, and authorizes the Reverb socket with the same cookie.
 
 Steps, each with its tests (contract → runner → main → renderer):
 
-1. ADR 0020; SPEC, `design.md`, ADR 0017 and the hub's CLAUDE.md updated.
+1. ADR 0021; SPEC, `design.md`, ADR 0017 and the hub's CLAUDE.md updated.
 2. Contract 0.4.0: `TeamConnection` and its inputs, `SharedAgent.teamConnectionId`,
    `secretRef: 'team'`, `on: 'hub'`, `HubRunner.kind`, the executor claim payloads,
-   `usage.executedBy`, new events. Tagged.
+   `usage.executedBy`, workspace guidelines and `SharedAgent.guidelineIds`, new events. Tagged.
 3. `packages/engine`: move the Electron-free `RunEngine`, `ChatStore`, `HubClient`,
    `PusherSocket` and the hub run session out of desktop main, without changing behavior.
    The riskiest step: small commits, each with the full desktop suite.

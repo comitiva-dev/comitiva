@@ -43,6 +43,10 @@ To share one of your Personal agents, open it and use **Share** in its panel. It
 workspace, and you run it with the same connection and folders. Your Personal agent and its
 conversations stay where they are.
 
+Guidelines are Personal for now: a shared agent's turns get none, so its prompt is the same
+whoever sends the message. Write what every member's runs need into its role. Workspace guidelines
+come with Phase 9 (ADR 0020).
+
 When you send a message, your computer runs the reply with your connection, and everyone in the
 workspace sees it stream in. The chat header says whose computer is running a reply. If the agent
 wants to write a file, only the person whose computer runs it can allow it: the file is on their

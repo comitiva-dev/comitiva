@@ -20,6 +20,7 @@ import { preciseNow } from '../util/jsonl.js';
 import type { Logger } from '../util/logger.js';
 import { normalizeHistory } from './history.js';
 import { isReadOnly, PermissionGate } from './PermissionGate.js';
+import { systemPrompt } from './systemPrompt.js';
 
 export type EmitRunEvent = (event: RunEvent) => void;
 
@@ -259,7 +260,7 @@ export class Run {
       connection,
       secret: this.req.secret,
       model,
-      system: agent.role,
+      system: systemPrompt(agent.role, this.req.guidelines),
       params: agent.params,
       // API providers need strict tool_use → tool_result pairs; harnesses get a transcript.
       messages: connection.kind === 'api' ? normalizeHistory(this.req.messages) : this.req.messages,

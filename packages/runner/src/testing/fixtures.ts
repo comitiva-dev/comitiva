@@ -92,6 +92,7 @@ export function testAgent(overrides: Partial<Agent> = {}): Agent {
     permissionPolicy: 'ask',
     fallbackConnectionIds: [],
     tags: [],
+    guidelineIds: [],
     createdAt: now,
     updatedAt: now,
     ...overrides,

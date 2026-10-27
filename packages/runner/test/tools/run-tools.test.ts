@@ -4,6 +4,7 @@ import {
   providerDescriptors,
   type Message,
   type PermissionPolicy,
+  type RunGuideline,
   type RunEvent,
   type StopReason,
   type ToolDef,
@@ -44,6 +45,7 @@ class ScriptedAdapter implements ProviderAdapter {
   readonly kind = 'api' as const;
   readonly capabilities = providerDescriptors.anthropic.capabilities;
   readonly requests: Array<{ messages: Message[]; tools: ToolDef[] }> = [];
+  readonly systems: string[] = [];
 
   constructor(private readonly steps: Step[]) {}
 
@@ -52,6 +54,7 @@ class ScriptedAdapter implements ProviderAdapter {
   }
 
   run(input: RunInput, ctx: RunContext, signal: AbortSignal): AsyncIterable<AdapterEvent> {
+    this.systems.push(input.system);
     const usage = UsageTracker.for(input);
     return streamTurn({
       signal,
@@ -110,6 +113,7 @@ function setup(
     servers?: ToolServerLaunch[];
     maxToolIterations?: number;
     fake?: FakeMcp;
+    guidelines?: RunGuideline[];
   } = {},
 ) {
   const events: RunEvent[] = [];
@@ -136,6 +140,7 @@ function setup(
       messages: [userText('c1', 'hi')],
       toolServers: opts.servers ?? [notes],
       ...(opts.alwaysAllowed ? { alwaysAllowed: opts.alwaysAllowed } : {}),
+      ...(opts.guidelines ? { guidelines: opts.guidelines } : {}),
     });
   const of = <T extends RunEvent['type']>(type: T, runId = 'r1') =>
     events.filter((e): e is Extract<RunEvent, { type: T }> => e.type === type && e.runId === runId);
@@ -165,6 +170,20 @@ function setup(
 }
 
 describe('Run with tools', () => {
+  it('sends the role with the guidelines after it as the system prompt', async () => {
+    const t = setup([{ text: 'ok' }], {
+      servers: [],
+      guidelines: [
+        { name: 'Tone', content: 'Plain words.\n' },
+        { name: 'Empty', content: '  ' },
+      ],
+    });
+    t.start();
+    await t.terminal();
+    // The test agent has no role, so the prompt is the guidelines alone.
+    expect(t.adapter.systems).toEqual(['# Guidelines\n\n## Tone\n\nPlain words.']);
+  });
+
   it('runs read-only tools without asking and feeds the result back to the model', async () => {
     const t = setup([
       {

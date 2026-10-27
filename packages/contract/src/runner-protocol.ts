@@ -3,6 +3,7 @@ import { Block, ToolResultContentBlock } from './blocks.js';
 import { Id } from './common.js';
 import { Agent, AgentRoot } from './entities/agent.js';
 import { Connection } from './entities/connection.js';
+import { RunGuideline } from './entities/guideline.js';
 import { Message } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { BuiltinToolServer } from './entities/tool-server.js';
@@ -88,6 +89,8 @@ export const RunStartRequest = z.object({
   alwaysAllowed: z.array(z.string()).optional(),
   /** The agent's enabled MCP servers, resolved by the shell (Phase 5). */
   toolServers: z.array(ToolServerLaunch).optional(),
+  /** Guidelines that reach the agent, in order; the runner adds them to the system prompt after the role. */
+  guidelines: z.array(RunGuideline).optional(),
 });
 /** Finds a CLI harness binary and reads its version (the form's "Detect"). */
 export const CliDetectRequest = z.object({

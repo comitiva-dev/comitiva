@@ -58,6 +58,8 @@ export const Agent = z.object({
   permissionPolicy: PermissionPolicy,
   fallbackConnectionIds: z.array(Id),
   tags: AgentTags,
+  /** Guidelines this agent picked, besides those that reach it by scope (`Guideline`). */
+  guidelineIds: z.array(Id).max(100),
   createdAt: IsoDate,
   updatedAt: IsoDate,
 });

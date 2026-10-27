@@ -93,6 +93,7 @@ describe('agent IPC', () => {
       toolServerIds: [],
       roots: [],
       permissionPolicy: 'ask',
+      guidelineIds: [],
     });
   });
 

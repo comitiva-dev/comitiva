@@ -10,6 +10,7 @@ import {
 } from './entities/agent.js';
 import { Connection } from './entities/connection.js';
 import { Conversation } from './entities/conversation.js';
+import { Guideline, GuidelineName, GuidelineScope } from './entities/guideline.js';
 import { Message, MessageRole } from './entities/message.js';
 import { ApprovalDecision } from './entities/tool-approval.js';
 import { ToolServer } from './entities/tool-server.js';
@@ -154,6 +155,7 @@ const agentFields = {
   toolServerIds: z.array(Id),
   roots: z.array(AgentRoot),
   permissionPolicy: PermissionPolicy,
+  guidelineIds: z.array(Id).max(100),
 };
 
 /** A new agent as the form submits it. */
@@ -166,6 +168,7 @@ export const AgentDraft = z.object({
   toolServerIds: agentFields.toolServerIds.default([]),
   roots: agentFields.roots.default([]),
   permissionPolicy: agentFields.permissionPolicy.default('ask'),
+  guidelineIds: agentFields.guidelineIds.default([]),
 });
 /** What callers send (defaults may be omitted). */
 export type AgentDraft = z.input<typeof AgentDraft>;
@@ -204,6 +207,23 @@ export const AppSettingsPatch = z
 export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
 
 const ById = z.object({ id: Id });
+
+/** A new guideline as the form submits it. */
+export const GuidelineDraft = z.object({
+  name: GuidelineName,
+  content: z.string().default(''),
+  scope: GuidelineScope.default('agents'),
+  agentTags: AgentTags.default([]),
+});
+export type GuidelineDraft = z.input<typeof GuidelineDraft>;
+export type ValidGuidelineDraft = z.output<typeof GuidelineDraft>;
+
+/** Changes to a saved guideline; omitted fields are kept. */
+export const GuidelinePatch = z
+  .object({ name: GuidelineName, content: z.string(), scope: GuidelineScope, agentTags: AgentTags })
+  .partial();
+export type GuidelinePatch = z.input<typeof GuidelinePatch>;
+export type ValidGuidelinePatch = z.output<typeof GuidelinePatch>;
 
 /**
  * An env var or header value as the form submits it: a plain value, a new
@@ -645,6 +665,24 @@ export const ipcInvoke = {
   'updates.install': { input: z.undefined(), output: z.void() },
   /** Native folder picker; null when cancelled. */
   'dialogs.pickFolder': { input: z.undefined(), output: z.string().nullable() },
+  /** In prompt order. */
+  'guidelines.list': { input: z.undefined(), output: z.array(Guideline) },
+  'guidelines.create': { input: GuidelineDraft, output: Guideline },
+  'guidelines.update': { input: ById.extend({ patch: GuidelinePatch }), output: Guideline },
+  /** Agents that picked it lose it. */
+  'guidelines.delete': { input: ById, output: z.void() },
+  /** Moves a guideline to an index in the prompt order; returns the new order. */
+  'guidelines.move': {
+    input: ById.extend({ index: z.number().int().nonnegative() }),
+    output: z.array(Guideline),
+  },
+  /**
+   * Picks an AGENTS.md, CLAUDE.md or other Markdown file and adds one
+   * guideline per section (parseGuidelinesMarkdown); null when cancelled.
+   */
+  'guidelines.import': { input: z.undefined(), output: z.array(Guideline).nullable() },
+  /** Writes every guideline as one AGENTS.md through a save dialog; null when cancelled. */
+  'guidelines.export': { input: z.undefined(), output: z.string().nullable() },
   'toolServers.list': { input: z.undefined(), output: z.array(ToolServer) },
   'toolServers.create': { input: ToolServerDraft, output: ToolServer },
   'toolServers.update': { input: ById.extend({ patch: ToolServerPatch }), output: ToolServer },

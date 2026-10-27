@@ -1,6 +1,7 @@
 export * from './agent.js';
 export * from './connection.js';
 export * from './conversation.js';
+export * from './guideline.js';
 export * from './message.js';
 export * from './tool-approval.js';
 export * from './tool-server.js';

@@ -27,6 +27,7 @@ export const agent: Agent = {
   permissionPolicy: 'ask',
   fallbackConnectionIds: [],
   tags: [],
+  guidelineIds: [],
   createdAt: now,
   updatedAt: now,
 };

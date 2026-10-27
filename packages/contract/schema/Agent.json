@@ -132,6 +132,14 @@
         "maxLength": 32
       }
     },
+    "guidelineIds": {
+      "maxItems": 100,
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
     "createdAt": {
       "type": "string",
       "format": "date-time",
@@ -156,6 +164,7 @@
     "permissionPolicy",
     "fallbackConnectionIds",
     "tags",
+    "guidelineIds",
     "createdAt",
     "updatedAt"
   ]

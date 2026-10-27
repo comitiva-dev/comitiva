@@ -1390,6 +1390,14 @@
                 "maxLength": 32
               }
             },
+            "guidelineIds": {
+              "maxItems": 100,
+              "type": "array",
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
             "createdAt": {
               "type": "string",
               "format": "date-time",
@@ -1414,6 +1422,7 @@
             "permissionPolicy",
             "fallbackConnectionIds",
             "tags",
+            "guidelineIds",
             "createdAt",
             "updatedAt"
           ]
@@ -2516,6 +2525,26 @@
                   "url"
                 ]
               }
+            ]
+          }
+        },
+        "guidelines": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 100
+              },
+              "content": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "name",
+              "content"
             ]
           }
         }

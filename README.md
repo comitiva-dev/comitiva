@@ -2,6 +2,8 @@
 
 **Agentic chat for your whole team.**
 
+[comitiva.dev](https://comitiva.dev) · [Download](https://comitiva.dev/download/) · news on X: [@ComitivaAI](https://x.com/ComitivaAI)
+
 > [!IMPORTANT]
 > **Comitiva is an early-stage open source project, in development and testing.** It works and is tested end to end, but it is young: expect rough edges and changes between versions, keep copies of files you let agents change, and tell us what breaks ([issues](https://github.com/comitiva-dev/comitiva/issues)). The installers for Windows and macOS are not signed yet.
 

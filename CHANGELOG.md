@@ -2,6 +2,25 @@
 
 All notable changes, from conventional commits (`pnpm changelog`).
 
+## 0.3.0 (2026-10-27)
+
+### Features
+
+- **contract:** guidelines, which ones reach an agent, and AGENTS.md in and out ([e60145a](https://github.com/comitiva-dev/comitiva/commit/e60145a20e095d29bcd9cad10b57fda47659fc9f))
+- **desktop:** guidelines in main: table, repository, service, IPC and runs ([82e9148](https://github.com/comitiva-dev/comitiva/commit/82e914869ce88569979722d390362c2a325c7466))
+- **desktop:** Guidelines screen, agent form checklist and panel row ([b19999b](https://github.com/comitiva-dev/comitiva/commit/b19999b4e4f706d6dc0bc8a06965d50862c1969c))
+- **runner:** guidelines go into the system prompt after the role ([f11d467](https://github.com/comitiva-dev/comitiva/commit/f11d467a58d35eb79a1eb259761a3f628f1872c8))
+
+### Documentation
+
+- plan Phase 9a (hub execution, team keys, web UI) ([07ee585](https://github.com/comitiva-dev/comitiva/commit/07ee585596a02bb93109c8411d2591f369ae9f78))
+- v0.2.0 is published, with the fixes the release needed ([66f12aa](https://github.com/comitiva-dev/comitiva/commit/66f12aa38660236a535bdc63ba281dde1ca7e98b))
+- ADR 0020 guidelines, shared instructions per agent, tag or everyone ([81e3204](https://github.com/comitiva-dev/comitiva/commit/81e32046d3faa9ba158fd45ced03644760703025))
+- screenshots of guidelines, search and usage ([9ec4803](https://github.com/comitiva-dev/comitiva/commit/9ec4803cffe49363321477b9d497ca194e2c35e0))
+- Phase 8b guidelines, and say plainly the project is early ([195b8ae](https://github.com/comitiva-dev/comitiva/commit/195b8ae2cb551994f2779c9827e105d9e8318ea4))
+- link the site and @ComitivaAI on X from the README ([6513f2a](https://github.com/comitiva-dev/comitiva/commit/6513f2ab21fd7572964dc97376fb0524f5e0e0fb))
+- guidelines ship in v0.3.0 ([a2a86a8](https://github.com/comitiva-dev/comitiva/commit/a2a86a8324e3a61178e9cf0258df3e87b848bec4))
+
 ## 0.2.0 (2026-10-19)
 
 ### Features

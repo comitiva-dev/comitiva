@@ -42,13 +42,15 @@ then the one for every agent). Export writes the four back as one `AGENTS.md` wi
 | `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` | Green. 802 tests: contract 76, runner 274, mcp-servers 40, desktop 412 (Phase 8: 776). |
 | `pnpm contract:schema` | No diff after the change is committed. 53 schemas. No hub payload changed, so no `contract-v*` tag is needed yet. |
 | `pnpm --filter desktop test:e2e` | 62/62 (Phase 8: 58), with `guidelines.spec.ts`'s four. |
-| `pnpm dev` by hand | **Not done.** |
+| `pnpm dev` by hand | Done by the maintainer: guidelines imported and picked, no problems found. |
 
 ### Open
 
 - Workspace guidelines (Phase 9, above). The portable bundle does not carry guidelines yet; Export
   AGENTS.md moves them.
-- A release (v0.3.0) with release notes, then the site can say guidelines are available.
+- **v0.3.0 is published** (2026-10-27, tag on `15df68f`, Release run 40556687621) with written
+  notes; comitiva.dev says guidelines are available and serves the v0.3.0 schemas. The demo GIF
+  and video predate guidelines (no Guidelines entry in the sidebar); re-record them.
 
 ## Phase 8 — Laravel hub (done)
 

@@ -232,6 +232,8 @@ export function runnerAgent(shared: SharedAgent, link: AgentLink, connection: Co
     permissionPolicy: shared.permissionPolicy,
     fallbackConnectionIds: [],
     tags: shared.tags,
+    // Personal guidelines stay out of workspace turns, so every member's run gets the same prompt.
+    guidelineIds: [],
     createdAt: shared.createdAt,
     updatedAt: shared.updatedAt,
   };

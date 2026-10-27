@@ -7,6 +7,7 @@ import type {
   Message,
   MessageStatus,
   PendingApproval,
+  RunGuideline,
   RunToolCallEvent,
   StopReason,
   ToolServerLaunch,
@@ -45,6 +46,8 @@ export interface RunTarget {
   connection: Connection;
   /** The agent's MCP servers, resolved with their secrets for this run. */
   launches(): Promise<ToolServerLaunch[]>;
+  /** What the runner adds to the system prompt after the role (ADR 0020); none in a workspace yet. */
+  guidelines?: RunGuideline[];
 }
 
 export interface TurnInput {

@@ -52,6 +52,7 @@ const draft = (overrides: Partial<ValidAgentDraft> = {}): ValidAgentDraft => ({
   toolServerIds: [],
   roots: [],
   permissionPolicy: 'ask',
+  guidelineIds: [],
   ...overrides,
 });
 

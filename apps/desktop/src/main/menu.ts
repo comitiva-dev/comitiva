@@ -89,6 +89,7 @@ export function menuTemplate(deps: MenuDeps): MenuItemConstructorOptions[] {
         command('goAgents'),
         command('goConnections'),
         command('goTools'),
+        command('goGuidelines'),
         command('goUsage'),
         sep,
         command('previousConversation'),

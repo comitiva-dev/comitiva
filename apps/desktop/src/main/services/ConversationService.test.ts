@@ -16,6 +16,7 @@ import { Database } from '../db/Database';
 import { AgentRepository } from '../db/repositories/AgentRepository';
 import { ConnectionRepository } from '../db/repositories/ConnectionRepository';
 import { ConversationRepository } from '../db/repositories/ConversationRepository';
+import { GuidelineRepository } from '../db/repositories/GuidelineRepository';
 import { MessageRepository } from '../db/repositories/MessageRepository';
 import { ToolApprovalRepository } from '../db/repositories/ToolApprovalRepository';
 import { ToolServerRepository } from '../db/repositories/ToolServerRepository';
@@ -30,6 +31,7 @@ import {
   type RunnerPort,
 } from './ConversationService';
 import { AttachmentService } from './AttachmentService';
+import { GuidelineService } from './GuidelineService';
 import { TitleService } from './TitleService';
 import { ToolServerService } from './ToolServerService';
 
@@ -85,6 +87,7 @@ let connections: ConnectionRepository;
 let secretFor: ReturnType<typeof vi.fn>;
 let title: { generate: ReturnType<typeof vi.fn> };
 let service: ConversationService;
+let guidelines: GuidelineService;
 let events: Emitted[];
 let attachments: AttachmentService;
 let attachmentsDir: string;
@@ -114,6 +117,7 @@ function makeService(titleService: unknown = title) {
         accessToken: () => driveToken(),
       },
     }),
+    guidelines,
     approvals: new ToolApprovalRepository(db),
     attachments,
   });
@@ -183,6 +187,11 @@ beforeEach(() => {
   secretFor = vi.fn(async (c: { kind: string }) => (c.kind === 'api' ? 'sk-test' : undefined));
   title = { generate: vi.fn(async () => null) };
   events = [];
+  guidelines = new GuidelineService({
+    repo: new GuidelineRepository(db),
+    saveFile: vi.fn(),
+    openFile: vi.fn(),
+  });
   service = makeService();
 });
 
@@ -223,9 +232,42 @@ describe('ConversationService: sending and streaming', () => {
     expect(req.messages.map((m) => m.id)).toEqual([user!.id]);
     expect(req).not.toHaveProperty('harnessSessionId');
     expect(req).not.toHaveProperty('workingDirectory');
+    expect(req).not.toHaveProperty('guidelines');
 
     expect(of('message.updated').map((p) => p.message.id)).toEqual([user!.id, reply.id]);
     expect(of('conversation.updated').at(-1)!.conversation.status).toBe('running');
+  });
+
+  it('sends the guidelines that reach the agent, in order', async () => {
+    const picked = guidelines.create({
+      name: 'Picked',
+      content: 'Only for a1.',
+      scope: 'agents',
+      agentTags: [],
+    });
+    guidelines.create({ name: 'Everyone', content: 'Be brief.', scope: 'all', agentTags: [] });
+    guidelines.create({
+      name: 'Research',
+      content: 'Quote sources.',
+      scope: 'tags',
+      agentTags: ['research'],
+    });
+    guidelines.create({
+      name: 'Legal',
+      content: 'Not for a1.',
+      scope: 'tags',
+      agentTags: ['legal'],
+    });
+    agents.update('a1', { tags: ['Research'], guidelineIds: [picked.id] });
+
+    await started();
+    expect(runner.started[0]!.guidelines).toEqual([
+      { name: 'Picked', content: 'Only for a1.' },
+      { name: 'Everyone', content: 'Be brief.' },
+      { name: 'Research', content: 'Quote sources.' },
+    ]);
+    await started('a2');
+    expect(runner.started[1]!.guidelines).toEqual([{ name: 'Everyone', content: 'Be brief.' }]);
   });
 
   it('coalesces deltas to the UI per frame and checkpoints to SQLite about every 250 ms', async () => {

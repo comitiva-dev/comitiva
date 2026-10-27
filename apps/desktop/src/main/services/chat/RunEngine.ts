@@ -253,6 +253,7 @@ export class RunEngine {
       messages,
       toolServers: ctx.toolServers,
       alwaysAllowed: ctx.alwaysAllowed,
+      ...(target.guidelines?.length ? { guidelines: target.guidelines } : {}),
       ...(ctx.secret !== undefined ? { secret: ctx.secret } : {}),
       ...(harnessSessionId !== undefined ? { harnessSessionId } : {}),
       ...(workingDirectory !== undefined ? { workingDirectory } : {}),

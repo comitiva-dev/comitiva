@@ -3,10 +3,14 @@ import { asc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 import { Agent, AppError, type ValidAgentDraft, type ValidAgentPatch } from '@comitiva/contract';
 import type { Database } from '../Database';
-import { agentRoots, agents, agentToolServers } from '../schema';
+import { agentGuidelines, agentRoots, agents, agentToolServers } from '../schema';
 import { ConnectionRepository } from './ConnectionRepository';
 
-export type NewAgent = ValidAgentDraft & { id?: string };
+/** Guidelines are optional here: a bundle import or a duplicate brings none of its own. */
+export type NewAgent = Omit<ValidAgentDraft, 'guidelineIds'> & {
+  id?: string;
+  guidelineIds?: string[];
+};
 export type AgentChanges = ValidAgentPatch;
 
 type Row = typeof agents.$inferSelect;
@@ -32,11 +36,13 @@ export class AgentRepository {
       .all();
     const roots = this.db.orm.select().from(agentRoots).orderBy(asc(agentRoots.position)).all();
     const servers = this.db.orm.select().from(agentToolServers).all();
+    const picks = this.db.orm.select().from(agentGuidelines).all();
     return rows.map((row) =>
       toAgent(
         row,
         roots.filter((r) => r.agentId === row.id),
         servers.filter((s) => s.agentId === row.id).map((s) => s.toolServerId),
+        picks.filter((p) => p.agentId === row.id).map((p) => p.guidelineId),
       ),
     );
   }
@@ -55,10 +61,16 @@ export class AgentRepository {
       .from(agentToolServers)
       .where(eq(agentToolServers.agentId, id))
       .all();
+    const picks = this.db.orm
+      .select()
+      .from(agentGuidelines)
+      .where(eq(agentGuidelines.agentId, id))
+      .all();
     return toAgent(
       row,
       roots,
       servers.map((s) => s.toolServerId),
+      picks.map((p) => p.guidelineId),
     );
   }
 
@@ -74,6 +86,7 @@ export class AgentRepository {
     const agent = validate({
       ...data,
       id: data.id ?? ulid(),
+      guidelineIds: data.guidelineIds ?? [],
       fallbackConnectionIds: [],
       createdAt: now,
       updatedAt: now,
@@ -102,14 +115,18 @@ export class AgentRepository {
         this.assertUsableConnection(agent.connectionId, agent.model);
       }
       this.db.orm.update(agents).set(toRow(agent)).where(eq(agents.id, id)).run();
-      if (defined.roots !== undefined || defined.toolServerIds !== undefined) {
+      if (
+        defined.roots !== undefined ||
+        defined.toolServerIds !== undefined ||
+        defined.guidelineIds !== undefined
+      ) {
         this.replaceLinks(agent);
       }
       return agent;
     });
   }
 
-  /** A copy with a new id, name and timestamps; roots, tools, params and tags included. */
+  /** A copy with a new id, name and timestamps; roots, tools, guidelines, params and tags included. */
   duplicate(id: string, name: string): Agent {
     const {
       id: _id,
@@ -121,7 +138,7 @@ export class AgentRepository {
     return this.create({ ...rest, name });
   }
 
-  /** Deletes the agent; roots, tool server links and conversations cascade. */
+  /** Deletes the agent; roots, tool server and guideline links and conversations cascade. */
   delete(id: string): void {
     this.require(id);
     this.db.orm.delete(agents).where(eq(agents.id, id)).run();
@@ -148,6 +165,7 @@ export class AgentRepository {
   private replaceLinks(agent: Agent): void {
     this.db.orm.delete(agentRoots).where(eq(agentRoots.agentId, agent.id)).run();
     this.db.orm.delete(agentToolServers).where(eq(agentToolServers.agentId, agent.id)).run();
+    this.db.orm.delete(agentGuidelines).where(eq(agentGuidelines.agentId, agent.id)).run();
     if (agent.roots.length > 0) {
       this.db.orm
         .insert(agentRoots)
@@ -167,16 +185,22 @@ export class AgentRepository {
         .values(agent.toolServerIds.map((toolServerId) => ({ agentId: agent.id, toolServerId })))
         .run();
     }
+    if (agent.guidelineIds.length > 0) {
+      this.db.orm
+        .insert(agentGuidelines)
+        .values(agent.guidelineIds.map((guidelineId) => ({ agentId: agent.id, guidelineId })))
+        .run();
+    }
   }
 
-  /** Runs a write in a transaction; unknown tool servers become `invalid_request`. */
+  /** Runs a write in a transaction; unknown tool servers or guidelines become `invalid_request`. */
   private write<T>(fn: () => T): T {
     try {
       return this.db.transaction(fn);
     } catch (err) {
       const code = (err as { code?: unknown }).code;
       if (code === 'SQLITE_CONSTRAINT_FOREIGNKEY') {
-        throw new AppError('invalid_request', 'Unknown tool server', { cause: err });
+        throw new AppError('invalid_request', 'Unknown tool server or guideline', { cause: err });
       }
       throw err;
     }
@@ -187,6 +211,10 @@ function validate(candidate: unknown): Agent {
   const parsed = Agent.safeParse(candidate);
   if (!parsed.success) {
     throw new AppError('invalid_request', `Invalid agent: ${parsed.error.issues[0]?.message}`);
+  }
+  const { guidelineIds } = parsed.data;
+  if (new Set(guidelineIds).size !== guidelineIds.length) {
+    throw new AppError('invalid_request', 'Invalid agent: a guideline is listed twice');
   }
   const paths = parsed.data.roots.map((r) => r.path);
   if (new Set(paths).size !== paths.length) {
@@ -219,10 +247,12 @@ function toAgent(
   row: Row,
   roots: Array<{ path: string; mode: 'read' | 'readwrite' }>,
   toolServerIds: string[],
+  guidelineIds: string[],
 ): Agent {
   return Agent.parse({
     ...row,
     roots: roots.map((r) => ({ path: r.path, mode: r.mode })),
     toolServerIds,
+    guidelineIds,
   });
 }

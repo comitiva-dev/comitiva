@@ -18,6 +18,7 @@ import type { TitleService } from './TitleService';
 import type { AttachmentService } from './AttachmentService';
 import type { ToolServerService } from './ToolServerService';
 import { LocalChatStore, type LocalChatEvents } from './chat/LocalChatStore';
+import type { GuidelineService } from './GuidelineService';
 import { RunEngine, type RunnerPort } from './chat/RunEngine';
 
 export { buildHistory, type RunnerPort } from './chat/RunEngine';
@@ -37,6 +38,8 @@ export interface ConversationServiceDeps {
   title: TitleService;
   /** The agent's MCP servers, resolved for a run (secrets included). */
   toolServers: Pick<ToolServerService, 'launchesFor'>;
+  /** The guidelines that reach the agent (ADR 0020); without it, runs get none. */
+  guidelines?: Pick<GuidelineService, 'forAgent'>;
   approvals: ToolApprovalRepository;
   /** Turns attachment file sources into base64 before a run (ADR 0012). */
   attachments: Pick<AttachmentService, 'resolve'>;

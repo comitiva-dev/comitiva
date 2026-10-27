@@ -15,6 +15,7 @@ import type { MessageRepository } from '../../db/repositories/MessageRepository'
 import type { ToolApprovalRepository } from '../../db/repositories/ToolApprovalRepository';
 import type { UsageRepository } from '../../db/repositories/UsageRepository';
 import type { AttachmentService } from '../AttachmentService';
+import type { GuidelineService } from '../GuidelineService';
 import { placeholderTitle } from '../TitleService';
 import type { ToolServerService } from '../ToolServerService';
 import type { ChatStore, RunOutcome, RunSession, RunTarget, Turn, TurnInput } from './ChatStore';
@@ -35,6 +36,7 @@ export interface LocalChatStoreDeps {
   connections: ConnectionRepository;
   approvals: ToolApprovalRepository;
   toolServers: Pick<ToolServerService, 'launchesFor'>;
+  guidelines?: Pick<GuidelineService, 'forAgent'>;
   attachments: Pick<AttachmentService, 'resolve'>;
   emit<C extends keyof LocalChatEvents>(channel: C, payload: LocalChatEvents[C][0]): void;
   /** The pending approval of a live run, which conversation events carry. */
@@ -64,7 +66,12 @@ export class LocalChatStore implements ChatStore {
     const conversation = this.deps.conversations.require(conversationId);
     const agent = this.deps.agents.require(conversation.agentId);
     const { connection } = this.deps.connections.require(agent.connectionId);
-    return { agent, connection, launches: () => this.deps.toolServers.launchesFor(agent) };
+    return {
+      agent,
+      connection,
+      launches: () => this.deps.toolServers.launchesFor(agent),
+      guidelines: this.deps.guidelines?.forAgent(agent) ?? [],
+    };
   }
 
   checkRetry(conversationId: string): void {

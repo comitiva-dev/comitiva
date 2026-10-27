@@ -9,6 +9,7 @@ import { ConnectionRepository } from './db/repositories/ConnectionRepository';
 import { ConversationRepository } from './db/repositories/ConversationRepository';
 import { MessageRepository } from './db/repositories/MessageRepository';
 import { ToolApprovalRepository } from './db/repositories/ToolApprovalRepository';
+import { GuidelineRepository } from './db/repositories/GuidelineRepository';
 import { ToolServerRepository } from './db/repositories/ToolServerRepository';
 import { SettingsRepository } from './db/repositories/SettingsRepository';
 import { UsageRepository } from './db/repositories/UsageRepository';
@@ -46,6 +47,7 @@ import { ConnectionService } from './services/ConnectionService';
 import { ConversationService } from './services/ConversationService';
 import { GoogleDriveService } from './services/GoogleDriveService';
 import { TitleService } from './services/TitleService';
+import { GuidelineService } from './services/GuidelineService';
 import { ToolServerService } from './services/ToolServerService';
 
 // One data directory named after the product, in dev and packaged builds.
@@ -233,6 +235,11 @@ async function bootstrap(): Promise<void> {
     saveFile: pickSaveFile,
     openFile: pickOpenFile,
   });
+  const guidelines = new GuidelineService({
+    repo: new GuidelineRepository(db),
+    saveFile: pickSaveFile,
+    openFile: pickOpenFile,
+  });
   const chat = new ConversationService({
     db,
     conversations: conversationRepo,
@@ -245,6 +252,7 @@ async function bootstrap(): Promise<void> {
     title: new TitleService({ runner: supervisor.client, usage, secretFor }),
     workspacesDir: paths.workspaces(),
     toolServers,
+    guidelines,
     approvals: new ToolApprovalRepository(db),
     attachments,
   });
@@ -348,6 +356,13 @@ async function bootstrap(): Promise<void> {
       'updates.check': () => updates.check(),
       'updates.install': () => updates.install(),
       'dialogs.pickFolder': () => pickFolder(),
+      'guidelines.list': () => guidelines.list(),
+      'guidelines.create': (draft) => guidelines.create(draft),
+      'guidelines.update': ({ id, patch }) => guidelines.update(id, patch),
+      'guidelines.delete': ({ id }) => guidelines.delete(id),
+      'guidelines.move': ({ id, index }) => guidelines.move(id, index),
+      'guidelines.import': () => guidelines.importMarkdown(),
+      'guidelines.export': () => guidelines.exportMarkdown(),
       'toolServers.list': () => toolServers.list(),
       'toolServers.create': (draft) => toolServers.create(draft),
       'toolServers.update': ({ id, patch }) => toolServers.update(id, patch),

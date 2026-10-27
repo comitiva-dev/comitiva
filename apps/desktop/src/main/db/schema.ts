@@ -112,6 +112,38 @@ export const agentToolServers = sqliteTable(
   (t) => [primaryKey({ columns: [t.agentId, t.toolServerId] })],
 );
 
+// Blocks of instructions added to the system prompt of the agents they reach (ADR 0020).
+export const guidelines = sqliteTable(
+  'guidelines',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    content: text('content').notNull().default(''),
+    scope: text('scope', { enum: ['all', 'tags', 'agents'] })
+      .notNull()
+      .default('agents'),
+    agentTags: json('agent_tags', '[]'),
+    position: integer('position').notNull().default(0),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [check('guidelines_scope_check', sql`${t.scope} IN ('all','tags','agents')`)],
+);
+
+// Guidelines an agent picked by hand; scope `all` and `tags` reach agents without a row here.
+export const agentGuidelines = sqliteTable(
+  'agent_guidelines',
+  {
+    agentId: text('agent_id')
+      .notNull()
+      .references(() => agents.id, { onDelete: 'cascade' }),
+    guidelineId: text('guideline_id')
+      .notNull()
+      .references(() => guidelines.id, { onDelete: 'cascade' }),
+  },
+  (t) => [primaryKey({ columns: [t.agentId, t.guidelineId] })],
+);
+
 export const conversations = sqliteTable(
   'conversations',
   {

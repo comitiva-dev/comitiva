@@ -35,6 +35,7 @@ describe('AgentService', () => {
       toolServerIds: [],
       roots: [],
       permissionPolicy: 'ask',
+      guidelineIds: [],
     });
     expect(service.duplicate(agent.id, 'Writer (cópia)').name).toBe('Writer (cópia)');
     expect(service.duplicate(agent.id).name).toBe('Writer (copy)');

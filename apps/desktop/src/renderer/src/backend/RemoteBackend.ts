@@ -15,6 +15,7 @@ import {
   type SearchInput,
   type SearchResult,
   type SharedAgent,
+  type Guideline,
   type ToolServer,
   type ToolServerDraft,
   type ToolServerPatch,
@@ -344,6 +345,25 @@ export class RemoteBackend implements Backend {
     url: (path: string) => this.executor.attachmentUrl(path),
   };
 
+  // ------------------------------------------------------------ guidelines
+
+  /** None in a workspace yet: Personal guidelines stay out of shared agents' turns (ADR 0020). */
+  guidelines = {
+    list: async (): Promise<Guideline[]> => [],
+    create: (): Promise<Guideline> => this.noGuidelines(),
+    update: (): Promise<Guideline> => this.noGuidelines(),
+    delete: (): Promise<void> => this.noGuidelines(),
+    move: (): Promise<Guideline[]> => this.noGuidelines(),
+    import: (): Promise<Guideline[] | null> => this.noGuidelines(),
+    export: (): Promise<string | null> => this.noGuidelines(),
+  };
+
+  private noGuidelines(): Promise<never> {
+    return Promise.reject(
+      new BackendError('not_implemented', 'Workspace guidelines come later', false),
+    );
+  }
+
   // ------------------------------------------------------------ tool servers
 
   toolServers = {
@@ -614,6 +634,7 @@ export function toAgent(shared: SharedAgent, link: AgentLink | null): Agent {
     permissionPolicy: shared.permissionPolicy,
     fallbackConnectionIds: [],
     tags: shared.tags,
+    guidelineIds: [],
     createdAt: shared.createdAt,
     updatedAt: shared.updatedAt,
   };

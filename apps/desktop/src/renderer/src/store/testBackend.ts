@@ -20,6 +20,8 @@ import type {
   ToolDef,
   ToolServer,
   ToolServerDraft,
+  Guideline,
+  GuidelineDraft,
   ModelPrice,
   ModelPrices,
   ProviderId,
@@ -30,6 +32,18 @@ import type {
   UsageTotals,
 } from '@comitiva/contract';
 import type { Backend, WorkspaceContext } from '../backend/Backend';
+
+export const guideline = (id: string, overrides: Partial<Guideline> = {}): Guideline => ({
+  id,
+  name: `Guideline ${id}`,
+  content: `About ${id}.`,
+  scope: 'agents',
+  agentTags: [],
+  position: 0,
+  createdAt: '2026-09-18T12:00:00.000Z',
+  updatedAt: '2026-09-18T12:00:00.000Z',
+  ...overrides,
+});
 
 export const hubStatus = (overrides: Partial<HubStatus> = {}): HubStatus => ({
   url: 'https://hub.example.com',
@@ -72,6 +86,7 @@ export const agent = (id: string, overrides: Partial<Agent> = {}): Agent => ({
   permissionPolicy: 'ask',
   fallbackConnectionIds: [],
   tags: [],
+  guidelineIds: [],
   createdAt: '2026-09-18T12:00:00.000Z',
   updatedAt: '2026-09-18T12:00:00.000Z',
   ...overrides,
@@ -254,6 +269,15 @@ export function fakeBackend() {
       url: (path: string) => `att://${path}`,
     },
     dialogs: { pickFolder: vi.fn(async (): Promise<string | null> => '/home/me/work') },
+    guidelines: {
+      list: vi.fn(async (): Promise<Guideline[]> => []),
+      create: vi.fn(async (draft: GuidelineDraft) => guideline('new', { name: draft.name })),
+      update: vi.fn(async (id: string) => guideline(id)),
+      delete: vi.fn(async () => {}),
+      move: vi.fn(async (): Promise<Guideline[]> => []),
+      import: vi.fn(async (): Promise<Guideline[] | null> => null),
+      export: vi.fn(async (): Promise<string | null> => null),
+    },
     toolServers: {
       list: vi.fn(async (): Promise<ToolServer[]> => [filesystemServer()]),
       create: vi.fn(async (draft: ToolServerDraft) => toolServer('new', { name: draft.name })),

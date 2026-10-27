@@ -5,6 +5,7 @@ import type { AppState, AppStore } from './app';
 import type { ConnectionsState, ConnectionsStore } from './connections';
 import type { ConversationsState, ConversationsStore } from './conversations';
 import type { GoogleDriveState, GoogleDriveStore } from './googleDrive';
+import type { GuidelinesState, GuidelinesStore } from './guidelines';
 import type { MessagesState, MessagesStore } from './messages';
 import type { ToolServersState, ToolServersStore } from './toolServers';
 import type { SettingsState, SettingsStore } from './settings';
@@ -23,6 +24,7 @@ export interface Stores {
   conversations: ConversationsStore;
   messages: MessagesStore;
   toolServers: ToolServersStore;
+  guidelines: GuidelinesStore;
   usage: UsageStore;
   googleDrive: GoogleDriveStore;
   ui: UiStore;
@@ -67,6 +69,10 @@ export function useMessages<T>(selector: (state: MessagesState) => T): T {
 
 export function useToolServers<T>(selector: (state: ToolServersState) => T): T {
   return useStore(useStores().toolServers, selector);
+}
+
+export function useGuidelines<T>(selector: (state: GuidelinesState) => T): T {
+  return useStore(useStores().guidelines, selector);
 }
 
 export function useGoogleDrive<T>(selector: (state: GoogleDriveState) => T): T {

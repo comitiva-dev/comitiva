@@ -9,6 +9,7 @@ import { createConnectionsStore } from './connections';
 import type { Stores } from './context';
 import { createConversationsStore } from './conversations';
 import { createGoogleDriveStore } from './googleDrive';
+import { createGuidelinesStore } from './guidelines';
 import type { HubStore } from './hub';
 import { createMessagesStore } from './messages';
 import { createSettingsStore } from './settings';
@@ -28,6 +29,7 @@ export function createStores(backend: Backend, hub: HubStore, api: HubApi): Stor
     conversations: createConversationsStore(backend),
     messages: createMessagesStore(backend),
     toolServers: createToolServersStore(backend),
+    guidelines: createGuidelinesStore(backend),
     googleDrive: createGoogleDriveStore(backend),
     usage: createUsageStore(backend),
     ui: createUiStore(backend),
@@ -82,6 +84,8 @@ export function startStores(stores: Stores, backend: Backend, hub: HubStore): ()
   void stores.conversations.getState().load();
   // The agent form's Tools checklist and the Tools screen share this list.
   void stores.toolServers.getState().load();
+  // The agent form's Guidelines checklist and the Guidelines screen share this list.
+  void stores.guidelines.getState().load();
   void stores.googleDrive.getState().load();
   void stores.workspace.getState().load();
   // First run lands on Connections (setup); once one exists, on Agents. A workspace opens on Agents.

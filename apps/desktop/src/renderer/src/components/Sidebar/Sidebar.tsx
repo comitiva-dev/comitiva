@@ -9,6 +9,7 @@ import { AgentList } from './AgentList';
 const settingsSections: Array<Exclude<Section, 'agents' | 'workspace'>> = [
   'connections',
   'tools',
+  'guidelines',
   'usage',
   'settings',
 ];
@@ -75,7 +76,10 @@ export function Sidebar() {
 
       <div className="flex flex-col gap-0.5 border-t border-neutral-200 px-2 py-2 dark:border-neutral-800">
         {workspace && item('workspace', t('nav.workspace'))}
-        {settingsSections.map((id) => item(id, t(`nav.${id}`)))}
+        {settingsSections
+          // Guidelines are this machine's; a workspace's turns get none yet (ADR 0020).
+          .filter((id) => !(workspace && id === 'guidelines'))
+          .map((id) => item(id, t(`nav.${id}`)))}
       </div>
 
       {updateReady && (

@@ -21,6 +21,8 @@ import type {
   ModelPrices,
   ProviderId,
   UsageRange,
+  GuidelineDraft,
+  GuidelinePatch,
 } from '@comitiva/contract';
 import { BackendError, type Backend, type BackendEvent } from './Backend';
 import type { HubExecutor, HubTransport } from './hub/HubTransport';
@@ -176,6 +178,17 @@ export class LocalBackend implements Backend {
 
   dialogs = {
     pickFolder: () => this.api.invoke('dialogs.pickFolder', undefined),
+  };
+
+  guidelines = {
+    list: () => this.api.invoke('guidelines.list', undefined),
+    create: (draft: GuidelineDraft) => this.api.invoke('guidelines.create', draft),
+    update: (id: string, patch: GuidelinePatch) =>
+      this.api.invoke('guidelines.update', { id, patch }),
+    delete: (id: string) => this.api.invoke('guidelines.delete', { id }),
+    move: (id: string, index: number) => this.api.invoke('guidelines.move', { id, index }),
+    import: () => this.api.invoke('guidelines.import', undefined),
+    export: () => this.api.invoke('guidelines.export', undefined),
   };
 
   toolServers = {

@@ -7,6 +7,7 @@ import { Sidebar } from './components/Sidebar/Sidebar';
 import { TransferFeedback } from './components/TransferFeedback';
 import { AgentsScreen } from './screens/AgentsScreen';
 import { ConnectionsScreen } from './screens/ConnectionsScreen';
+import { GuidelinesScreen } from './screens/GuidelinesScreen';
 import { SettingsScreen } from './screens/SettingsScreen';
 import { ToolsScreen } from './screens/ToolsScreen';
 import { UsageScreen } from './screens/UsageScreen';
@@ -40,6 +41,8 @@ export function App() {
           <AgentsScreen />
         ) : section === 'tools' ? (
           <ToolsScreen />
+        ) : section === 'guidelines' ? (
+          <GuidelinesScreen />
         ) : section === 'usage' ? (
           <UsageScreen />
         ) : section === 'workspace' ? (

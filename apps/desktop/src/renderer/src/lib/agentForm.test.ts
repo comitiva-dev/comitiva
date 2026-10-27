@@ -68,6 +68,7 @@ describe('agent form', () => {
       role: 'Write.',
       params: { temperature: 0.4, maxTokens: 1000, topP: 0.9 },
       tags: ['docs'],
+      guidelineIds: ['g1'],
     });
     const form = agentFormFor(a);
     expect(form).toMatchObject({
@@ -88,6 +89,7 @@ describe('agent form', () => {
       roots: [],
       toolServerIds: [],
       permissionPolicy: 'ask',
+      guidelineIds: ['g1'],
     });
   });
 
@@ -104,6 +106,7 @@ describe('agent form', () => {
       roots: [],
       toolServerIds: [],
       permissionPolicy: 'ask',
+      guidelineIds: [],
     });
   });
 

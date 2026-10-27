@@ -24,6 +24,7 @@
     "agents": "Agentes",
     "connections": "Conexões",
     "tools": "Ferramentas",
+    "guidelines": "Diretrizes",
     "usage": "Uso",
     "settings": "Configurações",
     "workspace": "Workspace"
@@ -232,6 +233,11 @@
       "replace": "Substituir",
       "keep": "Manter o meu",
       "rolePlaceholder": "Quem o agente é, o que ele faz e como deve responder.",
+      "guidelines": "Diretrizes",
+      "guidelinesHint": "Entram no prompt de sistema depois do papel. Marque as que este agente precisa; as acinzentadas já chegam a ele sozinhas.",
+      "guidelinesNone": "Ainda não há diretrizes. Escreva instruções comuns uma vez em Diretrizes, ou importe um AGENTS.md, e escolha-as aqui.",
+      "guidelineAll": "todos os agentes",
+      "guidelineTag": "tag “{{tag}}”",
       "temperature": "Temperatura",
       "maxTokens": "Máx. de tokens",
       "providerDefault": "Padrão do provedor",
@@ -479,6 +485,61 @@
       }
     }
   },
+  "guidelines": {
+    "title": "Diretrizes",
+    "subtitle": "Instruções, regras e dados de referência que você escreve uma vez e entrega aos agentes que precisam deles. Cada agente recebe só as suas, no prompt de sistema, depois do papel.",
+    "add": "Adicionar diretriz",
+    "import": "Importar AGENTS.md…",
+    "export": "Exportar AGENTS.md…",
+    "imported_one": "{{count}} diretriz importada.",
+    "imported_other": "{{count}} diretrizes importadas.",
+    "exported": "Salvo em {{path}}",
+    "edit": "Editar",
+    "delete": "Excluir",
+    "deleteTitle": "Excluir “{{name}}”?",
+    "deleteBody": "Os agentes deixam de recebê-la. Isso não pode ser desfeito.",
+    "deleteBodyUsed_one": "{{count}} agente a escolheu e deixará de recebê-la. Isso não pode ser desfeito.",
+    "deleteBodyUsed_other": "{{count}} agentes a escolheram e deixarão de recebê-la. Isso não pode ser desfeito.",
+    "reach_one": "chega a {{count}} agente",
+    "reach_other": "chega a {{count}} agentes",
+    "orderNote": "Os agentes recebem as diretrizes nesta ordem. Agentes de workspace ainda não recebem nenhuma.",
+    "empty": {
+      "title": "Ainda não há diretrizes",
+      "body": "Escreva uma diretriz para o que vários agentes precisam saber ou seguir: o estilo da casa, quem são seus clientes, regras para fontes, um glossário. Ou importe um AGENTS.md ou CLAUDE.md: cada seção ## vira uma diretriz."
+    },
+    "scopeBadge": {
+      "all": "Todos os agentes",
+      "tags": "Tags: {{tags}}",
+      "agents": "Escolhida por agente"
+    },
+    "scopes": {
+      "all": {
+        "label": "Todos os agentes",
+        "hint": "Entra para todos os seus agentes."
+      },
+      "tags": {
+        "label": "Agentes com uma tag",
+        "hint": "Entra para agentes com qualquer uma destas tags, agora e depois."
+      },
+      "agents": {
+        "label": "Agentes que a escolherem",
+        "hint": "Marque-a no formulário do agente."
+      }
+    },
+    "form": {
+      "createTitle": "Nova diretriz",
+      "editTitle": "Editar diretriz",
+      "name": "Nome",
+      "namePlaceholder": "ex.: Estilo da casa",
+      "nameRequired": "Dê um nome à diretriz.",
+      "content": "Texto",
+      "contentPlaceholder": "O que os agentes precisam saber ou seguir. Aceita Markdown.",
+      "contentHint": "Markdown. Use ### para títulos dentro dela: num AGENTS.md exportado, ## começa a próxima diretriz.",
+      "scope": "Quem recebe",
+      "agentTags": "Tags",
+      "tagsRequired": "Adicione pelo menos uma tag."
+    }
+  },
   "usage": {
     "title": "Uso",
     "subtitle": "Tokens e custo estimado por conexão, agente, modelo e dia.",
@@ -623,6 +684,7 @@
     "goAgents": "Agentes",
     "goConnections": "Conexões",
     "goTools": "Ferramentas",
+    "goGuidelines": "Diretrizes",
     "goUsage": "Uso",
     "settings": "Configurações…",
     "shortcuts": "Atalhos de teclado",

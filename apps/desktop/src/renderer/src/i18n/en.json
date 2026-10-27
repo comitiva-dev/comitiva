@@ -24,6 +24,7 @@
     "agents": "Agents",
     "connections": "Connections",
     "tools": "Tools",
+    "guidelines": "Guidelines",
     "usage": "Usage",
     "settings": "Settings",
     "workspace": "Workspace"
@@ -232,6 +233,11 @@
       "replace": "Replace",
       "keep": "Keep mine",
       "rolePlaceholder": "Who the agent is, what it does and how it should answer.",
+      "guidelines": "Guidelines",
+      "guidelinesHint": "Added to the system prompt after the role. Tick the ones this agent needs; greyed ones reach it on their own.",
+      "guidelinesNone": "No guidelines yet. Write shared instructions once under Guidelines, or import an AGENTS.md, then pick them here.",
+      "guidelineAll": "every agent",
+      "guidelineTag": "tag “{{tag}}”",
       "temperature": "Temperature",
       "maxTokens": "Max tokens",
       "providerDefault": "Provider default",
@@ -479,6 +485,61 @@
       }
     }
   },
+  "guidelines": {
+    "title": "Guidelines",
+    "subtitle": "Instructions, rules and reference data you write once and give to the agents that need them. Each agent gets only its own, added to its system prompt after the role.",
+    "add": "Add guideline",
+    "import": "Import AGENTS.md…",
+    "export": "Export AGENTS.md…",
+    "imported_one": "Imported {{count}} guideline.",
+    "imported_other": "Imported {{count}} guidelines.",
+    "exported": "Saved to {{path}}",
+    "edit": "Edit",
+    "delete": "Delete",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteBody": "Agents stop getting it. This cannot be undone.",
+    "deleteBodyUsed_one": "{{count}} agent picked it and will stop getting it. This cannot be undone.",
+    "deleteBodyUsed_other": "{{count}} agents picked it and will stop getting it. This cannot be undone.",
+    "reach_one": "reaches {{count}} agent",
+    "reach_other": "reaches {{count}} agents",
+    "orderNote": "Agents get their guidelines in this order. Workspace agents get none yet.",
+    "empty": {
+      "title": "No guidelines yet",
+      "body": "Write a guideline for anything several agents should know or follow: your house style, who your customers are, rules for sources, a glossary. Or import an AGENTS.md or CLAUDE.md: each ## section becomes a guideline."
+    },
+    "scopeBadge": {
+      "all": "All agents",
+      "tags": "Tags: {{tags}}",
+      "agents": "Picked per agent"
+    },
+    "scopes": {
+      "all": {
+        "label": "Every agent",
+        "hint": "Added for all your agents."
+      },
+      "tags": {
+        "label": "Agents with a tag",
+        "hint": "Added for agents with any of these tags, now and later."
+      },
+      "agents": {
+        "label": "Agents that pick it",
+        "hint": "Tick it in an agent’s form."
+      }
+    },
+    "form": {
+      "createTitle": "New guideline",
+      "editTitle": "Edit guideline",
+      "name": "Name",
+      "namePlaceholder": "e.g. House style",
+      "nameRequired": "Give the guideline a name.",
+      "content": "Text",
+      "contentPlaceholder": "What the agents should know or follow. Markdown works.",
+      "contentHint": "Markdown. Use ### for headings inside it: in an exported AGENTS.md, ## starts the next guideline.",
+      "scope": "Who gets it",
+      "agentTags": "Tags",
+      "tagsRequired": "Add at least one tag."
+    }
+  },
   "usage": {
     "title": "Usage",
     "subtitle": "Tokens and estimated cost per connection, agent, model and day.",
@@ -623,6 +684,7 @@
     "goAgents": "Agents",
     "goConnections": "Connections",
     "goTools": "Tools",
+    "goGuidelines": "Guidelines",
     "goUsage": "Usage",
     "settings": "Settings…",
     "shortcuts": "Keyboard shortcuts",

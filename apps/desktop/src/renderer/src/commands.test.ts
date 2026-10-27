@@ -12,6 +12,7 @@ import { fakeBackend } from './store/testBackend';
 import { createToolServersStore } from './store/toolServers';
 import { createTransferStore } from './store/transfer';
 import { createUiStore } from './store/ui';
+import { createGuidelinesStore } from './store/guidelines';
 import { createUpdatesStore } from './store/updates';
 import { createUsageStore } from './store/usage';
 import { createWorkspaceStore } from './store/workspace';
@@ -29,6 +30,7 @@ beforeEach(() => {
     conversations: createConversationsStore(backend),
     messages: createMessagesStore(backend),
     toolServers: createToolServersStore(backend),
+    guidelines: createGuidelinesStore(backend),
     googleDrive: createGoogleDriveStore(backend),
     usage: createUsageStore(backend),
     ui: createUiStore(backend),
@@ -56,6 +58,8 @@ describe('runCommand', () => {
   it('navigates sections and toggles the overlays', () => {
     runCommand(stores, 'goUsage');
     expect(stores.app.getState().section).toBe('usage');
+    runCommand(stores, 'goGuidelines');
+    expect(stores.app.getState().section).toBe('guidelines');
     runCommand(stores, 'settings');
     expect(stores.app.getState().section).toBe('settings');
     runCommand(stores, 'quickSwitcher');

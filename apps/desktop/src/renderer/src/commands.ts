@@ -47,6 +47,8 @@ export function runCommand(stores: Stores, command: Command): void {
       return app.setSection('connections');
     case 'goTools':
       return app.setSection('tools');
+    case 'goGuidelines':
+      return app.setSection('guidelines');
     case 'goUsage':
       return app.setSection('usage');
     case 'newConversation':

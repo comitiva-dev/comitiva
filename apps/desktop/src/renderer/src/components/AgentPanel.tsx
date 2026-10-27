@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import type { Agent } from '@comitiva/contract';
+import { guidelinesFor, type Agent } from '@comitiva/contract';
 import { errorCode } from '../backend/Backend';
 import { connectionState, defaultModelOf } from '../lib/agentForm';
 import { providerLabel } from '../lib/connectionForm';
@@ -10,6 +10,7 @@ import { totalCost, totalTokens } from '../lib/usage';
 import {
   useAgents,
   useConnections,
+  useGuidelines,
   useStoreApis,
   useToolServers,
   useTransfer,
@@ -42,6 +43,11 @@ export function AgentPanel({
     const server = servers.find((s) => s.id === id);
     return server ? [{ id, name: serverDisplayName(server, t), enabled: server.enabled }] : [];
   });
+  // Personal only: a workspace's backend lists none (ADR 0020).
+  const guidelines = guidelinesFor(
+    agent,
+    useGuidelines((s) => s.items),
+  );
   const fallbackModel =
     connection?.kind === 'cli'
       ? t('agents.panel.harnessDefault')
@@ -157,6 +163,19 @@ export function AgentPanel({
             ))
           )}
         </dd>
+        {guidelines.length > 0 && (
+          <>
+            <dt className={ui.muted}>{t('agents.form.guidelines')}</dt>
+            <dd data-testid="panel-guidelines" className="min-w-0">
+              {guidelines.map((g, i) => (
+                <span key={g.id}>
+                  {i > 0 && ', '}
+                  {g.name}
+                </span>
+              ))}
+            </dd>
+          </>
+        )}
         <dt className={ui.muted}>{t('agents.form.roots')}</dt>
         <dd data-testid="panel-roots" className="min-w-0">
           {agent.roots.length === 0 ? (

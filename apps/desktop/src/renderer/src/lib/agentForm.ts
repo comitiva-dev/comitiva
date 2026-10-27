@@ -72,6 +72,8 @@ export interface AgentFormState {
   roots: AgentRoot[];
   toolServerIds: string[];
   permissionPolicy: PermissionPolicy;
+  /** Guidelines picked by hand; those reaching every agent or its tags need no pick. */
+  guidelineIds: string[];
 }
 
 export type AgentFormProblem = 'name' | 'connection' | 'model' | 'temperature' | 'maxTokens';
@@ -95,6 +97,7 @@ export function newAgentForm(
     roots: [],
     toolServerIds: [],
     permissionPolicy: 'ask',
+    guidelineIds: [],
     ...prefill,
   };
 }
@@ -113,6 +116,7 @@ export function agentFormFor(agent: Agent): AgentFormState {
     roots: agent.roots.map((r) => ({ ...r })),
     toolServerIds: [...agent.toolServerIds],
     permissionPolicy: agent.permissionPolicy,
+    guidelineIds: [...agent.guidelineIds],
   };
 }
 
@@ -213,6 +217,7 @@ export function toAgentDraft(form: AgentFormState): AgentDraft {
     roots: form.roots,
     toolServerIds: form.toolServerIds,
     permissionPolicy: form.permissionPolicy,
+    guidelineIds: form.guidelineIds,
   };
 }
 
@@ -229,6 +234,7 @@ export function toAgentPatch(form: AgentFormState, agent: Agent): AgentPatch {
     roots: form.roots,
     toolServerIds: form.toolServerIds,
     permissionPolicy: form.permissionPolicy,
+    guidelineIds: form.guidelineIds,
   };
 }
 

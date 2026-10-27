@@ -2,7 +2,8 @@ import { createStore } from 'zustand/vanilla';
 import type { RunnerStatus, SecretStorageStatus } from '@comitiva/contract';
 import type { Backend, BackendEvent } from '../backend/Backend';
 
-export type Section = 'agents' | 'connections' | 'tools' | 'usage' | 'settings' | 'workspace';
+export type Section =
+  'agents' | 'connections' | 'tools' | 'guidelines' | 'usage' | 'settings' | 'workspace';
 
 export interface AppState {
   version: string;

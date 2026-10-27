@@ -28,7 +28,15 @@ import {
 import type { Async } from '../../lib/async';
 import { roleTemplateIds, type RoleTemplateId } from '../../lib/roleTemplates';
 import { serverDisplayName } from '../../lib/toolServerForm';
-import { useAgents, useConnections, useGoogleDrive, useToolServers } from '../../store/context';
+import { automaticReach, toggleGuideline } from '../../lib/guidelines';
+import {
+  useAgents,
+  useConnections,
+  useGoogleDrive,
+  useGuidelines,
+  useToolServers,
+  useWorkspace,
+} from '../../store/context';
 import { AgentAvatar, avatarSwatchClasses } from '../AgentAvatar';
 import { ui } from '../ui';
 import { FormShell } from './FormShell';
@@ -51,6 +59,9 @@ export function AgentForm({
   const fetchModels = useAgents((s) => s.fetchModels);
   const pickFolder = useConnections((s) => s.pickFolder);
   const toolServers = useToolServers((s) => s.items);
+  const guidelines = useGuidelines((s) => s.items);
+  // Guidelines are this machine's; a workspace's turns get none yet (ADR 0020).
+  const workspace = useWorkspace();
   const driveState = useGoogleDrive((s) => s.status?.state ?? null);
 
   const [form, setForm] = useState<AgentFormState>(() =>
@@ -345,6 +356,50 @@ export function AgentForm({
           onChange={(e) => setForm({ ...form, role: e.target.value })}
         />
       </div>
+
+      {!workspace && (
+        <fieldset className="flex flex-col gap-1.5" data-testid="agent-guidelines">
+          <legend className={ui.label}>{t('agents.form.guidelines')}</legend>
+          {guidelines.length === 0 ? (
+            <p data-testid="agent-guidelines-none" className={ui.hint}>
+              {t('agents.form.guidelinesNone')}
+            </p>
+          ) : (
+            <>
+              <p className={ui.hint}>{t('agents.form.guidelinesHint')}</p>
+              {guidelines.map((g) => {
+                const auto = automaticReach(g, form.tags);
+                return (
+                  <label key={g.id} className="flex items-center gap-2 text-sm">
+                    <input
+                      type="checkbox"
+                      data-testid="agent-guideline"
+                      data-id={g.id}
+                      data-auto={auto?.kind ?? ''}
+                      disabled={auto !== null}
+                      checked={auto !== null || form.guidelineIds.includes(g.id)}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          guidelineIds: toggleGuideline(form.guidelineIds, g.id, e.target.checked),
+                        })
+                      }
+                    />
+                    <span>{g.name}</span>
+                    {auto && (
+                      <span className={`text-xs ${ui.muted}`}>
+                        {auto.kind === 'all'
+                          ? t('agents.form.guidelineAll')
+                          : t('agents.form.guidelineTag', { tag: auto.tag })}
+                      </span>
+                    )}
+                  </label>
+                );
+              })}
+            </>
+          )}
+        </fieldset>
+      )}
 
       {paramsApply(connection) ? (
         <div className="grid grid-cols-2 gap-3">

@@ -38,6 +38,9 @@ import type {
   ToolServer,
   ToolServerDraft,
   ToolServerPatch,
+  Guideline,
+  GuidelineDraft,
+  GuidelinePatch,
   UserContent,
   ModelPrice,
   ModelPrices,
@@ -171,6 +174,23 @@ export interface Backend {
   dialogs: {
     /** A native folder picker; null when cancelled (or when the backend has none). */
     pickFolder(): Promise<string | null>;
+  };
+  /**
+   * Instructions added to the system prompt of the agents they reach (ADR 0020).
+   * This machine's only: a workspace has none yet, and its turns get none.
+   */
+  guidelines: {
+    /** In prompt order. */
+    list(): Promise<Guideline[]>;
+    create(draft: GuidelineDraft): Promise<Guideline>;
+    update(id: string, patch: GuidelinePatch): Promise<Guideline>;
+    delete(id: string): Promise<void>;
+    /** Moves one to an index in the prompt order; resolves with the new order. */
+    move(id: string, index: number): Promise<Guideline[]>;
+    /** Picks an AGENTS.md (or any Markdown) and adds one guideline per section; null when cancelled. */
+    import(): Promise<Guideline[] | null>;
+    /** Saves every guideline as one AGENTS.md; the path, or null when cancelled. */
+    export(): Promise<string | null>;
   };
   toolServers: {
     /** Built-ins first. Secret values never come back, only refs. */

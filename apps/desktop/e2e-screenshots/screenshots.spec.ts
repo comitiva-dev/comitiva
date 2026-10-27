@@ -63,6 +63,43 @@ const REPLY = {
 Want me to rewrite the hero section with these changes so you can compare both versions?`,
 };
 
+/** Guidelines for the team: one for everyone, two by tag, one the Writer picks. */
+const GUIDELINES = [
+  {
+    name: 'House style',
+    scope: 'all' as const,
+    agentTags: [],
+    content: `Write for customers, not for engineers.
+
+- Short sentences, active voice.
+- Lead with the answer, then the detail.
+- No jargon: "one place for all your agents", not "orchestration layer".`,
+  },
+  {
+    name: 'Customer research rules',
+    scope: 'tags' as const,
+    agentTags: ['research'],
+    content: `- Quote customers word for word, with the interview number.
+- Keep what customers said apart from what we conclude.
+- Say how many interviews back each theme.`,
+  },
+  {
+    name: 'Review checklist',
+    scope: 'tags' as const,
+    agentTags: ['review'],
+    content: `1. Is the main point in the first sentence?
+2. Is every claim backed by a source or a number?
+3. Would a new customer understand every word?`,
+  },
+  {
+    name: 'Glossary',
+    scope: 'agents' as const,
+    agentTags: [],
+    content: `**Activation**: a team's first successful run.
+**Trial**: the first 14 days, before a plan is chosen.`,
+  },
+];
+
 const FILE = `# Onboarding feedback, Q3
 
 Three themes from 14 customer interviews...
@@ -183,6 +220,9 @@ async function scene(scheme: 'light' | 'dark') {
     name: 'Ollama',
     config: { baseUrl: fake.urls.ollama, defaultModel: 'llama-fake:latest' },
   });
+  const guidelines = [];
+  for (const g of GUIDELINES) guidelines.push(await invoke('guidelines.create', g));
+  const glossary = guidelines.find((g) => g.name === 'Glossary')!.id;
   const agents = [
     [
       'Researcher',
@@ -191,17 +231,39 @@ async function scene(scheme: 'light' | 'dark') {
       claude,
       'Finds sources and summarizes them with citations.',
       false,
+      ['research'],
+      [],
     ],
-    ['Writer', 'emerald', '✍️', claude, 'Drafts documents in the shared folder.', true],
-    ['Reviewer', 'amber', '🧐', local, 'Reviews copy for tone, clarity and accuracy.', false],
-    ['Organizer', 'sky', '🗂️', local, 'Keeps the research folder tidy.', true],
+    [
+      'Writer',
+      'emerald',
+      '✍️',
+      claude,
+      'Drafts documents in the shared folder.',
+      true,
+      ['writing'],
+      [glossary],
+    ],
+    [
+      'Reviewer',
+      'amber',
+      '🧐',
+      local,
+      'Reviews copy for tone, clarity and accuracy.',
+      false,
+      ['review'],
+      [],
+    ],
+    ['Organizer', 'sky', '🗂️', local, 'Keeps the research folder tidy.', true, [], []],
   ] as const;
-  for (const [name, color, emoji, conn, role, files] of agents) {
+  for (const [name, color, emoji, conn, role, files, tags, guidelineIds] of agents) {
     await invoke('agents.create', {
       name,
       avatar: { color, emoji },
       connectionId: conn.connection.id,
       role,
+      tags: [...tags],
+      guidelineIds: [...guidelineIds],
       ...(files
         ? { roots: [{ path: folder, mode: 'readwrite' as const }], toolServerIds: ['filesystem'] }
         : {}),
@@ -246,6 +308,41 @@ async function scene(scheme: 'light' | 'dark') {
   ).toContainText('slides next', { timeout: 20_000 });
   await page.waitForTimeout(1200);
   await shot('tools');
+
+  // Search across every conversation.
+  await page.keyboard.press('Control+K');
+  await page.getByTestId('switcher-input').fill('onboarding');
+  await expect(page.getByTestId('switcher-item').first()).toBeVisible();
+  await page.waitForTimeout(400);
+  await shot('search');
+  await page.keyboard.press('Escape');
+
+  // Guidelines: the list, one being edited, and the Writer's checklist.
+  await page.getByTestId('nav-guidelines').click();
+  await expect(page.getByTestId('guideline-row')).toHaveCount(GUIDELINES.length);
+  await shot('guidelines');
+  await page
+    .locator('[data-testid="guideline-row"][data-name="Customer research rules"]')
+    .getByTestId('edit')
+    .click();
+  await expect(page.getByTestId('guideline-form')).toBeVisible();
+  await page.waitForTimeout(300);
+  await shot('guideline-form');
+  await page.getByTestId('guideline-form').getByTestId('cancel').click();
+
+  await open('Writer');
+  await page.getByTestId('agent-edit').click();
+  await page
+    .getByTestId('agent-guidelines')
+    .evaluate((el) => el.scrollIntoView({ block: 'center' }));
+  await page.waitForTimeout(300);
+  await shot('agent-guidelines');
+  await page.getByTestId('cancel').click();
+
+  // What the runs above cost, by connection, agent and model.
+  await page.getByTestId('nav-usage').click();
+  await page.waitForTimeout(800);
+  await shot('usage');
 
   await app.close();
   await fake.close();

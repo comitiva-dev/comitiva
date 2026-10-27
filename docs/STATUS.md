@@ -2,7 +2,7 @@
 
 Updated at the end of every phase. The roadmap is in `SPEC.md` §6.
 
-## Current phase: 8b — Guidelines (done, in `main`, not released)
+## Current phase: 8b — Guidelines (done, released as v0.3.0)
 
 Done when an agent's run gets the role and then exactly the guidelines that reach it, in order,
 after importing them from an `AGENTS.md`: **yes**. `e2e/guidelines.spec.ts` imports an

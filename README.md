@@ -17,13 +17,13 @@ It is not a coding tool. Agents research, write, review and organize files; code
   <img src="docs/images/demo.gif" alt="Comitiva: the Writer reads a folder and asks before saving a file, while the Researcher and the Reviewer answer at the same time" width="900">
 </p>
 
-> **Status: v0.2.0, early development**: macOS, Windows and Linux, and workspaces for teams on a self-hostable [hub](https://github.com/comitiva-dev/hub). Guidelines are in `main` for the next release. A web UI and agents run by the hub come next ([roadmap](CONTRIBUTING.md#roadmap)).
+> **Status: v0.3.0, early development**: macOS, Windows and Linux, guidelines, and workspaces for teams on a self-hostable [hub](https://github.com/comitiva-dev/hub). A web UI and agents run by the hub come next ([roadmap](CONTRIBUTING.md#roadmap)).
 
 ## What it does
 
 - **Any model, one chat.** Connect API keys or the CLI harnesses you already use with their own login. Each agent picks a connection and a model; many agents answer at the same time.
 - **Agents with a role and tools.** Give an agent folders (read, or read and write), your Google Drive, or any MCP server. Reading runs freely; anything that changes a file asks you first, inline, with Allow, Deny or Always allow. Paths outside the agent's folders are refused by the server itself.
-- **Guidelines, written once** (next release). Keep your house style, rules and reference notes as guidelines, or import an `AGENTS.md` or `CLAUDE.md` (one guideline per `##` section). Give each one to every agent, to the agents with a tag, or to the agents that pick it. Each agent's prompt gets only its own guidelines, after its role ([ADR 0020](docs/adr/0020-guidelines.md)).
+- **Guidelines, written once.** Keep your house style, rules and reference notes as guidelines, or import an `AGENTS.md` or `CLAUDE.md` (one guideline per `##` section). Give each one to every agent, to the agents with a tag, or to the agents that pick it. Each agent's prompt gets only its own guidelines, after its role ([ADR 0020](docs/adr/0020-guidelines.md)).
 - **Attachments.** Paste a screenshot or drop text files into a message. Providers that cannot see images get the file name instead, and the composer tells you before you send.
 - **Search everything.** Cmd/Ctrl+K jumps to an agent, a conversation or any message, full text, accents ignored.
 - **Know what it costs.** Every run's tokens and cost, by connection, agent and model, with your own price corrections and a CSV export.
